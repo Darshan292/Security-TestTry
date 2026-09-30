@@ -1,11 +1,19 @@
-"""Streaming restore with a bounded hold-back, and the output gate (ADR-0008).
+"""Streaming restore and the output gate (ADR-0008, amended R2).
 
-Order per chunk of released text:  output gate on ALIASED text  ->  restore  ->  emit.
+Order for every piece of text released to the client:
+    output gate on ALIASED text  ->  restore  ->  emit
 
-Hold-back: we never release (a) the trailing whitespace-free token (it may be an
-incomplete alias, email, id or secret) or (b) up to HOLD_MAX chars of preceding
-tokens that contain digits or amount/date words (numbers span spaces: "9820 012 345",
-"12 March 1984", "38 lakh"). Everything else is released immediately.
+Modes (chosen per purpose by policy, see PolicyPack.stream_mode):
+  * "buffered":    nothing is released until the upstream finishes; the gate sees the whole output.
+                   Default for RESTRICTED purposes until streaming passes E-STREAM-LEAK.
+  * "incremental": bounded hold-back. R2 changes, driven by the R1 TEST failures:
+      - W4: the gate runs deterministic recognisers over the WHOLE aliased output released so far
+            (capped at GATE_CONTEXT_MAX), not a 48-char lookback, so context-dependent types
+            (a TSV header far above a value) are judged the same as in buffered mode. Past the cap
+            the restorer stops releasing and degrades to buffered for the remainder.
+      - W5: a whitespace-free run longer than TOKEN_MAX is cut only at a delimiter that is not
+            inside an alias or an alias prefix; if no safe cut exists, it is held.
+      - text is released in batches (>= MIN_RELEASE chars or at a newline) to bound gate cost.
 """
 from __future__ import annotations
 
@@ -16,12 +24,14 @@ from .alias import ALIAS_RE
 from .detect import recognizers
 from .types import EntityType
 
-HOLD_MAX = 64
-TOKEN_MAX = 256       # a whitespace-free run longer than this is released in pieces (still gated)
-LOOKBACK = 48         # context the gate sees from already-released text
+HOLD_MAX = 64            # max chars of trailing risky tokens held back (numbers/dates/amounts span spaces)
+TOKEN_MAX = 256          # longest whitespace-free run held back before a delimiter cut is attempted
+MIN_RELEASE = 48         # batch size for releases in incremental mode
+GATE_CONTEXT_MAX = 32_768  # beyond this much output, incremental degrades to buffered
 
 _RISKY_WORD = re.compile(
-    r"(?:\d|₹|rs\.?$|inr|lakh|lac|crore|lpa|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\+)", re.IGNORECASE)
+    r"(?:\d|₹|rs\.?$|inr|lakh|lac|crore|lpa|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\+|@)", re.IGNORECASE)
+_SAFE_DELIMS = set(',;{}[]"\'<>=&|')
 _GATE_TYPES = {EntityType.AADHAAR, EntityType.PAN, EntityType.CARD, EntityType.SECRET,
                EntityType.BANK_ACCOUNT, EntityType.UPI_ID, EntityType.EMAIL, EntityType.PHONE}
 
@@ -38,15 +48,24 @@ class Restorer:
     restore: bool = True
     never_restore: frozenset = frozenset()
     roster: object | None = None   # RosterIndex, for names the model "knew"
+    mode: str = "incremental"      # "incremental" | "buffered"
     events: list[GateEvent] = field(default_factory=list)
     restored: list = field(default_factory=list)   # (EntityType, value) actually emitted -> restore ledger
     _buf: str = ""
     _released_aliased: str = ""
+    _degraded: bool = False
 
     # -- public -------------------------------------------------------------
     def feed(self, delta: str) -> str:
         self._buf += delta
+        if self.mode == "buffered" or self._degraded:
+            return ""
+        if len(self._released_aliased) + len(self._buf) > GATE_CONTEXT_MAX:
+            self._degraded = True          # hold everything; judged at finish()
+            return ""
         cut = self._cut(self._buf)
+        if cut < MIN_RELEASE and "\n" not in self._buf[:cut]:
+            return ""
         region, self._buf = self._buf[:cut], self._buf[cut:]
         return self._process(region)
 
@@ -58,9 +77,11 @@ class Restorer:
     def _cut(self, b: str) -> int:
         ws = max(b.rfind(" "), b.rfind("\n"), b.rfind("\t"))
         cut = ws + 1
-        if len(b) - cut > TOKEN_MAX:          # pathological long token: release all but the tail
-            return len(b) - TOKEN_MAX
-        # step back over preceding risky tokens (numbers/dates/amounts spanning spaces)
+        if len(b) - cut > TOKEN_MAX:
+            cut = self._delimiter_cut(b, cut)
+            if cut is None:
+                return 0
+        # step back over preceding risky tokens (numbers/dates/amounts/emails spanning spaces)
         while cut > 0:
             j = cut - 1
             while j >= 0 and b[j].isspace():
@@ -77,13 +98,25 @@ class Restorer:
                 break
         return cut
 
+    @staticmethod
+    def _delimiter_cut(b: str, run_start: int) -> int | None:
+        """Cut inside a long whitespace-free run: at a delimiter, outside any alias or alias prefix,
+        leaving at least TOKEN_MAX chars held. None if no safe position exists."""
+        limit = len(b) - TOKEN_MAX
+        busy = [(m.start(), m.end()) for m in ALIAS_RE.finditer(b, run_start)]
+        for p in range(limit, run_start, -1):
+            if b[p - 1] not in _SAFE_DELIMS:
+                continue
+            if any(s < p < e for s, e in busy):   # never inside a complete alias
+                continue
+            return p                               # an incomplete alias can only sit in the held tail (<= 31 chars)
+        return None
+
     def _process(self, region: str) -> str:
         if not region:
             return ""
-        ctx = self._released_aliased[-LOOKBACK:]
-        gated = self._gate(ctx, region)
+        gated = self._gate(self._released_aliased, region)
         self._released_aliased += gated
-        self._released_aliased = self._released_aliased[-LOOKBACK:]
         return self._restore(gated)
 
     def _gate(self, ctx: str, region: str) -> str:
@@ -100,7 +133,7 @@ class Restorer:
             if key not in self.alias_map:
                 self.events.append(GateEvent("fabricated_alias", m.group(1).upper()))
                 repl.append((max(m.start(), off), m.end(), f"[unknown {m.group(1).upper()}]"))
-        # 2. deterministic recognisers on the aliased text
+        # 2. deterministic recognisers over the whole output so far (context-dependent types need it)
         for d in recognizers.detect_d2(text):
             if d.end <= off or d.type not in _GATE_TYPES:
                 continue
@@ -108,12 +141,14 @@ class Restorer:
                 continue
             self.events.append(GateEvent("raw_pii", d.type.value))
             repl.append((max(d.start, off), d.end, f"[{d.type.value}]"))
-        # 3. roster names the model produced on its own
+        # 3. roster names the model produced on its own (context-free: region plus a short lookback)
         if self.roster is not None:
-            for d in self.roster.detect(text):
-                if d.end > off and not any(s <= d.start < e for s, e in alias_spans):
+            lb = max(0, off - 64)
+            for d in self.roster.detect(text[lb:]):
+                s, e = d.start + lb, d.end + lb
+                if e > off and not any(a <= s < b for a, b in alias_spans):
                     self.events.append(GateEvent("edm_name", d.type.value))
-                    repl.append((max(d.start, off), d.end, f"[{d.type.value}]"))
+                    repl.append((max(s, off), e, f"[{d.type.value}]"))
         out = text
         taken: list[tuple[int, int]] = []
         for s, e, r in sorted(repl, key=lambda x: (-x[0], x[0] - x[1])):

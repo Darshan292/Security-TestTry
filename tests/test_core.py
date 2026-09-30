@@ -249,3 +249,13 @@ def test_roster_single_name_rules():
     assert "payal" in hits("[12:24] payal: portal is down")
     assert hits("We will review the price list in May.") == set()
     assert "Will" in hits("Dear Will, please review.")
+
+
+def test_egress_invariant_ignores_own_alias_tokens_but_still_catches_values():
+    """R1 TEST W9: detected value "Date" matched inside [DATE_OF_BIRTH_...] and blocked 8 requests."""
+    sens = [(T.PERSON, "Date"), (T.EMPLOYEE_ID, "IFSC")]
+    check(b'{"x": "[DATE_OF_BIRTH_82PYXM]\\t[IFSC_6BVN5J]"}', sens)          # no false alarm
+    with pytest.raises(EgressViolation):
+        check(b'{"x": "[DATE_OF_BIRTH_82PYXM] Date of joining"}', sens)       # the real value outside an alias
+    with pytest.raises(EgressViolation):
+        check(b'{"x": "DATE_OF_BIRTH_82PYXM"}', [(T.PERSON, "birth_82pyxm")])  # unbracketed text is still swept

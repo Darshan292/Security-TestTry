@@ -7,11 +7,18 @@ from __future__ import annotations
 
 import json
 
+import re
+
 import ahocorasick
 
-from .alias import canon
+from .alias import _CK, _TYPE_NAMES, canon
 from .types import EgressViolation, EntityType
 
+# Our own alias tokens exactly as the pipeline emits them. They are blanked (same length, so
+# offsets are unchanged) before the sweep: a detected value such as "Date" must not match the
+# type name inside "[DATE_OF_BIRTH_3QX2MA]" (R1 TEST: 8 false alarms, W9). Only this strict,
+# bracketed form is blanked; lenient or partial alias-like text is still swept.
+_EMITTED_ALIAS = re.compile(rf"\[(?:{_TYPE_NAMES})_[0-9][{_CK}]{{5}}(?:[{_CK}]{{2}})?\]")
 MIN_NEEDLE = 4  # shorter needles would fire on ordinary text; such values are rare and covered by D5 tests
 _NUMERIC = (EntityType.AADHAAR, EntityType.CARD, EntityType.BANK_ACCOUNT, EntityType.PHONE)
 
@@ -33,7 +40,7 @@ def check(body: bytes, sensitive: list[tuple[EntityType, str]]) -> None:
     if len(auto) == 0:
         return
     auto.make_automaton()
-    hay = body.decode("utf-8", errors="replace").casefold()
+    hay = _EMITTED_ALIAS.sub(lambda m: " " * len(m.group(0)), body.decode("utf-8", errors="replace")).casefold()
     hits = [t for _, t in auto.iter(hay)]
     if hits:
         raise EgressViolation(hits)

@@ -42,3 +42,19 @@ purposes:
     DATE_OF_BIRTH: TOKENIZE
 
 never_restore: [SECRET]
+
+# Data class per purpose (R2). Unlisted purposes are RESTRICTED (fail safe).
+data_class:
+  hr_case_summary: RESTRICTED
+  email_draft: RESTRICTED
+  ticket_classification: RESTRICTED
+  comp_band_analysis: RESTRICTED
+  integration_debug: RESTRICTED
+  eval_tokenize_all: INTERNAL
+
+# Output streaming mode by data class (R2, SECURITY_EVALUATION W4/W5).
+# RESTRICTED stays buffered until incremental streaming passes the E-STREAM-LEAK gate.
+stream_mode:
+  RESTRICTED: buffered
+  CONFIDENTIAL: buffered
+  INTERNAL: incremental

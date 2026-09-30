@@ -21,6 +21,8 @@ class PolicyPack:
     defaults: dict[EntityType, Action]
     purposes: dict[str, dict[EntityType, Action]]
     never_restore: frozenset[EntityType]
+    data_class: dict[str, str] = None
+    stream_modes: dict[str, str] = None
 
     @classmethod
     def load(cls, path: str | Path) -> "PolicyPack":
@@ -31,12 +33,24 @@ class PolicyPack:
             raise ValueError(f"policy pack missing defaults for {sorted(m.value for m in missing)}")
         purposes = {p: {EntityType(k): Action(v) for k, v in (o or {}).items()}
                     for p, o in raw["purposes"].items()}
+        modes = raw.get("stream_mode") or {}
+        if any(v not in ("buffered", "incremental") for v in modes.values()):
+            raise ValueError("stream_mode values must be 'buffered' or 'incremental'")
         return cls(raw["pack"], int(raw["version"]), defaults, purposes,
-                   frozenset(EntityType(t) for t in raw.get("never_restore", [])))
+                   frozenset(EntityType(t) for t in raw.get("never_restore", [])),
+                   dict(raw.get("data_class") or {}), dict(modes))
 
     @property
     def ref(self) -> str:
         return f"{self.name}@{self.version}"
+
+    def data_class_of(self, purpose: str) -> str:
+        return (self.data_class or {}).get(purpose, "RESTRICTED")
+
+    def stream_mode(self, purpose: str) -> str:
+        """Output mode for a purpose; anything not explicitly incremental is buffered."""
+        mode = (self.stream_modes or {}).get(self.data_class_of(purpose), "buffered")
+        return "incremental" if mode == "incremental" else "buffered"
 
     def decide(self, purpose: str, t: EntityType) -> Action:
         if purpose not in self.purposes:

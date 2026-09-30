@@ -243,7 +243,7 @@ def create_app(settings: Settings) -> Starlette:
 
         def new_restorer() -> Restorer:
             return Restorer(prot.alias_map, restore=app.restore_output, never_restore=policy.never_restore,
-                            roster=roster)
+                            roster=roster, mode=policy.stream_mode(purpose))
 
         def record(items) -> None:
             if ctx.conversation_id:
