@@ -1,0 +1,387 @@
+{
+  "files": {
+    "dev.jsonl": {
+      "bytes": 3668766,
+      "lines": 3977,
+      "sha256": "056f655133e16f3484f9105a7ed5839768c2a38fd2af02f775b8490dd9ee8b28"
+    },
+    "roster.jsonl": {
+      "bytes": 247877,
+      "lines": 1500,
+      "sha256": "5d4ca6001374d3426385d5dd1b2039df836f3f632e2f3b6c7c38ac4652440ab9"
+    },
+    "test.jsonl": {
+      "bytes": 985249,
+      "lines": 1240,
+      "sha256": "5b0834878efd8e7a1b40f1be10adf01895870ab6b9ec5be47f61444b91ea0b5e"
+    },
+    "tune.jsonl": {
+      "bytes": 1158403,
+      "lines": 1452,
+      "sha256": "2322cccc4d9164f0a90dc09c49c9e8937c20cb2df511188f930886e4ba1617ad"
+    }
+  },
+  "generator_version": "1.0.0",
+  "items": {
+    "dev": {
+      "hr_free_text": 1593,
+      "hris_structured": 1110,
+      "integration_debug": 524,
+      "negatives": 750
+    },
+    "test": {
+      "hr_free_text": 500,
+      "hris_structured": 320,
+      "integration_debug": 170,
+      "negatives": 250
+    },
+    "tune": {
+      "hr_free_text": 535,
+      "hris_structured": 356,
+      "integration_debug": 311,
+      "negatives": 250
+    }
+  },
+  "person_mentions_by_name_source": {
+    "dev": {
+      "external": 3336,
+      "roster": 8117
+    },
+    "test": {
+      "external": 925,
+      "roster": 1986
+    },
+    "tune": {
+      "external": 1027,
+      "roster": 1965
+    }
+  },
+  "roster_size": 1500,
+  "seed": 1337,
+  "span_counts": {
+    "dev": {
+      "ALL": {
+        "AADHAAR": 450,
+        "BANK_ACCOUNT": 1536,
+        "CARD": 739,
+        "COMPENSATION": 3241,
+        "DATE_OF_BIRTH": 1211,
+        "EMAIL": 1598,
+        "EMPLOYEE_ID": 4192,
+        "IFSC": 1384,
+        "PAN": 1178,
+        "PERSON": 11453,
+        "PHONE": 1573,
+        "SECRET": 714,
+        "UPI_ID": 450
+      },
+      "hr_free_text": {
+        "AADHAAR": 126,
+        "BANK_ACCOUNT": 143,
+        "CARD": 170,
+        "COMPENSATION": 1531,
+        "DATE_OF_BIRTH": 398,
+        "EMAIL": 702,
+        "EMPLOYEE_ID": 1105,
+        "IFSC": 143,
+        "PAN": 185,
+        "PERSON": 6008,
+        "PHONE": 730,
+        "SECRET": 172,
+        "UPI_ID": 40
+      },
+      "hris_structured": {
+        "AADHAAR": 303,
+        "BANK_ACCOUNT": 1152,
+        "CARD": 463,
+        "COMPENSATION": 1515,
+        "DATE_OF_BIRTH": 721,
+        "EMAIL": 650,
+        "EMPLOYEE_ID": 2702,
+        "IFSC": 1000,
+        "PAN": 925,
+        "PERSON": 4958,
+        "PHONE": 696,
+        "SECRET": 0,
+        "UPI_ID": 410
+      },
+      "integration_debug": {
+        "AADHAAR": 21,
+        "BANK_ACCOUNT": 241,
+        "CARD": 106,
+        "COMPENSATION": 195,
+        "DATE_OF_BIRTH": 92,
+        "EMAIL": 246,
+        "EMPLOYEE_ID": 385,
+        "IFSC": 241,
+        "PAN": 68,
+        "PERSON": 487,
+        "PHONE": 147,
+        "SECRET": 542,
+        "UPI_ID": 0
+      },
+      "negatives": {
+        "AADHAAR": 0,
+        "BANK_ACCOUNT": 0,
+        "CARD": 0,
+        "COMPENSATION": 0,
+        "DATE_OF_BIRTH": 0,
+        "EMAIL": 0,
+        "EMPLOYEE_ID": 0,
+        "IFSC": 0,
+        "PAN": 0,
+        "PERSON": 0,
+        "PHONE": 0,
+        "SECRET": 0,
+        "UPI_ID": 0
+      }
+    },
+    "test": {
+      "ALL": {
+        "AADHAAR": 232,
+        "BANK_ACCOUNT": 241,
+        "CARD": 228,
+        "COMPENSATION": 1125,
+        "DATE_OF_BIRTH": 317,
+        "EMAIL": 720,
+        "EMPLOYEE_ID": 812,
+        "IFSC": 322,
+        "PAN": 395,
+        "PERSON": 2911,
+        "PHONE": 597,
+        "SECRET": 321,
+        "UPI_ID": 206
+      },
+      "hr_free_text": {
+        "AADHAAR": 0,
+        "BANK_ACCOUNT": 104,
+        "CARD": 73,
+        "COMPENSATION": 510,
+        "DATE_OF_BIRTH": 0,
+        "EMAIL": 245,
+        "EMPLOYEE_ID": 220,
+        "IFSC": 104,
+        "PAN": 104,
+        "PERSON": 1853,
+        "PHONE": 163,
+        "SECRET": 0,
+        "UPI_ID": 26
+      },
+      "hris_structured": {
+        "AADHAAR": 232,
+        "BANK_ACCOUNT": 137,
+        "CARD": 0,
+        "COMPENSATION": 615,
+        "DATE_OF_BIRTH": 317,
+        "EMAIL": 407,
+        "EMPLOYEE_ID": 538,
+        "IFSC": 218,
+        "PAN": 291,
+        "PERSON": 868,
+        "PHONE": 399,
+        "SECRET": 0,
+        "UPI_ID": 145
+      },
+      "integration_debug": {
+        "AADHAAR": 0,
+        "BANK_ACCOUNT": 0,
+        "CARD": 155,
+        "COMPENSATION": 0,
+        "DATE_OF_BIRTH": 0,
+        "EMAIL": 68,
+        "EMPLOYEE_ID": 54,
+        "IFSC": 0,
+        "PAN": 0,
+        "PERSON": 190,
+        "PHONE": 35,
+        "SECRET": 321,
+        "UPI_ID": 35
+      },
+      "negatives": {
+        "AADHAAR": 0,
+        "BANK_ACCOUNT": 0,
+        "CARD": 0,
+        "COMPENSATION": 0,
+        "DATE_OF_BIRTH": 0,
+        "EMAIL": 0,
+        "EMPLOYEE_ID": 0,
+        "IFSC": 0,
+        "PAN": 0,
+        "PERSON": 0,
+        "PHONE": 0,
+        "SECRET": 0,
+        "UPI_ID": 0
+      }
+    },
+    "tune": {
+      "ALL": {
+        "AADHAAR": 150,
+        "BANK_ACCOUNT": 200,
+        "CARD": 221,
+        "COMPENSATION": 838,
+        "DATE_OF_BIRTH": 371,
+        "EMAIL": 545,
+        "EMPLOYEE_ID": 1149,
+        "IFSC": 175,
+        "PAN": 321,
+        "PERSON": 2992,
+        "PHONE": 557,
+        "SECRET": 150,
+        "UPI_ID": 186
+      },
+      "hr_free_text": {
+        "AADHAAR": 73,
+        "BANK_ACCOUNT": 175,
+        "CARD": 68,
+        "COMPENSATION": 86,
+        "DATE_OF_BIRTH": 73,
+        "EMAIL": 213,
+        "EMPLOYEE_ID": 299,
+        "IFSC": 175,
+        "PAN": 194,
+        "PERSON": 2176,
+        "PHONE": 438,
+        "SECRET": 0,
+        "UPI_ID": 128
+      },
+      "hris_structured": {
+        "AADHAAR": 77,
+        "BANK_ACCOUNT": 0,
+        "CARD": 153,
+        "COMPENSATION": 752,
+        "DATE_OF_BIRTH": 274,
+        "EMAIL": 0,
+        "EMPLOYEE_ID": 356,
+        "IFSC": 0,
+        "PAN": 0,
+        "PERSON": 630,
+        "PHONE": 0,
+        "SECRET": 0,
+        "UPI_ID": 0
+      },
+      "integration_debug": {
+        "AADHAAR": 0,
+        "BANK_ACCOUNT": 25,
+        "CARD": 0,
+        "COMPENSATION": 0,
+        "DATE_OF_BIRTH": 24,
+        "EMAIL": 332,
+        "EMPLOYEE_ID": 494,
+        "IFSC": 0,
+        "PAN": 127,
+        "PERSON": 186,
+        "PHONE": 119,
+        "SECRET": 150,
+        "UPI_ID": 58
+      },
+      "negatives": {
+        "AADHAAR": 0,
+        "BANK_ACCOUNT": 0,
+        "CARD": 0,
+        "COMPENSATION": 0,
+        "DATE_OF_BIRTH": 0,
+        "EMAIL": 0,
+        "EMPLOYEE_ID": 0,
+        "IFSC": 0,
+        "PAN": 0,
+        "PERSON": 0,
+        "PHONE": 0,
+        "SECRET": 0,
+        "UPI_ID": 0
+      }
+    }
+  },
+  "splits": [
+    "dev",
+    "tune",
+    "test"
+  ],
+  "template_split": {
+    "dev": [
+      "hr.appraisal",
+      "hr.attrition_review",
+      "hr.bgv",
+      "hr.candidate_note",
+      "hr.case_note",
+      "hr.dob_correction",
+      "hr.email_bank_update",
+      "hr.email_hrbp_manager",
+      "hr.exit_interview",
+      "hr.grievance",
+      "hr.hinglish_chat",
+      "hr.hrbp_handover",
+      "hr.leave_request",
+      "hr.lost_card_report",
+      "hr.promotion",
+      "hr.relocation",
+      "hr.salary_letter",
+      "hr.slack_creds",
+      "hr.teams_chat",
+      "hris.absence_xml",
+      "hris.audit_events_json",
+      "hris.bank_details_json",
+      "hris.comp_change_json",
+      "hris.csv_bank_advice",
+      "hris.csv_corp_cards",
+      "hris.csv_employee_export",
+      "hris.leave_balance_csv",
+      "hris.wd_worker_raas",
+      "hris.wd_workers_rest",
+      "hris.worker_xml_soap",
+      "int.card_vault_error",
+      "int.curl",
+      "int.eib_error",
+      "int.env_file",
+      "int.escaped_json_log",
+      "int.git_diff_leak",
+      "int.http_dump",
+      "int.java_trace",
+      "int.sftp_payroll_log",
+      "int.studio_fault",
+      "neg.dates_generic",
+      "neg.finance_budget",
+      "neg.gl_codes",
+      "neg.hr_generic_text",
+      "neg.invoice",
+      "neg.luhn_lookalikes",
+      "neg.meeting_invite",
+      "neg.news_public",
+      "neg.order_ids",
+      "neg.template_placeholders"
+    ],
+    "test": [
+      "hr.card_reimbursement",
+      "hr.offer_negotiation",
+      "hr.payroll_query",
+      "hr.pip",
+      "hr.recommendation",
+      "hr.show_cause",
+      "hris.offer_json",
+      "hris.tsv_dump",
+      "hris.ukg_employee_json",
+      "int.payment_gateway_log",
+      "int.python_snippet",
+      "int.yaml_config",
+      "neg.it_ticket",
+      "neg.policy_text",
+      "neg.product_catalog"
+    ],
+    "tune": [
+      "hr.emergency_contact",
+      "hr.medical_leave",
+      "hr.onboarding_docs",
+      "hr.referral",
+      "hr.slack_msgs",
+      "hr.travel_booking_chat",
+      "hris.comp_history_compact",
+      "hris.dependents_json",
+      "hris.expense_cards_json",
+      "int.jwt_log",
+      "int.kv_syslog",
+      "int.py_traceback",
+      "neg.at_signs",
+      "neg.log_hashes",
+      "neg.release_notes"
+    ]
+  }
+}
