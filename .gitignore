@@ -23,4 +23,4 @@ secrets/
 # Generated eval corpus: reproducible from eval/synth/generate.py (hashes in MANIFEST.json);
 # contains realistic fake secrets that trip secret scanners
 eval/data/*.jsonl
-eval/results/*.json
+eval/results/det_*.json

@@ -1,0 +1,1755 @@
+{
+ "split": "dev",
+ "code_commit": "a51c22daaaf97bd34ee04cbd8e5e3c1451c793a8",
+ "corpus_sha256": {
+  "dev": "056f655133e16f34\u2026",
+  "test": "5b0834878efd8e7a\u2026"
+ },
+ "results": {
+  "clean": {
+   "items": 3977,
+   "per_type": {
+    "AADHAAR": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "BANK_ACCOUNT": {
+     "n_gold": 1536,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975051979372423,
+      1.0
+     ],
+     "n_pred": 1536,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "CARD": {
+     "n_gold": 739,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9948285071810734,
+      1.0
+     ],
+     "n_pred": 739,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "COMPENSATION": {
+     "n_gold": 3241,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9988160901290221,
+      1.0
+     ],
+     "n_pred": 3241,
+     "precision": 1.0,
+     "gate": [
+      0.95,
+      0.85,
+      200
+     ],
+     "status": "PASS"
+    },
+    "DATE_OF_BIRTH": {
+     "n_gold": 1211,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.996837777040233,
+      1.0
+     ],
+     "n_pred": 1276,
+     "precision": 0.9490595611285266,
+     "gate": null,
+     "status": "no gate"
+    },
+    "EMAIL": {
+     "n_gold": 1598,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9976017603738097,
+      1.0
+     ],
+     "n_pred": 1598,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "EMPLOYEE_ID": {
+     "n_gold": 4192,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9990844268286964,
+      1.0000000000000002
+     ],
+     "n_pred": 4192,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "IFSC": {
+     "n_gold": 1384,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9972319607655512,
+      0.9999999999999998
+     ],
+     "n_pred": 1384,
+     "precision": 1.0,
+     "gate": null,
+     "status": "no gate"
+    },
+    "PAN": {
+     "n_gold": 1178,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9967494797949235,
+      1.0
+     ],
+     "n_pred": 1178,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "PERSON": {
+     "n_gold": 11453,
+     "recall": 0.9447306382607177,
+     "recall_ci95": [
+      0.9403945875759525,
+      0.9487684431846368
+     ],
+     "n_pred": 11453,
+     "precision": 0.9585261503536191,
+     "gate": [
+      0.9,
+      0.85,
+      400
+     ],
+     "status": "PASS"
+    },
+    "PHONE": {
+     "n_gold": 1573,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975637375371122,
+      1.0000000000000002
+     ],
+     "n_pred": 1573,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "SECRET": {
+     "n_gold": 714,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.99464840154151,
+      1.0
+     ],
+     "n_pred": 714,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "UPI_ID": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    }
+   },
+   "person_by_source": {
+    "roster": {
+     "recall": 1.0,
+     "n": 4446,
+     "ci95": [
+      0.9991366883711096,
+      1.0
+     ]
+    },
+    "mixed": {
+     "recall": 0.923125,
+     "n": 6400,
+     "ci95": [
+      0.9163415653613592,
+      0.9294007777971598
+     ]
+    },
+    "external": {
+     "recall": 0.7677100494233937,
+     "n": 607,
+     "ci95": [
+      0.7324948554822711,
+      0.7995579713062121
+     ]
+    }
+   },
+   "leak_rate_chars": 0.021131333320863317,
+   "leak_gate": 0.01,
+   "negatives": {
+    "items": 750,
+    "items_with_fp": 45,
+    "fp_by_type": {
+     "PERSON": 73
+    }
+   },
+   "latency_ms": {
+    "p50": 2.2836780003672175,
+    "p95": 5.074900899944623,
+    "p99": 9.728426359815785,
+    "max": 17.80560899987904
+   },
+   "stream_roundtrip": {
+    "n": 3977,
+    "exact": 3836,
+    "case_insensitive": 3976
+   }
+  },
+  "homoglyph": {
+   "items": 3227,
+   "per_type": {
+    "AADHAAR": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "BANK_ACCOUNT": {
+     "n_gold": 1536,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975051979372423,
+      1.0
+     ],
+     "n_pred": 1536,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "CARD": {
+     "n_gold": 739,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9948285071810734,
+      1.0
+     ],
+     "n_pred": 739,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "COMPENSATION": {
+     "n_gold": 3241,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9988160901290221,
+      1.0
+     ],
+     "n_pred": 3241,
+     "precision": 1.0,
+     "gate": [
+      0.95,
+      0.85,
+      200
+     ],
+     "status": "PASS"
+    },
+    "DATE_OF_BIRTH": {
+     "n_gold": 1211,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.996837777040233,
+      1.0
+     ],
+     "n_pred": 1276,
+     "precision": 0.9490595611285266,
+     "gate": null,
+     "status": "no gate"
+    },
+    "EMAIL": {
+     "n_gold": 1598,
+     "recall": 0.9981226533166458,
+     "recall_ci95": [
+      0.9944947282635466,
+      0.999361343397971
+     ],
+     "n_pred": 1595,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "EMPLOYEE_ID": {
+     "n_gold": 4192,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9990844268286964,
+      1.0000000000000002
+     ],
+     "n_pred": 4192,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "IFSC": {
+     "n_gold": 1384,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9972319607655512,
+      0.9999999999999998
+     ],
+     "n_pred": 1384,
+     "precision": 1.0,
+     "gate": null,
+     "status": "no gate"
+    },
+    "PAN": {
+     "n_gold": 1178,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9967494797949235,
+      1.0
+     ],
+     "n_pred": 1178,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "PERSON": {
+     "n_gold": 11453,
+     "recall": 0.9140836462062342,
+     "recall_ci95": [
+      0.9088113013450533,
+      0.9190782978268511
+     ],
+     "n_pred": 10952,
+     "precision": 0.962655222790358,
+     "gate": [
+      0.9,
+      0.85,
+      400
+     ],
+     "status": "PASS"
+    },
+    "PHONE": {
+     "n_gold": 1573,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975637375371122,
+      1.0000000000000002
+     ],
+     "n_pred": 1573,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "SECRET": {
+     "n_gold": 714,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.99464840154151,
+      1.0
+     ],
+     "n_pred": 714,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "UPI_ID": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    }
+   },
+   "person_by_source": {
+    "roster": {
+     "recall": 0.9910031488978858,
+     "n": 4446,
+     "ci95": [
+      0.9877726806649665,
+      0.9933858396742743
+     ]
+    },
+    "mixed": {
+     "recall": 0.87578125,
+     "n": 6400,
+     "ci95": [
+      0.867474244000993,
+      0.8836374012339546
+     ]
+    },
+    "external": {
+     "recall": 0.7545304777594728,
+     "n": 607,
+     "ci95": [
+      0.7187627862696434,
+      0.7870966705846376
+     ]
+    }
+   },
+   "leak_rate_chars": 0.033193401936237245,
+   "leak_gate": 0.01,
+   "negatives": {
+    "items": 0,
+    "items_with_fp": 0,
+    "fp_by_type": {}
+   },
+   "latency_ms": {
+    "p50": 2.8213290001986024,
+    "p95": 5.944335400181444,
+    "p99": 12.436373839827866,
+    "max": 19.216544000300928
+   },
+   "stream_roundtrip": {
+    "n": 0,
+    "exact": 0,
+    "case_insensitive": 0
+   }
+  },
+  "zero_width": {
+   "items": 3227,
+   "per_type": {
+    "AADHAAR": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "BANK_ACCOUNT": {
+     "n_gold": 1536,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975051979372423,
+      1.0
+     ],
+     "n_pred": 1536,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "CARD": {
+     "n_gold": 739,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9948285071810734,
+      1.0
+     ],
+     "n_pred": 739,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "COMPENSATION": {
+     "n_gold": 3241,
+     "recall": 0.9996914532551682,
+     "recall_ci95": [
+      0.9982541939746669,
+      0.9999455332477654
+     ],
+     "n_pred": 3240,
+     "precision": 1.0,
+     "gate": [
+      0.95,
+      0.85,
+      200
+     ],
+     "status": "PASS"
+    },
+    "DATE_OF_BIRTH": {
+     "n_gold": 1211,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.996837777040233,
+      1.0
+     ],
+     "n_pred": 1275,
+     "precision": 0.9498039215686275,
+     "gate": null,
+     "status": "no gate"
+    },
+    "EMAIL": {
+     "n_gold": 1598,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9976017603738097,
+      1.0
+     ],
+     "n_pred": 1598,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "EMPLOYEE_ID": {
+     "n_gold": 4192,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9990844268286964,
+      1.0000000000000002
+     ],
+     "n_pred": 4192,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "IFSC": {
+     "n_gold": 1384,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9972319607655512,
+      0.9999999999999998
+     ],
+     "n_pred": 1384,
+     "precision": 1.0,
+     "gate": null,
+     "status": "no gate"
+    },
+    "PAN": {
+     "n_gold": 1178,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9967494797949235,
+      1.0
+     ],
+     "n_pred": 1178,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "PERSON": {
+     "n_gold": 11453,
+     "recall": 0.9204575220466253,
+     "recall_ci95": [
+      0.9153597451234382,
+      0.9252733312734635
+     ],
+     "n_pred": 11079,
+     "precision": 0.9611878328368987,
+     "gate": [
+      0.9,
+      0.85,
+      400
+     ],
+     "status": "PASS"
+    },
+    "PHONE": {
+     "n_gold": 1573,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975637375371122,
+      1.0000000000000002
+     ],
+     "n_pred": 1573,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "SECRET": {
+     "n_gold": 714,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.99464840154151,
+      1.0
+     ],
+     "n_pred": 714,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "UPI_ID": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    }
+   },
+   "person_by_source": {
+    "roster": {
+     "recall": 0.9986504723346828,
+     "n": 4446,
+     "ci95": [
+      0.9970585975254694,
+      0.9993813656408598
+     ]
+    },
+    "mixed": {
+     "recall": 0.881875,
+     "n": 6400,
+     "ci95": [
+      0.8737374467675837,
+      0.8895543873090118
+     ]
+    },
+    "external": {
+     "recall": 0.7545304777594728,
+     "n": 607,
+     "ci95": [
+      0.7187627862696434,
+      0.7870966705846376
+     ]
+    }
+   },
+   "leak_rate_chars": 0.029747813153124716,
+   "leak_gate": 0.01,
+   "negatives": {
+    "items": 0,
+    "items_with_fp": 0,
+    "fp_by_type": {}
+   },
+   "latency_ms": {
+    "p50": 2.763499000138836,
+    "p95": 5.811711800288322,
+    "p99": 12.289168759907625,
+    "max": 19.45357199974751
+   },
+   "stream_roundtrip": {
+    "n": 0,
+    "exact": 0,
+    "case_insensitive": 0
+   }
+  },
+  "spaced": {
+   "items": 3227,
+   "per_type": {
+    "AADHAAR": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "BANK_ACCOUNT": {
+     "n_gold": 1536,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975051979372423,
+      1.0
+     ],
+     "n_pred": 1536,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "CARD": {
+     "n_gold": 739,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9948285071810734,
+      1.0
+     ],
+     "n_pred": 739,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "COMPENSATION": {
+     "n_gold": 3241,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9988160901290221,
+      1.0
+     ],
+     "n_pred": 3241,
+     "precision": 1.0,
+     "gate": [
+      0.95,
+      0.85,
+      200
+     ],
+     "status": "PASS"
+    },
+    "DATE_OF_BIRTH": {
+     "n_gold": 1211,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.996837777040233,
+      1.0
+     ],
+     "n_pred": 1276,
+     "precision": 0.9490595611285266,
+     "gate": null,
+     "status": "no gate"
+    },
+    "EMAIL": {
+     "n_gold": 1598,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9976017603738097,
+      1.0
+     ],
+     "n_pred": 1598,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "EMPLOYEE_ID": {
+     "n_gold": 4192,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9990844268286964,
+      1.0000000000000002
+     ],
+     "n_pred": 4192,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "IFSC": {
+     "n_gold": 1384,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9972319607655512,
+      0.9999999999999998
+     ],
+     "n_pred": 1384,
+     "precision": 1.0,
+     "gate": null,
+     "status": "no gate"
+    },
+    "PAN": {
+     "n_gold": 1178,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9967494797949235,
+      1.0
+     ],
+     "n_pred": 1178,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "PERSON": {
+     "n_gold": 11453,
+     "recall": 0.114293198288658,
+     "recall_ci95": [
+      0.10859498293296668,
+      0.12025007677354092
+     ],
+     "n_pred": 1928,
+     "precision": 0.7780082987551867,
+     "gate": [
+      0.9,
+      0.85,
+      400
+     ],
+     "status": "FAIL"
+    },
+    "PHONE": {
+     "n_gold": 1573,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975637375371122,
+      1.0000000000000002
+     ],
+     "n_pred": 1573,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "SECRET": {
+     "n_gold": 714,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.99464840154151,
+      1.0
+     ],
+     "n_pred": 714,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "UPI_ID": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    }
+   },
+   "person_by_source": {
+    "roster": {
+     "recall": 0.1054880791722897,
+     "n": 4446,
+     "ci95": [
+      0.09679659073099081,
+      0.11486074107156144
+     ]
+    },
+    "mixed": {
+     "recall": 0.11984375,
+     "n": 6400,
+     "ci95": [
+      0.11211384165760244,
+      0.12802976214421552
+     ]
+    },
+    "external": {
+     "recall": 0.12026359143327842,
+     "n": 607,
+     "ci95": [
+      0.09674647186677694,
+      0.14855705690402055
+     ]
+    }
+   },
+   "leak_rate_chars": 0.4548430223580374,
+   "leak_gate": 0.01,
+   "negatives": {
+    "items": 0,
+    "items_with_fp": 0,
+    "fp_by_type": {}
+   },
+   "latency_ms": {
+    "p50": 2.9175869999562565,
+    "p95": 6.001082399779989,
+    "p99": 12.524050680021901,
+    "max": 20.456443000057334
+   },
+   "stream_roundtrip": {
+    "n": 0,
+    "exact": 0,
+    "case_insensitive": 0
+   }
+  },
+  "obfuscated_email": {
+   "items": 3227,
+   "per_type": {
+    "AADHAAR": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "BANK_ACCOUNT": {
+     "n_gold": 1536,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975051979372423,
+      1.0
+     ],
+     "n_pred": 1536,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "CARD": {
+     "n_gold": 739,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9948285071810734,
+      1.0
+     ],
+     "n_pred": 739,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "COMPENSATION": {
+     "n_gold": 3241,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9988160901290221,
+      1.0
+     ],
+     "n_pred": 3241,
+     "precision": 1.0,
+     "gate": [
+      0.95,
+      0.85,
+      200
+     ],
+     "status": "PASS"
+    },
+    "DATE_OF_BIRTH": {
+     "n_gold": 1211,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.996837777040233,
+      1.0
+     ],
+     "n_pred": 1276,
+     "precision": 0.9490595611285266,
+     "gate": null,
+     "status": "no gate"
+    },
+    "EMAIL": {
+     "n_gold": 1598,
+     "recall": 0.06508135168961202,
+     "recall_ci95": [
+      0.053999595331552006,
+      0.07824918632076616
+     ],
+     "n_pred": 104,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "FAIL"
+    },
+    "EMPLOYEE_ID": {
+     "n_gold": 4192,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9990844268286964,
+      1.0000000000000002
+     ],
+     "n_pred": 4192,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "IFSC": {
+     "n_gold": 1384,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9972319607655512,
+      0.9999999999999998
+     ],
+     "n_pred": 1384,
+     "precision": 1.0,
+     "gate": null,
+     "status": "no gate"
+    },
+    "PAN": {
+     "n_gold": 1178,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9967494797949235,
+      1.0
+     ],
+     "n_pred": 1178,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "PERSON": {
+     "n_gold": 11453,
+     "recall": 0.9447306382607177,
+     "recall_ci95": [
+      0.9403945875759525,
+      0.9487684431846368
+     ],
+     "n_pred": 13293,
+     "precision": 0.8258481907771007,
+     "gate": [
+      0.9,
+      0.85,
+      400
+     ],
+     "status": "FAIL"
+    },
+    "PHONE": {
+     "n_gold": 1573,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975637375371122,
+      1.0000000000000002
+     ],
+     "n_pred": 1573,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "SECRET": {
+     "n_gold": 714,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.99464840154151,
+      1.0
+     ],
+     "n_pred": 714,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "UPI_ID": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    }
+   },
+   "person_by_source": {
+    "roster": {
+     "recall": 1.0,
+     "n": 4446,
+     "ci95": [
+      0.9991366883711096,
+      1.0
+     ]
+    },
+    "mixed": {
+     "recall": 0.923125,
+     "n": 6400,
+     "ci95": [
+      0.9163415653613592,
+      0.9294007777971598
+     ]
+    },
+    "external": {
+     "recall": 0.7677100494233937,
+     "n": 607,
+     "ci95": [
+      0.7324948554822711,
+      0.7995579713062121
+     ]
+    }
+   },
+   "leak_rate_chars": 0.12676283817908204,
+   "leak_gate": 0.01,
+   "negatives": {
+    "items": 0,
+    "items_with_fp": 0,
+    "fp_by_type": {}
+   },
+   "latency_ms": {
+    "p50": 2.470864999850164,
+    "p95": 5.33320120011922,
+    "p99": 11.029682719854463,
+    "max": 28.09210699979303
+   },
+   "stream_roundtrip": {
+    "n": 0,
+    "exact": 0,
+    "case_insensitive": 0
+   }
+  },
+  "case": {
+   "items": 3227,
+   "per_type": {
+    "AADHAAR": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "BANK_ACCOUNT": {
+     "n_gold": 1536,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975051979372423,
+      1.0
+     ],
+     "n_pred": 1536,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "CARD": {
+     "n_gold": 739,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9948285071810734,
+      1.0
+     ],
+     "n_pred": 739,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "COMPENSATION": {
+     "n_gold": 3241,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9988160901290221,
+      1.0
+     ],
+     "n_pred": 3241,
+     "precision": 1.0,
+     "gate": [
+      0.95,
+      0.85,
+      200
+     ],
+     "status": "PASS"
+    },
+    "DATE_OF_BIRTH": {
+     "n_gold": 1211,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.996837777040233,
+      1.0
+     ],
+     "n_pred": 1276,
+     "precision": 0.9490595611285266,
+     "gate": null,
+     "status": "no gate"
+    },
+    "EMAIL": {
+     "n_gold": 1598,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9976017603738097,
+      1.0
+     ],
+     "n_pred": 1598,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "EMPLOYEE_ID": {
+     "n_gold": 4192,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9990844268286964,
+      1.0000000000000002
+     ],
+     "n_pred": 4192,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "IFSC": {
+     "n_gold": 1384,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9972319607655512,
+      0.9999999999999998
+     ],
+     "n_pred": 1384,
+     "precision": 1.0,
+     "gate": null,
+     "status": "no gate"
+    },
+    "PAN": {
+     "n_gold": 1178,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9967494797949235,
+      1.0
+     ],
+     "n_pred": 1178,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "PERSON": {
+     "n_gold": 11453,
+     "recall": 0.8506941412730289,
+     "recall_ci95": [
+      0.8440494650330749,
+      0.8571036346135154
+     ],
+     "n_pred": 10294,
+     "precision": 0.9584223819700797,
+     "gate": [
+      0.9,
+      0.85,
+      400
+     ],
+     "status": "FAIL"
+    },
+    "PHONE": {
+     "n_gold": 1573,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975637375371122,
+      1.0000000000000002
+     ],
+     "n_pred": 1573,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "SECRET": {
+     "n_gold": 714,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.99464840154151,
+      1.0
+     ],
+     "n_pred": 714,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "UPI_ID": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    }
+   },
+   "person_by_source": {
+    "roster": {
+     "recall": 0.9705353126405758,
+     "n": 4446,
+     "ci95": [
+      0.9651438436447476,
+      0.9751143444219916
+     ]
+    },
+    "mixed": {
+     "recall": 0.7896875,
+     "n": 6400,
+     "ci95": [
+      0.7795307034006651,
+      0.7994967353792073
+     ]
+    },
+    "external": {
+     "recall": 0.6161449752883031,
+     "n": 607,
+     "ci95": [
+      0.5768405327206364,
+      0.6539885398245209
+     ]
+    }
+   },
+   "leak_rate_chars": 0.05152432588428003,
+   "leak_gate": 0.01,
+   "negatives": {
+    "items": 0,
+    "items_with_fp": 0,
+    "fp_by_type": {}
+   },
+   "latency_ms": {
+    "p50": 2.47318899982929,
+    "p95": 5.353432199899544,
+    "p99": 11.054356640215701,
+    "max": 18.34687299970028
+   },
+   "stream_roundtrip": {
+    "n": 0,
+    "exact": 0,
+    "case_insensitive": 0
+   }
+  },
+  "nbsp": {
+   "items": 3227,
+   "per_type": {
+    "AADHAAR": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 473,
+     "precision": 0.9513742071881607,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "BANK_ACCOUNT": {
+     "n_gold": 1536,
+     "recall": 0.60546875,
+     "recall_ci95": [
+      0.5807921377217865,
+      0.6296191149681005
+     ],
+     "n_pred": 930,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "FAIL"
+    },
+    "CARD": {
+     "n_gold": 739,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9948285071810734,
+      1.0
+     ],
+     "n_pred": 762,
+     "precision": 0.9698162729658792,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "COMPENSATION": {
+     "n_gold": 3241,
+     "recall": 0.816414686825054,
+     "recall_ci95": [
+      0.8027139102916269,
+      0.829366250416372
+     ],
+     "n_pred": 2648,
+     "precision": 0.9992447129909365,
+     "gate": [
+      0.95,
+      0.85,
+      200
+     ],
+     "status": "FAIL"
+    },
+    "DATE_OF_BIRTH": {
+     "n_gold": 1211,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.996837777040233,
+      1.0
+     ],
+     "n_pred": 1276,
+     "precision": 0.9490595611285266,
+     "gate": null,
+     "status": "no gate"
+    },
+    "EMAIL": {
+     "n_gold": 1598,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9976017603738097,
+      1.0
+     ],
+     "n_pred": 1598,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "EMPLOYEE_ID": {
+     "n_gold": 4192,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9990844268286964,
+      1.0000000000000002
+     ],
+     "n_pred": 4192,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "IFSC": {
+     "n_gold": 1384,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9972319607655512,
+      0.9999999999999998
+     ],
+     "n_pred": 1384,
+     "precision": 1.0,
+     "gate": null,
+     "status": "no gate"
+    },
+    "PAN": {
+     "n_gold": 1178,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9967494797949235,
+      1.0
+     ],
+     "n_pred": 1178,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "PERSON": {
+     "n_gold": 11453,
+     "recall": 0.9447306382607177,
+     "recall_ci95": [
+      0.9403945875759525,
+      0.9487684431846368
+     ],
+     "n_pred": 11380,
+     "precision": 0.9646748681898066,
+     "gate": [
+      0.9,
+      0.85,
+      400
+     ],
+     "status": "PASS"
+    },
+    "PHONE": {
+     "n_gold": 1573,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9975637375371122,
+      1.0000000000000002
+     ],
+     "n_pred": 1573,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.95,
+      150
+     ],
+     "status": "PASS"
+    },
+    "SECRET": {
+     "n_gold": 714,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.99464840154151,
+      1.0
+     ],
+     "n_pred": 714,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    },
+    "UPI_ID": {
+     "n_gold": 450,
+     "recall": 1.0,
+     "recall_ci95": [
+      0.9915353726939091,
+      1.0000000000000002
+     ],
+     "n_pred": 450,
+     "precision": 1.0,
+     "gate": [
+      0.98,
+      0.9,
+      150
+     ],
+     "status": "PASS"
+    }
+   },
+   "person_by_source": {
+    "roster": {
+     "recall": 1.0,
+     "n": 4446,
+     "ci95": [
+      0.9991366883711096,
+      1.0
+     ]
+    },
+    "mixed": {
+     "recall": 0.923125,
+     "n": 6400,
+     "ci95": [
+      0.9163415653613592,
+      0.9294007777971598
+     ]
+    },
+    "external": {
+     "recall": 0.7677100494233937,
+     "n": 607,
+     "ci95": [
+      0.7324948554822711,
+      0.7995579713062121
+     ]
+    }
+   },
+   "leak_rate_chars": 0.06549020847492452,
+   "leak_gate": 0.01,
+   "negatives": {
+    "items": 0,
+    "items_with_fp": 0,
+    "fp_by_type": {}
+   },
+   "latency_ms": {
+    "p50": 2.508400999886362,
+    "p95": 5.437560999962443,
+    "p99": 10.967985559782392,
+    "max": 16.967027000191592
+   },
+   "stream_roundtrip": {
+    "n": 0,
+    "exact": 0,
+    "case_insensitive": 0
+   }
+  }
+ }
+}
