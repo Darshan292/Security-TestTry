@@ -75,3 +75,13 @@ construction. Audit evidence exists without storing content.
 **Bad.** Some legitimate requests are blocked during detector outages.
 That is the correct trade for HR data and must be agreed with app owners in
 the onboarding contract.
+
+## Amendment R2 (2026-09-30) — false alarms on our own alias text
+
+**Trigger:** M-09 (R1 TEST: 0 true catches, 8 false alarms). A detected value such as "Date", itself
+a TSV header mis-detection, matched inside the emitted alias `[DATE_OF_BIRTH_…]`.
+**Change:** before the sweep, alias tokens in exactly the form the pipeline emits (`[TYPE_suffix]`)
+are blanked at the same length. Values outside aliases, and unbracketed alias-like text, are still
+swept. The TSV header-row guard (recognizers) removes the root cause.
+**Unchanged:** the invariant is a bug detector, never a recall control. Its false-alarm rate is
+reported as an availability metric (pre-registered gate: 0).

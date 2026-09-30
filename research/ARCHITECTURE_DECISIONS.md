@@ -35,6 +35,24 @@ ADR-0002/0003/0005/0006 **depart from**, not as support. ADR-0003, ADR-0004 and 
 no FACT-P/FACT-M evidence that the *decision* is right (tests show only that the implementation behaves),
 so their rationale is marked PROVISIONAL.
 
+## R2 status update (2026-09-30, code `4a6a75e`)
+
+| ADR | R2 change | Held-out evidence | Status now |
+|---|---|---|---|
+| ADR-0002 | Suffix grammar amended in the ADR text | M-12 fixed (no identifier corruption) | CONTRADICTED → **AMENDED**; rationale PROVISIONAL (Q-01) |
+| ADR-0005 | D0 views, structural escalation, D1 field context, D4 NER (spaCy) | M-21, M-23, M-24, M-28, M-30 | PARTIAL; **leak gate FAILED on test2** (6.1–8.2 %) |
+| ADR-0007 | Alias blanking before the sweep | M-26 (0 false alarms, clean test2); M-27 availability risk under held-out transforms | PARTIAL |
+| ADR-0008 | RESTRICTED buffered by policy; incremental hardened | M-25 (E-STREAM-LEAK FAIL, 9/1,755) | AMENDED; incremental **not approved** for RESTRICTED |
+
+Weaknesses added by R2 (SECURITY_EVALUATION_R2.md): W-10 unseen document formats, W-11 held-out
+evasions, W-12 external names at 0.794, W-13 secrets in new places.
+
+| ID | Proposal | Why | Closes |
+|---|---|---|---|
+| PD-10 | **Value-shape masking under RESTRICTED purposes**: mask Verhoeff-valid 12-digit numbers, Luhn card-length numbers, dates in person-bearing documents (month/year) and high-entropy tokens regardless of context; measure on a third fresh split | M-23, M-30 | W-10, W-13 |
+| PD-11 | D0 views for line-wrapped values, HTML entities and OCR confusions (O↔0, l↔1) inside digit runs | M-27 | W-11 |
+| PD-12 | Re-evaluate GLiNER when huggingface.co is allowed; keep spaCy `lg` meanwhile | M-24 | W-12 |
+
 ## Required amendments (documentation only; the code already reflects the first)
 
 | Amends | Change | Evidence |

@@ -4,7 +4,7 @@
 
 ## Evaluation integrity (do not break)
 
-- Tune only on `dev`/`tune`. `test` is read once per release via `python -m eval.run_det --split test --one-shot-test`, which writes `eval/results/TEST_LOCK.json`. The current test split is **spent**: the next release needs a new seed and new templates.
+- Tune only on `dev`/`tune`. `test` is read once per release via `python -m eval.run_det --split test --one-shot-test`, which writes `eval/results/TEST_LOCK.json`. R1 `test` and R2 `test2`/`ner_test2` are **spent** (see LOCK files): the next release needs a third fresh corpus.
 - Never commit `eval/data/*.jsonl` (realistic fake secrets); the generator plus MANIFEST hashes reproduce them.
 
 ## Provenance

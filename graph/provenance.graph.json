@@ -1602,13 +1602,103 @@
    "source_location": "L33"
   },
   {
+   "id": "M-21",
+   "label": "M-21 R2 test2 character leak, Config A / B: 8.24 % / **6.10 %** (gate ≤ 1 %; dev2 0.58 %)",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L34"
+  },
+  {
+   "id": "M-22",
+   "label": "M-22 R2 test2 document exposure, A / B: 30.1 % / **20.1 %**",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L35"
+  },
+  {
+   "id": "M-23",
+   "label": "M-23 R2 test2 per-type recall (A=B except PERSON): AADHAAR 0.789, DOB 0.756, SECRET 0.848, COMPENSATION 0.927, ",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L36"
+  },
+  {
+   "id": "M-24",
+   "label": "M-24 ner_test2 external-name recall A / B / C: 0.133 / 0.794 / 0.844 (C = trf, reference)",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L37"
+  },
+  {
+   "id": "M-25",
+   "label": "M-25 E-STREAM-LEAK on test2: 9/1,755 docs differ, 5 stream-only fragments: **FAIL**",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L38"
+  },
+  {
+   "id": "M-26",
+   "label": "M-26 Egress invariant, clean test2: 0 fires, 0 false alarms (R1: 8)",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L39"
+  },
+  {
+   "id": "M-27",
+   "label": "M-27 Held-out adversarial leak, B: line-wrap 70.6 %, HTML entity 52.4 %, OCR 40.5 %, leetspeak ",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L40"
+  },
+  {
+   "id": "M-28",
+   "label": "M-28 Known R1 evasions on test2, B: 5.8–6.9 % except case 10.2 % (≈ baseline 6.1 %)",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L41"
+  },
+  {
+   "id": "M-29",
+   "label": "M-29 Detection latency, test2: A p95 9.2 ms · B p95 47 ms, p99 132 ms",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L42"
+  },
+  {
+   "id": "M-30",
+   "label": "M-30 Overfit gap dev2 → test2: char leak A 0.58 % → 8.24 %; rules-only external names 0.992",
+   "file_type": "measurement",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L43"
+  },
+  {
    "id": "C-01",
    "label": "C-01 Cloudflare AI Gateway DLP buffers the **complete** provider response before inspection whe",
    "file_type": "claim",
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L41"
+   "source_location": "L52"
   },
   {
    "id": "C-02",
@@ -1617,7 +1707,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L42"
+   "source_location": "L53"
   },
   {
    "id": "C-03",
@@ -1626,7 +1716,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L43"
+   "source_location": "L54"
   },
   {
    "id": "C-04",
@@ -1635,7 +1725,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L44"
+   "source_location": "L55"
   },
   {
    "id": "C-05",
@@ -1644,7 +1734,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L45"
+   "source_location": "L56"
   },
   {
    "id": "C-06",
@@ -1653,7 +1743,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L46"
+   "source_location": "L57"
   },
   {
    "id": "C-07",
@@ -1662,7 +1752,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L47"
+   "source_location": "L58"
   },
   {
    "id": "C-08",
@@ -1671,7 +1761,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L48"
+   "source_location": "L59"
   },
   {
    "id": "C-09",
@@ -1680,7 +1770,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L49"
+   "source_location": "L60"
   },
   {
    "id": "C-10",
@@ -1689,7 +1779,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L50"
+   "source_location": "L61"
   },
   {
    "id": "C-11",
@@ -1698,7 +1788,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L51"
+   "source_location": "L62"
   },
   {
    "id": "C-12",
@@ -1707,7 +1797,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L52"
+   "source_location": "L63"
   },
   {
    "id": "C-13",
@@ -1716,7 +1806,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L53"
+   "source_location": "L64"
   },
   {
    "id": "C-14",
@@ -1725,7 +1815,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S/FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L54"
+   "source_location": "L65"
   },
   {
    "id": "C-15",
@@ -1734,7 +1824,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L55"
+   "source_location": "L66"
   },
   {
    "id": "C-16",
@@ -1743,7 +1833,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L56"
+   "source_location": "L67"
   },
   {
    "id": "C-17",
@@ -1752,7 +1842,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L57"
+   "source_location": "L68"
   },
   {
    "id": "C-18",
@@ -1761,7 +1851,7 @@
    "_origin": "provenance",
    "epistemic_class": "UNVERIFIED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L58"
+   "source_location": "L69"
   },
   {
    "id": "C-19",
@@ -1770,7 +1860,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L59"
+   "source_location": "L70"
   },
   {
    "id": "C-20",
@@ -1779,7 +1869,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L60"
+   "source_location": "L71"
   },
   {
    "id": "C-21",
@@ -1788,7 +1878,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L61"
+   "source_location": "L72"
   },
   {
    "id": "C-22",
@@ -1797,7 +1887,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L62"
+   "source_location": "L73"
   },
   {
    "id": "C-23",
@@ -1806,7 +1896,7 @@
    "_origin": "provenance",
    "epistemic_class": "KNOWN",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L63"
+   "source_location": "L74"
   },
   {
    "id": "C-24",
@@ -1815,7 +1905,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L64"
+   "source_location": "L75"
   },
   {
    "id": "C-25",
@@ -1824,7 +1914,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S/FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L65"
+   "source_location": "L76"
   },
   {
    "id": "C-26",
@@ -1833,7 +1923,7 @@
    "_origin": "provenance",
    "epistemic_class": "KNOWN/CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L66"
+   "source_location": "L77"
   },
   {
    "id": "C-27",
@@ -1842,7 +1932,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L67"
+   "source_location": "L78"
   },
   {
    "id": "C-28",
@@ -1851,7 +1941,7 @@
    "_origin": "provenance",
    "epistemic_class": "UNVERIFIED/KNOWN",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L68"
+   "source_location": "L79"
   },
   {
    "id": "C-29",
@@ -1860,7 +1950,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L69"
+   "source_location": "L80"
   },
   {
    "id": "C-30",
@@ -1869,7 +1959,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-V",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L70"
+   "source_location": "L81"
   },
   {
    "id": "C-31",
@@ -1878,7 +1968,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLAIM-S",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L71"
+   "source_location": "L82"
   },
   {
    "id": "C-32",
@@ -1887,7 +1977,7 @@
    "_origin": "provenance",
    "epistemic_class": "FACT-P",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L72"
+   "source_location": "L83"
   },
   {
    "id": "A-01",
@@ -2396,13 +2486,22 @@
    "source_location": "L34"
   },
   {
+   "id": "Q-26",
+   "label": "Q-26 May huggingface.co be allowed in the build environment (for GLiNER)?",
+   "file_type": "question",
+   "_origin": "provenance",
+   "epistemic_class": "OPEN",
+   "source_file": "research/OPEN_QUESTIONS.md",
+   "source_location": "L37"
+  },
+  {
    "id": "Q-00a",
    "label": "Q-00a Does roster-based EDM make PERSON detection viable for employees?",
    "file_type": "question",
    "_origin": "provenance",
    "epistemic_class": "CLOSED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L40"
+   "source_location": "L45"
   },
   {
    "id": "Q-00b",
@@ -2411,7 +2510,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLOSED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L41"
+   "source_location": "L46"
   },
   {
    "id": "Q-00c",
@@ -2420,7 +2519,7 @@
    "_origin": "provenance",
    "epistemic_class": "CLOSED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L42"
+   "source_location": "L47"
   },
   {
    "id": "ADR-0001",
@@ -2523,13 +2622,40 @@
    "source_location": "L31"
   },
   {
+   "id": "PD-10",
+   "label": "PD-10 **Value-shape masking under RESTRICTED purposes**: mask Verhoeff-valid 12-digit numbers, L",
+   "file_type": "proposed_decision",
+   "_origin": "provenance",
+   "epistemic_class": "PROPOSED",
+   "source_file": "research/ARCHITECTURE_DECISIONS.md",
+   "source_location": "L52"
+  },
+  {
+   "id": "PD-11",
+   "label": "PD-11 D0 views for line-wrapped values, HTML entities and OCR confusions (O↔0, l↔1) inside digit",
+   "file_type": "proposed_decision",
+   "_origin": "provenance",
+   "epistemic_class": "PROPOSED",
+   "source_file": "research/ARCHITECTURE_DECISIONS.md",
+   "source_location": "L53"
+  },
+  {
+   "id": "PD-12",
+   "label": "PD-12 Re-evaluate GLiNER when huggingface.co is allowed; keep spaCy `lg` meanwhile",
+   "file_type": "proposed_decision",
+   "_origin": "provenance",
+   "epistemic_class": "PROPOSED",
+   "source_file": "research/ARCHITECTURE_DECISIONS.md",
+   "source_location": "L54"
+  },
+  {
    "id": "PD-1",
    "label": "PD-1 Make **roster sync (F-11) a Phase 1 prerequisite**, not Phase 4",
    "file_type": "proposed_decision",
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L51"
+   "source_location": "L69"
   },
   {
    "id": "PD-2",
@@ -2538,7 +2664,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L52"
+   "source_location": "L70"
   },
   {
    "id": "PD-3",
@@ -2547,7 +2673,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L53"
+   "source_location": "L71"
   },
   {
    "id": "PD-4",
@@ -2556,7 +2682,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54"
+   "source_location": "L72"
   },
   {
    "id": "PD-5",
@@ -2565,7 +2691,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L55"
+   "source_location": "L73"
   },
   {
    "id": "PD-7",
@@ -2574,7 +2700,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L56"
+   "source_location": "L74"
   },
   {
    "id": "PD-8",
@@ -2583,7 +2709,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L57"
+   "source_location": "L75"
   },
   {
    "id": "PD-9",
@@ -2592,7 +2718,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L58"
+   "source_location": "L76"
   },
   {
    "id": "PD-6",
@@ -2601,7 +2727,7 @@
    "_origin": "provenance",
    "epistemic_class": "PROPOSED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L59"
+   "source_location": "L77"
   },
   {
    "id": "W-1",
@@ -2692,6 +2818,42 @@
    "epistemic_class": "FACT-M",
    "source_file": "SECURITY_EVALUATION.md",
    "source_location": "L124"
+  },
+  {
+   "id": "W-10",
+   "label": "W-10 Unseen document formats defeat context-dependent typing",
+   "file_type": "weakness",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L89"
+  },
+  {
+   "id": "W-11",
+   "label": "W-11 Held-out evasions (line wrap, HTML entities, OCR, leetspeak)",
+   "file_type": "weakness",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L90"
+  },
+  {
+   "id": "W-12",
+   "label": "W-12 External names: 0.794 recall at best deployable",
+   "file_type": "weakness",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L91"
+  },
+  {
+   "id": "W-13",
+   "label": "W-13 Secrets in new places (webhook paths, signature keys, chat pastes)",
+   "file_type": "weakness",
+   "_origin": "provenance",
+   "epistemic_class": "FACT-M",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L92"
   },
   {
    "id": "T-1",
@@ -3463,12 +3625,132 @@
    "_origin": "provenance"
   },
   {
+   "source": "M-21",
+   "target": "ADR-0005",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L34",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-21",
+   "target": "W-10",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L34",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-23",
+   "target": "W-10",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L36",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-23",
+   "target": "W-13",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L36",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-24",
+   "target": "PD-4",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L37",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-25",
+   "target": "ADR-0008",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L38",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-26",
+   "target": "W-9",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L39",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-26",
+   "target": "ADR-0007",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L39",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-27",
+   "target": "W-11",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L40",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-28",
+   "target": "A-01",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L41",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-29",
+   "target": "N-1",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L42",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-30",
+   "target": "W-10",
+   "relation": "bears_on",
+   "confidence": "EXTRACTED",
+   "source_file": "research/EVIDENCE_MATRIX.md",
+   "source_location": "L43",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
    "source": "S-02",
    "target": "C-01",
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L41",
+   "source_location": "L52",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3478,7 +3760,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L41",
+   "source_location": "L52",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3488,7 +3770,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L41",
+   "source_location": "L52",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3498,7 +3780,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L42",
+   "source_location": "L53",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3508,7 +3790,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L42",
+   "source_location": "L53",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3518,7 +3800,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L43",
+   "source_location": "L54",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3528,7 +3810,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L43",
+   "source_location": "L54",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3538,7 +3820,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L44",
+   "source_location": "L55",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3548,7 +3830,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L44",
+   "source_location": "L55",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3558,7 +3840,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L44",
+   "source_location": "L55",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3568,7 +3850,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L45",
+   "source_location": "L56",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3578,7 +3860,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L45",
+   "source_location": "L56",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3588,7 +3870,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L45",
+   "source_location": "L56",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3598,7 +3880,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L46",
+   "source_location": "L57",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3608,7 +3890,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L47",
+   "source_location": "L58",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3618,7 +3900,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L47",
+   "source_location": "L58",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3628,7 +3910,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L48",
+   "source_location": "L59",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3638,7 +3920,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L48",
+   "source_location": "L59",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3648,7 +3930,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L48",
+   "source_location": "L59",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3658,7 +3940,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L48",
+   "source_location": "L59",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3668,7 +3950,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L48",
+   "source_location": "L59",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3678,7 +3960,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L49",
+   "source_location": "L60",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3688,7 +3970,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L49",
+   "source_location": "L60",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3698,7 +3980,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L49",
+   "source_location": "L60",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3708,7 +3990,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L50",
+   "source_location": "L61",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3718,7 +4000,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L50",
+   "source_location": "L61",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3728,7 +4010,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L50",
+   "source_location": "L61",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3738,7 +4020,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L51",
+   "source_location": "L62",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3748,7 +4030,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L51",
+   "source_location": "L62",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3758,7 +4040,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L51",
+   "source_location": "L62",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3768,7 +4050,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L52",
+   "source_location": "L63",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3778,7 +4060,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L52",
+   "source_location": "L63",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3788,7 +4070,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L52",
+   "source_location": "L63",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3798,7 +4080,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L52",
+   "source_location": "L63",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3808,7 +4090,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L53",
+   "source_location": "L64",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3818,7 +4100,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L53",
+   "source_location": "L64",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3828,7 +4110,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L53",
+   "source_location": "L64",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3838,7 +4120,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L54",
+   "source_location": "L65",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3848,7 +4130,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L54",
+   "source_location": "L65",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3858,7 +4140,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L54",
+   "source_location": "L65",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3868,7 +4150,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L55",
+   "source_location": "L66",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3878,7 +4160,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L55",
+   "source_location": "L66",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3888,7 +4170,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L55",
+   "source_location": "L66",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3898,7 +4180,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L56",
+   "source_location": "L67",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3908,7 +4190,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L56",
+   "source_location": "L67",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3918,7 +4200,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L57",
+   "source_location": "L68",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3928,7 +4210,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L57",
+   "source_location": "L68",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3938,7 +4220,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L58",
+   "source_location": "L69",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3948,7 +4230,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L58",
+   "source_location": "L69",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3958,7 +4240,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L58",
+   "source_location": "L69",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3968,7 +4250,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L58",
+   "source_location": "L69",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3978,7 +4260,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L59",
+   "source_location": "L70",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3988,7 +4270,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L59",
+   "source_location": "L70",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -3998,7 +4280,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L59",
+   "source_location": "L70",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4008,7 +4290,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L60",
+   "source_location": "L71",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4018,7 +4300,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L60",
+   "source_location": "L71",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4028,7 +4310,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L61",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4038,7 +4320,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L61",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4048,7 +4330,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L62",
+   "source_location": "L73",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4058,7 +4340,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L62",
+   "source_location": "L73",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4068,7 +4350,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L62",
+   "source_location": "L73",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4078,7 +4360,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L63",
+   "source_location": "L74",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4088,7 +4370,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L63",
+   "source_location": "L74",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4098,7 +4380,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L64",
+   "source_location": "L75",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4108,7 +4390,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L64",
+   "source_location": "L75",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4118,7 +4400,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L64",
+   "source_location": "L75",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4128,7 +4410,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L65",
+   "source_location": "L76",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4138,7 +4420,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L65",
+   "source_location": "L76",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4148,7 +4430,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L65",
+   "source_location": "L76",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4158,7 +4440,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L66",
+   "source_location": "L77",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4168,7 +4450,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L66",
+   "source_location": "L77",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4178,7 +4460,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L66",
+   "source_location": "L77",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4188,7 +4470,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L67",
+   "source_location": "L78",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4198,7 +4480,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L67",
+   "source_location": "L78",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4208,7 +4490,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L67",
+   "source_location": "L78",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4218,7 +4500,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L68",
+   "source_location": "L79",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4228,7 +4510,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L68",
+   "source_location": "L79",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4238,7 +4520,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L68",
+   "source_location": "L79",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4248,7 +4530,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L68",
+   "source_location": "L79",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4258,7 +4540,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L69",
+   "source_location": "L80",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4268,7 +4550,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L70",
+   "source_location": "L81",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4278,7 +4560,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L70",
+   "source_location": "L81",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4288,7 +4570,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L71",
+   "source_location": "L82",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4298,7 +4580,7 @@
    "relation": "asserts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L72",
+   "source_location": "L83",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4308,7 +4590,7 @@
    "relation": "bears_on",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L72",
+   "source_location": "L83",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4318,7 +4600,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L78",
+   "source_location": "L89",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Confirmed in our own system; the limitation is universal, not vendor-specific"
@@ -4329,7 +4611,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L78",
+   "source_location": "L89",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Confirmed in our own system; the limitation is universal, not vendor-specific"
@@ -4340,7 +4622,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L78",
+   "source_location": "L89",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Confirmed in our own system; the limitation is universal, not vendor-specific"
@@ -4351,7 +4633,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L78",
+   "source_location": "L89",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Confirmed in our own system; the limitation is universal, not vendor-specific"
@@ -4362,7 +4644,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L79",
+   "source_location": "L90",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Independently consistent: bounded-context streaming inspection is structurally weaker"
@@ -4373,7 +4655,7 @@
    "relation": "contradicts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L80",
+   "source_location": "L91",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Our approach is more ambitious and currently less safe than buffering for context-dependent types (Q-12)"
@@ -4384,7 +4666,7 @@
    "relation": "contradicts",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L80",
+   "source_location": "L91",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Our approach is more ambitious and currently less safe than buffering for context-dependent types (Q-12)"
@@ -4395,7 +4677,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L82",
+   "source_location": "L93",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Consistent"
@@ -4406,7 +4688,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L83",
+   "source_location": "L94",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "The NER path will dominate latency; the ADR-0005 cache is required, not optional"
@@ -4417,7 +4699,7 @@
    "relation": "leaves_open",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L84",
+   "source_location": "L95",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Open (Q-02); the central gap named by the external review"
@@ -4428,7 +4710,7 @@
    "relation": "leaves_open",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L84",
+   "source_location": "L95",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Open (Q-02); the central gap named by the external review"
@@ -4439,7 +4721,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L85",
+   "source_location": "L96",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Partly supported: ML is needed only for names outside the roster; Presidio's role unproven (Q-03)"
@@ -4450,7 +4732,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L85",
+   "source_location": "L96",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Partly supported: ML is needed only for names outside the roster; Presidio's role unproven (Q-03)"
@@ -4461,7 +4743,7 @@
    "relation": "corroborates",
    "confidence": "EXTRACTED",
    "source_file": "research/EVIDENCE_MATRIX.md",
-   "source_location": "L86",
+   "source_location": "L97",
    "weight": 1.0,
    "_origin": "provenance",
    "verdict": "Our departure is supported at unit level; not load-tested"
@@ -4957,12 +5239,42 @@
    "_origin": "provenance"
   },
   {
+   "source": "M-25",
+   "target": "Q-12",
+   "relation": "informs",
+   "confidence": "EXTRACTED",
+   "source_file": "research/OPEN_QUESTIONS.md",
+   "source_location": "L43",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-24",
+   "target": "Q-04",
+   "relation": "informs",
+   "confidence": "EXTRACTED",
+   "source_file": "research/OPEN_QUESTIONS.md",
+   "source_location": "L44",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "Q-26",
+   "target": "Q-04",
+   "relation": "informs",
+   "confidence": "EXTRACTED",
+   "source_file": "research/OPEN_QUESTIONS.md",
+   "source_location": "L44",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
    "source": "M-08",
    "target": "Q-00a",
    "relation": "informs",
    "confidence": "EXTRACTED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L40",
+   "source_location": "L45",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4972,7 +5284,7 @@
    "relation": "informs",
    "confidence": "EXTRACTED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L41",
+   "source_location": "L46",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4982,7 +5294,7 @@
    "relation": "informs",
    "confidence": "EXTRACTED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L42",
+   "source_location": "L47",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -4992,7 +5304,7 @@
    "relation": "informs",
    "confidence": "EXTRACTED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L42",
+   "source_location": "L47",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -5002,7 +5314,7 @@
    "relation": "informs",
    "confidence": "EXTRACTED",
    "source_file": "research/OPEN_QUESTIONS.md",
-   "source_location": "L42",
+   "source_location": "L47",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6257,12 +6569,52 @@
    "_origin": "provenance"
   },
   {
+   "source": "PD-10",
+   "target": "W-10",
+   "relation": "closes",
+   "confidence": "EXTRACTED",
+   "source_file": "research/ARCHITECTURE_DECISIONS.md",
+   "source_location": "L52",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "PD-10",
+   "target": "W-13",
+   "relation": "closes",
+   "confidence": "EXTRACTED",
+   "source_file": "research/ARCHITECTURE_DECISIONS.md",
+   "source_location": "L52",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "PD-11",
+   "target": "W-11",
+   "relation": "closes",
+   "confidence": "EXTRACTED",
+   "source_file": "research/ARCHITECTURE_DECISIONS.md",
+   "source_location": "L53",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "PD-12",
+   "target": "W-12",
+   "relation": "closes",
+   "confidence": "EXTRACTED",
+   "source_file": "research/ARCHITECTURE_DECISIONS.md",
+   "source_location": "L54",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
    "source": "M-12",
    "target": "ADR-0002",
    "relation": "requires_amendment",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L42",
+   "source_location": "L60",
    "weight": 1.0,
    "_origin": "provenance",
    "change": "Suffix grammar `[0-9][Crockford]{5}` (+2 on collision); entropy ~28.3 bits; P(collision, 200 same-type entities) ≈ 6×10⁻⁵"
@@ -6273,7 +6625,7 @@
    "relation": "requires_amendment",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L43",
+   "source_location": "L61",
    "weight": 1.0,
    "_origin": "provenance",
    "change": "Withdraw \"impossible by construction\" until W5 is fixed; state that the streaming D2 gate is weaker than non-streaming for context-dependent types; remove C-18 "
@@ -6284,7 +6636,7 @@
    "relation": "requires_amendment",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L43",
+   "source_location": "L61",
    "weight": 1.0,
    "_origin": "provenance",
    "change": "Withdraw \"impossible by construction\" until W5 is fixed; state that the streaming D2 gate is weaker than non-streaming for context-dependent types; remove C-18 "
@@ -6295,7 +6647,7 @@
    "relation": "requires_amendment",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L44",
+   "source_location": "L62",
    "weight": 1.0,
    "_origin": "provenance",
    "change": "Record the Presidio deviation (Q-03); restate spaced/obfuscated evasion as a measured residual (M-13), not \"partly handled\""
@@ -6306,7 +6658,7 @@
    "relation": "requires_amendment",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L45",
+   "source_location": "L63",
    "weight": 1.0,
    "_origin": "provenance",
    "change": "The invariant must exclude alias tokens from its sweep; report its false-alarm rate as an availability metric"
@@ -6317,7 +6669,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L51",
+   "source_location": "L69",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6327,7 +6679,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L51",
+   "source_location": "L69",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6337,7 +6689,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L52",
+   "source_location": "L70",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6347,7 +6699,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L52",
+   "source_location": "L70",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6357,7 +6709,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L53",
+   "source_location": "L71",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6367,7 +6719,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L53",
+   "source_location": "L71",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6377,7 +6729,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L53",
+   "source_location": "L71",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6387,7 +6739,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L53",
+   "source_location": "L71",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6397,7 +6749,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L53",
+   "source_location": "L71",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6407,7 +6759,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6417,7 +6769,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6427,7 +6779,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6437,7 +6789,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6447,7 +6799,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6457,7 +6809,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6467,7 +6819,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6477,7 +6829,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L54",
+   "source_location": "L72",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6487,7 +6839,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L55",
+   "source_location": "L73",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6497,7 +6849,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L55",
+   "source_location": "L73",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6507,7 +6859,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L55",
+   "source_location": "L73",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6517,7 +6869,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L56",
+   "source_location": "L74",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6527,7 +6879,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L56",
+   "source_location": "L74",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6537,7 +6889,7 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L57",
+   "source_location": "L75",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6547,7 +6899,7 @@
    "relation": "motivates",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L58",
+   "source_location": "L76",
    "weight": 1.0,
    "_origin": "provenance"
   },
@@ -6557,7 +6909,57 @@
    "relation": "closes",
    "confidence": "EXTRACTED",
    "source_file": "research/ARCHITECTURE_DECISIONS.md",
-   "source_location": "L58",
+   "source_location": "L76",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-23",
+   "target": "W-10",
+   "relation": "evidences",
+   "confidence": "EXTRACTED",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L89",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-30",
+   "target": "W-10",
+   "relation": "evidences",
+   "confidence": "EXTRACTED",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L89",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-27",
+   "target": "W-11",
+   "relation": "evidences",
+   "confidence": "EXTRACTED",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L90",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-24",
+   "target": "W-12",
+   "relation": "evidences",
+   "confidence": "EXTRACTED",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L91",
+   "weight": 1.0,
+   "_origin": "provenance"
+  },
+  {
+   "source": "M-23",
+   "target": "W-13",
+   "relation": "evidences",
+   "confidence": "EXTRACTED",
+   "source_file": "SECURITY_EVALUATION_R2.md",
+   "source_location": "L92",
    "weight": 1.0,
    "_origin": "provenance"
   },

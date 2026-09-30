@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 ID_RE = re.compile(
-    r"\b(S-\d{2,3}|C-\d{2}|M-\d{2}|A-\d{2}|Q-\d{2}[a-z]?|PD-\d|ADR-\d{4}|T-?\d{1,2}|W-?\d|F-\d{1,2}|N-\d|K-[\w.]+)\b"
+    r"\b(S-\d{2,3}|C-\d{2}|M-\d{2}|A-\d{2}|Q-\d{2}[a-z]?|PD-\d{1,2}|ADR-\d{4}|T-?\d{1,2}|W-?\d{1,2}|F-\d{1,2}|N-\d|K-[\w.]+)\b"
 )
 KIND = {"S": "source", "C": "claim", "M": "measurement", "A": "algorithm", "Q": "question", "PD": "proposed_decision",
         "ADR": "decision", "T": "threat", "W": "weakness", "F": "requirement", "N": "requirement", "K": "component",
@@ -197,7 +197,7 @@ def build() -> Graph:
         elif c and re.fullmatch(r"ADR-\d{4}", c[0]) and "Change" in col:
             for e in ids_in(col.get("Evidence", "")):
                 g.link(e, c[0], "requires_amendment", f, n, change=col["Change"][:160])
-        elif c and re.fullmatch(r"PD-\d", c[0]):
+        elif c and re.fullmatch(r"PD-\d{1,2}", c[0]):
             g.node(c[0], label=f"{c[0]} {c[1][:90]}", epistemic_class="PROPOSED",
                    source_file=f, source_location=f"L{n}")
             for e in ids_in(col.get("Why (evidence)", "")):
@@ -206,12 +206,15 @@ def build() -> Graph:
                 g.link(c[0], w, "closes", f, n)
 
     # --- Weaknesses (SECURITY_EVALUATION §5)
-    f = "SECURITY_EVALUATION.md"
-    for h, c, n in tables(ROOT / f):
-        if c and re.fullmatch(r"W\d", c[0]):
+    for f in ("SECURITY_EVALUATION.md", "SECURITY_EVALUATION_R2.md"):
+      for h, c, n in tables(ROOT / f):
+        if c and re.fullmatch(r"W\d{1,2}", c[0]):
             w = norm_id(c[0])
             g.node(w, label=f"{w} {re.sub(r'[*`]', '', c[1])[:90]}", severity=c[3] if len(c) > 3 else "",
                    epistemic_class="FACT-M", source_file=f, source_location=f"L{n}")
+            for m in ids_in(" ".join(c[2:])):
+                if m.startswith("M-"):
+                    g.link(m, w, "evidences", f, n)
 
     # --- Threats (THREAT_MODEL) and requirements (DESIGN §2)
     for h, c, n in tables(ROOT / "THREAT_MODEL.md"):

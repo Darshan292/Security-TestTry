@@ -1,9 +1,9 @@
 # ESU Privacy Gateway — design package
 
 A policy-driven privacy gateway between ESU applications (HRIS/ERP) and LLM
-providers. **Status: Phase 1 vertical slice built and evaluated. It is not secure enough for real HR data.**
-It fails its own pre-registered leak gate on held-out data: 2.56 % of sensitive characters and
-14.6 % of documents leak. Read [SECURITY_EVALUATION.md](SECURITY_EVALUATION.md) first.
+providers. **Status: Release 2 evaluated on a fresh held-out corpus. It is not secure enough for real HR data.**
+Held-out character leak is 6.10 % (best config; gate ≤ 1 %), and 20 % of documents still send at least one raw value.
+Read [SECURITY_EVALUATION_R2.md](SECURITY_EVALUATION_R2.md) first (R1: [SECURITY_EVALUATION.md](SECURITY_EVALUATION.md)).
 
 > Extracted from the `Evidence-first-universal-knowledge-graph-compiler` repository with its history; this is now the project's home.
 

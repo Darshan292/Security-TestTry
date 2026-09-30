@@ -71,3 +71,27 @@ tool arguments handled correctly; fabricated references caught.
 **Bad.** Per-provider SSE parsing (OpenAI chat, OpenAI Responses, Anthropic
 Messages) is ours to maintain; each gets a golden-stream test suite with
 adversarial chunk boundaries (every alias split at every offset).
+
+## Amendment R2 (2026-09-30) — the R1 claims were false; RESTRICTED output is buffered
+
+**Withdrawn claims.** "Split-placeholder leaks impossible by construction" was false for whitespace-free
+runs longer than 256 chars (W5, M-14: 26 R1 TEST items). The 256-character sliding D2 window missed
+context-dependent PII (W4: a raw Aadhaar reached the client in streaming but not buffered mode). C-18
+(LiteLLM #41611) is UNVERIFIED and is removed from this ADR's rationale.
+
+**Decision.**
+1. **Output mode is chosen per purpose by policy** (`policies/*.yaml` `data_class` → `stream_mode`).
+   RESTRICTED, CONFIDENTIAL and unknown purposes use **buffered** output: the gate sees the whole
+   response before anything is released. This is the industry default (C-01, C-03) and stays in force
+   until incremental mode passes the pre-registered E-STREAM-LEAK gate (streamed output identical to
+   buffered for every document and chunking).
+2. **Incremental mode (INTERNAL only)** now uses: whole-line release (≤ 2,048 chars, then word cuts);
+   a straddle guard that re-runs detectors over released context + pending text and never releases
+   part of a detection; a two-word name hold-back; delimiter-only cuts outside aliases in long runs;
+   and a gate that reads the whole released output (≤ 32 KB, then it degrades to buffered).
+3. Regressions reproduce the R1 TEST shapes and were verified to fail on the R1 code
+   (W5 194/200 corrupted, W4 100/100 leaked) and to pass on R2 (0/0).
+
+**Status after R2 dev2:** incremental mode still fails E-STREAM-LEAK (23/1,730 documents differ,
+13 stream-only fragments: right-context dependence across lines, far table headers). The residual is
+why RESTRICTED stays buffered. See SECURITY_EVALUATION_R2.md for the held-out result.

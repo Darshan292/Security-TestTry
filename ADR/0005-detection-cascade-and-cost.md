@@ -87,3 +87,19 @@ needs a sync job from the HRIS (Phase 4) — until then it is a static upload.
 | LLM-as-detector (remote) | Sends raw PII to a model to find PII. Defeats the purpose. |
 | LLM-as-detector (local, 7B+) | 1–10 s per request on GPU; non-deterministic; reserved as an offline *auditor* for E-DET error discovery, not the hot path. |
 | Global confidence threshold | Types differ by an order of magnitude in base precision. |
+
+## Amendment R2 (2026-09-30) — what the cascade actually is now
+
+- **D0 views** (`normalize.views`): base, despaced, deobfuscated_email, despaced_email, digits_joined
+  (never on hyphen-only chains), casefold_titled (≥ 99 % lowercase or ≥ 80 % uppercase). All detectors
+  run on every view, and offset maps return spans to the original. This replaces "spaced/homoglyph
+  partly handled" (M-13 measured 38 % leak for spaced text in R1).
+- **D1** is a field-context detector over JSON/XML/YAML/CSV/TSV/pipe/SQL/fixed-width in free text,
+  with an identity-concept classifier and **structural escalation** (a Verhoeff-valid 12-digit value in
+  a structured payload is AADHAAR unless the key vetoes it). This replaces growing keyword lists.
+- **D3** roster EDM tokenises on structural punctuation and learns tenant employee-id *shapes*
+  from the roster.
+- **D4 NER** is optional (`Protector(ner=…)`), spaCy only (GLiNER unreachable: huggingface.co is
+  blocked), and filtered by name shape. `en_core_web_lg` is the only model that fits N-1 latency; it
+  lowers leak but fails the 0.85 PERSON precision gate on dev2 (Config B, the owner's decision).
+- **Deviation recorded (Q-03):** Presidio is not used. The slice's own recognizers replace it.

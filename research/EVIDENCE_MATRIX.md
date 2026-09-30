@@ -31,6 +31,17 @@ Code `a51c22d`; corpus seed 1337 (MANIFEST hashes). "Repro" = the command that r
 | M-18 | T21 restore-ledger scenario | Truncated-history follow-up does not leak; without the ledger it does | `tests/test_core.py::test_t21_*`, `tests/test_gateway.py` | Supports ADR-0010 (unit level only) |
 | M-19 | Verhoeff pass rate on random 12-digit ids | ~12 % in generated negatives | `eval/synth/test_generate.py` | Corroborates KNOWN ~10 % (A-02) |
 | M-20 | E-UTIL output quality | **not measured** | `eval.run_util` (needs an API key) | Q-02 open |
+| M-21 | R2 test2 character leak, Config A / B | 8.24 % / **6.10 %** (gate ≤ 1 %; dev2 0.58 %) | FROZEN_R2_TEST2_4a6a75e.json | Refutes ADR-0005 generalisation; W-10 |
+| M-22 | R2 test2 document exposure, A / B | 30.1 % / **20.1 %** | same | Headline exposure R2 |
+| M-23 | R2 test2 per-type recall (A=B except PERSON) | AADHAAR 0.789, DOB 0.756, SECRET 0.848, COMPENSATION 0.927, BANK 0.940, others 1.000; PERSON 0.828 / 0.943 | same | W-10, W-13 |
+| M-24 | ner_test2 external-name recall A / B / C | 0.133 / 0.794 / 0.844 (C = trf, reference) | same | Supports PD-4 (NER) and refutes cue generalisation |
+| M-25 | E-STREAM-LEAK on test2 | 9/1,755 docs differ, 5 stream-only fragments: **FAIL** | same | ADR-0008 amendment: RESTRICTED buffered |
+| M-26 | Egress invariant, clean test2 | 0 fires, 0 false alarms (R1: 8) | same | Confirms W-9 fix; ADR-0007 |
+| M-27 | Held-out adversarial leak, B | line-wrap 70.6 %, HTML entity 52.4 %, OCR 40.5 %, leetspeak 24.2 %, spoken email 10.2 % | same | W-11 |
+| M-28 | Known R1 evasions on test2, B | 5.8–6.9 % except case 10.2 % (≈ baseline 6.1 %) | same | Supports D0 views (A-01) |
+| M-29 | Detection latency, test2 | A p95 9.2 ms · B p95 47 ms, p99 132 ms | same | Meets N-1 |
+| M-30 | Overfit gap dev2 → test2 | char leak A 0.58 % → 8.24 %; rules-only external names 0.992 → 0.133 | dev2 runs + FROZEN_R2 | W-10: rule tuning does not generalise |
+
 
 ## Part B — External claims (C-NN)
 

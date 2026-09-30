@@ -90,3 +90,15 @@ the type is what lets the model do the task.
 | Per-request sequential counters (`<PERSON_1>`) | Inconsistent across turns (Uber's documented failure); lenient matching unsafe. Kept only as an E-FMT candidate. |
 | Realistic surrogates by default | Inflection/partial-mention matching is hard, surrogates can collide with real people, and leaked surrogates are indistinguishable from real PII to a human reviewer. Candidate for Phase 3 where utility data justifies it. |
 | FPE (FF3-1) for IDs | NIST's SP 800-38G Rev.1 draft removes FF3/FF3-1; FF1 only, and 10–12 digit domains sit near the minimum-domain floor. Use only if a downstream system hard-validates format — none in Phase 1 does. |
+
+## Amendment R2 (2026-09-30) — alias suffix grammar
+
+**Trigger:** M-12. The v1 lenient grammar `TYPE_[0-9A-Z]{6}` matched ordinary identifiers
+(`<wd:Phone_Number>`, `Bank_Account_Number`), and the output gate rewrote them as `[unknown TYPE]`
+in 166/3,977 R1 dev items.
+**Change (code `a51c22d`):** the suffix is one decimal digit followed by Crockford base-32 (no I, L, O, U):
+`[0-9][0-9A-HJKMNP-TV-Z]{5}`, extended by 2 characters on collision. Entropy ≈ 28.3 bits (was 30);
+P(collision) at 200 same-type entities ≈ 6×10⁻⁵, still detected and resolved deterministically.
+English words can no longer parse as aliases. Regression: `test_parse_alias_lenient`,
+`test_gate_leaves_ordinary_identifiers_alone`.
+**Still open:** Q-01 (fidelity with real models, E-FMT) — the rationale stays PROVISIONAL.

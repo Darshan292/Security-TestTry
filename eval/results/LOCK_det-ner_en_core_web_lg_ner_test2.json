@@ -1,0 +1,7 @@
+{
+ "split": "ner_test2",
+ "tag": "det-ner_en_core_web_lg",
+ "code_commit": "4a6a75edb8b998e7da6ed0684b5f75190e96cd70",
+ "split_sha256": "1820b120cf4f008646f50c84a206dc2b11ea50248d3efe35a210fcdb2364b958",
+ "time": "2026-09-30T16:04:24Z"
+}

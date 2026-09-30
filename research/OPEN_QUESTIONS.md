@@ -33,10 +33,15 @@ Priority: **P0** blocks any real-data use · **P1** blocks the next phase gate �
 | Q-23 | Do PII Shield or Skyflow document restore semantics, streaming and tool handling? | Would inform ADR-0002/0003 layering | ADR-0002, ADR-0003 | Vendor self-description only (CLAIM-V) | Read the primary product docs | Research | P2 |
 | Q-24 | Does Purview or Azure Content Safety mask prompts? | Competitive row accuracy only | — | Absence (CLAIM-S) | Read the primary Learn docs | Research | P2 |
 
+| Q-25 | Is context-free value-shape masking (PD-10) acceptable on precision/utility for RESTRICTED HR purposes? | Rule tuning does not generalise (M-30); shape masking might | PD-10 | None yet | Fresh-split measurement + E-UTIL with a real model | Architect + privacy office | **P0** |
+| Q-26 | May huggingface.co be allowed in the build environment (for GLiNER)? | Only spaCy could be benchmarked; best deployable external-name recall is 0.794 | PD-12 | environment policy (FACT-M: host refused) | Environment owner decision | Owner | P1 |
+
 ## Closed in this iteration
 
 | ID | Question | Closed by |
 |---|---|---|
+| Q-12 | Bounded-hold-back streaming vs buffered for RESTRICTED | Decided: buffered by policy; incremental fails E-STREAM-LEAK (M-25) |
+| Q-04 | NER model choice (partially) | spaCy `en_core_web_lg` (inline), trf reference; external recall 0.794 / 0.844 (M-24); GLiNER untested (Q-26) |
 | Q-00a | Does roster-based EDM make PERSON detection viable for employees? | FACT-M: recall 1.000, n = 5,766 (M-08) |
 | Q-00b | Can the egress invariant be counted as a leak control? | FACT-M: no. 0 true catches while 14.6 % of TEST documents leaked; 8 false alarms (M-09) |
 | Q-00c | Does DEV performance on rule-based detectors transfer to unseen templates? | FACT-M: no for HIGH types with unseen keys or shapes (M-05, M-06), and precision collapses (M-11) |
