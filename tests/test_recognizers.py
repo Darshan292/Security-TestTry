@@ -604,7 +604,7 @@ def test_dob_positive(kw, d):
 
 @pytest.mark.parametrize("text", [
     "Joined on 12/03/2015", "Meeting 12 March 1984", "Invoice dated 2024-03-12", "Date: 12-Mar-1984",
-    "DOB: unknown", "DOB: 32/13/1984", "DOB: 12/03/84", "DOB: 12/03/19845",
+    "DOB: unknown", "DOB: 32/13/1984", "DOB: 12/03/19845",
     "DOB: 112/03/1984", "newborn 12/03/1984", "DOB" + " " * 70 + "12/03/1984", "DOB: 99/99/1984", "DOB: 12/03/1700",
     "dobby 12/03/1984",
 ])
@@ -663,6 +663,7 @@ def test_mixed_hr_paragraph():
         (T.EMPLOYEE_ID, "EMP-004521"), (T.EMAIL, "rahul.sharma@esu.com"), (T.PHONE, "+91 98200 12345"),
         (T.PAN, "ABCPE1234F"), (T.DATE_OF_BIRTH, "12/03/1984"), (T.COMPENSATION, "₹38L"),
         (T.BANK_ACCOUNT, "50100234567890"), (T.IFSC, "HDFC0001234"), (T.UPI_ID, "rahul@okaxis"),
+        (T.PERSON, "Rahul Sharma"),        # "Name <email>" display name
     }
 
 
@@ -1554,7 +1555,7 @@ def test_identity_concept_value_shape_decides_the_type():
     assert fc('{"passportNumber": "K1234567"}') == []
     assert fc('{"nationalIdType": "AADHAAR", "nationalIdIssuer": "UIDAI"}') == []
     assert fc('{"identityVerified": "true"}') == [] and fc('{"nationality": "Indian"}') == []
-    assert fc('{"government": "%s"}' % AAD2) != [] or True             # unknown concept alone may escalate, never crash
+    assert fc('{"government": "%s"}' % AAD2) == [(AAD2, T.AADHAAR)]   # the concept word alone is enough
 
 
 def test_uid_and_national_columns_in_tsv_far_from_any_keyword():
@@ -1691,3 +1692,404 @@ def test_ticket_ids_are_not_pay_context():
     for t in ["Ticket PAY-35616 | Requester: Meena Rawat", "Related: HR-3010, CHG939781, JIRA PAY-5719", "PAY_1044 open"]:
         assert vals(t, T.COMPENSATION) == [], (t, dets(t))
     assert vals("pay 35616", T.COMPENSATION) == ["35616"]
+
+
+# ---- T18: detect_d2 must stay (near-)linear on hostile, repetitive inputs
+def _best_of(f, s, k=3):
+    import time
+    b = 1e9
+    for _ in range(k):
+        t0 = time.perf_counter()
+        f(s)
+        b = min(b, time.perf_counter() - t0)
+    return b
+
+
+_PERF_SHAPES = {
+    "kv": lambda n: "\n".join(f"key{i}: {'9' * 12}" for i in range(n)),
+    "csv": lambda n: "a,b,c,d,e,f,g,h\n" + "\n".join(",".join(str(i * 8 + j) for j in range(8)) for i in range(n)),
+    "json": lambda n: "".join('{"nationalId":"275790399234","orderId":"275790399234"}\n' for _ in range(n)),
+    "password": lambda n: "".join("Password: x%d\n" % i for i in range(n)),
+    "accounts": lambda n: "".join("A/c No: 50100234567890 IFSC HDFC0001234\n" for _ in range(n)),
+}
+
+
+@pytest.mark.parametrize("shape", sorted(_PERF_SHAPES))
+def test_detect_d2_scales_linearly(shape):
+    make = _PERF_SHAPES[shape]
+    small, big = make(1500), make(3000)
+    t1, t2 = _best_of(detect_d2, small), _best_of(detect_d2, big)
+    assert _best_of(detect_d2, make(4000)) < 1.5
+    assert t2 / max(t1, 1e-4) < 2.6, (shape, t1, t2)
+
+
+def test_dob_two_digit_year_and_compact_forms_need_context():
+    assert vals("born 01/10/18", T.DATE_OF_BIRTH) == ["01/10/18"]
+    assert vals("DOB 19661024, contact", T.DATE_OF_BIRTH) == ["19661024"]
+    assert vals("ref 01/10/18 and 19661024", T.DATE_OF_BIRTH) == []
+    assert vals("DOB 19663024", T.DATE_OF_BIRTH) == []
+
+
+# =====================================================================================
+# Round 4: mechanisms found on dev2 (tables, bank files, currencies, secret catalogue, UPI, identity prose)
+# =====================================================================================
+PANV = "ABCPE1234F"
+
+
+# ---- 1. delimited tables beyond CSV/TSV, legends, SQL
+def test_pipe_table_with_named_header():
+    t = f"Emp ID | Full Name | DOB | PAN\nEMP-1001 | Meera Iyer | 14/03/1988 | {PANV}\nEMP-1002 | Rohit Das | 02/11/1991 | XYZPQ9876K\n"
+    got = fc(t)
+    for v, ty in [("EMP-1001", T.EMPLOYEE_ID), ("Meera Iyer", T.PERSON), ("14/03/1988", T.DATE_OF_BIRTH), ("02/11/1991", T.DATE_OF_BIRTH)]:
+        assert (v, ty) in got, (v, got)
+
+
+def test_markdown_pipe_table_and_semicolon_table():
+    md = "| Name | Aadhaar | Mobile |\n|---|---|---|\n| Meera Iyer | %s | 98200 12345 |\n" % group4(AAD2)
+    assert (group4(AAD2), T.AADHAAR) in fc(md) and ("98200 12345", T.PHONE) in fc(md)
+    sc = "Employee Name;Date of Birth;Annual CTC\nMeera Iyer;14/03/1988;18,40,000\nRohit Das;02/11/1991;12,00,000\n"
+    got = fc(sc)
+    assert ("14/03/1988", T.DATE_OF_BIRTH) in got and ("12,00,000", T.COMPENSATION) in got and ("Rohit Das", T.PERSON) in got
+
+
+@pytest.mark.parametrize("legend", [
+    "Key: c1 = employee id, c2 = PAN, c3 = mobile, c4 = date of birth",
+    "Legend\n  c1 = employee id\n  c2 = PAN\n  c3 = mobile\n  c4 = date of birth\n",
+    "col 1: employee id; col 2: PAN; col 3: mobile; col 4: DOB",
+    "columns: column 1 - employee id, column 2 - PAN card, column 3 - phone number, column 4 - birth date",
+    "c1=employee id,c2=pan,c3=mobile no,c4=dob",
+])
+def test_legend_maps_generic_column_labels(legend):
+    t = legend + "\n(refreshed nightly)\nSr|c1|c2|c3|c4\n1|EMP-65165|ZZVPM8035V|7225460987|2002-11-19\n2|E0284805|FARPP3907H|7623155176|1968-07-26\n"
+    got = fc(t)
+    assert ("2002-11-19", T.DATE_OF_BIRTH) in got and ("1968-07-26", T.DATE_OF_BIRTH) in got, got
+    assert ("7225460987", T.PHONE) in got and ("EMP-65165", T.EMPLOYEE_ID) in got
+
+
+def test_legend_after_the_table_and_generic_header_without_legend():
+    t = "Sr|c1|c2\n1|EMP-65165|2002-11-19\n2|E0284805|1968-07-26\n\nc2 = date of birth\n"
+    assert ("2002-11-19", T.DATE_OF_BIRTH) in fc(t)
+    assert [ty for v, ty in fc("Sr|c1|c2\n1|EMP-65165|2002-11-19\n2|E0284805|1968-07-26\n") if ty == T.DATE_OF_BIRTH] == []
+    assert fc("Sr|c1|c2\n1|a|b\n2|c|d\n\nc2 = department\n") == []            # legend for an untyped concept
+
+
+def test_sql_insert_positional_and_update_set_and_duplicate_entry():
+    sql = "INSERT INTO emp_bank (emp_id, acct_no, ifsc) VALUES ('EMP-97966', '508293213', 'BARB037638S'), ('EMP-97967', '61234567890', 'SBIN0001234')"
+    got = fc(sql)
+    assert ("508293213", T.BANK_ACCOUNT) in got and ("61234567890", T.BANK_ACCOUNT) in got and ("EMP-97966", T.EMPLOYEE_ID) in got
+    assert fcv("UPDATE emp SET dob='1990-05-01', mobile = '9820012345' WHERE id=7", T.DATE_OF_BIRTH) == ["1990-05-01"]
+    assert fcv("insert into people (name, email) values ('Rahul Sharma', 'r.s@corp.in')", T.EMAIL) == ["r.s@corp.in"]
+    assert fcv("Duplicate entry '9802819410438995' for key 'uq_acct'", T.BANK_ACCOUNT) == ["9802819410438995"]
+    assert fc("Duplicate entry 'abc' for key 'PRIMARY'") == []
+    assert fc("INSERT INTO t (a, b) VALUES ('x', 'y')") == []
+    assert fc("INSERT INTO emp_bank (emp_id, acct_no) VALUES ('EMP-1', '123')") == [("EMP-1", T.EMPLOYEE_ID)]   # bad shape stays out
+
+
+# ---- 2. fixed-width records and bank files
+NEFT = ("HSALARY CREDIT       KESTREL SYSTEMS     20250105\n"
+        "D0001 9857272713   BARB09369P4 LATA TRIPATHI                     337000.00\n"
+        "D0002 470411327511702357   KKBK096R14W SUSMITA SAHOO                     28000.00\n"
+        "D0003 83969805857398   SBIN08R525Y BASIL MASCARENHAS                 65000.00\n"
+        "T0003\n")
+
+
+def test_fixed_width_bank_file():
+    got = {(v, ty) for v, ty, _ in dets(NEFT)}
+    for v, ty in [("9857272713", T.BANK_ACCOUNT), ("470411327511702357", T.BANK_ACCOUNT), ("83969805857398", T.BANK_ACCOUNT),
+                  ("BARB09369P4", T.IFSC), ("337000.00", T.COMPENSATION), ("28000.00", T.COMPENSATION), ("65000.00", T.COMPENSATION),
+                  ("LATA TRIPATHI", T.PERSON), ("SUSMITA SAHOO", T.PERSON), ("BASIL MASCARENHAS", T.PERSON)]:
+        assert (v, ty) in got, (v, got)
+    assert not [1 for v, ty in got if ty == T.PHONE]                    # a 10-digit account is not a phone
+    assert not [1 for v, ty in got if ty == T.CARD]
+
+
+def test_bank_file_amounts_need_pay_context_in_the_document():
+    vendor = NEFT.replace("HSALARY CREDIT", "HVENDOR REMIT ")
+    got = {ty for v, ty, _ in dets(vendor)}
+    assert T.COMPENSATION not in got and T.BANK_ACCOUNT in got
+    assert T.COMPENSATION in {ty for v, ty, _ in dets(NEFT.replace("HSALARY CREDIT", "H payroll batch"))}
+
+
+def test_bank_file_account_rules():
+    line = "Rahul Sharma 50100234567890 HDFC0001234 salary"
+    assert vals(line, T.BANK_ACCOUNT) == ["50100234567890"]
+    assert vals("HDFC0001234 20260117021234", T.BANK_ACCOUNT) == []                 # timestamp-shaped run
+    assert vals("HDFC0001234 12345678", T.BANK_ACCOUNT) == []                       # 8 digits
+    assert vals("9820012345 50100234567890 HDFC0001234", T.BANK_ACCOUNT) == ["50100234567890"]   # phone-shaped run ignored
+    assert vals("50100234567890 60100234567890 HDFC0001234", T.BANK_ACCOUNT) == []              # ambiguous: two runs
+    assert vals("50100234567890 no ifsc here", T.BANK_ACCOUNT) == []
+
+
+def test_iso20022_xml_ancestor_context():
+    x = ('<CdtTrfTxInf><Amt><InstdAmt Ccy="INR">123000.00</InstdAmt></Amt><Cdtr><Nm>TEREZA BERGSTROM</Nm></Cdtr>'
+         '<CdtrAcct><Id><Othr><Id>95979765750</Id></Othr></Id></CdtrAcct><CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>CIUB0311524</MmbId>'
+         '</ClrSysMmbId></FinInstnId></CdtrAgt><RmtInf><Ustrd>SALARY AUG EMP-47320</Ustrd></RmtInf></CdtTrfTxInf>')
+    got = {(v, ty) for v, ty, _ in dets(x)}
+    for v, ty in [("95979765750", T.BANK_ACCOUNT), ("TEREZA BERGSTROM", T.PERSON), ("123000.00", T.COMPENSATION), ("CIUB0311524", T.IFSC),
+                  ("EMP-47320", T.EMPLOYEE_ID)]:
+        assert (v, ty) in got, (v, got)
+    assert (("Nm text", T.PERSON) not in got)
+    plain = "<Order><Id>95979765750</Id><Nm>Widget</Nm></Order>"
+    assert [ty for v, ty, _ in dets(plain) if ty in (T.BANK_ACCOUNT, T.PERSON)] == []
+
+
+def test_reference_columns_suppress_digit_shaped_pii():
+    t = "Invoice No | GSTIN | Date | Amount\n" + "".join(f"9193656366{i:02d} | 09FKCJS4782P8ZP | 2026-01-0{i % 9 + 1} | ₹1,00,000.00\n" for i in range(5))
+    assert [ty for v, ty, _ in dets(t) if ty in (T.PHONE, T.BANK_ACCOUNT, T.AADHAAR, T.CARD, T.COMPENSATION)] == []
+
+
+# ---- 3. other currencies (same pay-context rule)
+@pytest.mark.parametrize("t,val", [
+    ("revised fixed USD 118,800 per year", "USD 118,800"),
+    ("revised fixed US$80,380", "US$80,380"),
+    ("we can go up to $114,100 fixed plus a joining bonus", "$114,100"),
+    ("relocation package is USD 1,560 lumpsum", "USD 1,560"),
+    ("salary advance of $8,190 against my salary", "$8,190"),
+    ("offered €65,000 base salary", "€65,000"),
+    ("stipend £2,400 per month", "£2,400"),
+    ("bonus AED 12,000 paid", "AED 12,000"),
+    ("annual package SGD 90,000", "SGD 90,000"),
+    ("CTC 45,000 USD", "45,000 USD"),
+    ("bonus came as ₹24,000 instead of USD 10,680", "USD 10,680"),
+])
+def test_foreign_currency_amounts_with_pay_context(t, val):
+    assert val in vals(t, T.COMPENSATION), dets(t)
+
+
+@pytest.mark.parametrize("t", [
+    "the invoice total is $1,250 for hosting", "share price closed at $3,201", "order 55 costs $1,999", "budget USD 50,000 for offsite",
+    "the flight cost EUR 450", "she paid £30 at the shop", "PATH=$HOME/bin costs=$5", "price: US$2,999",
+])
+def test_foreign_currency_without_pay_context_is_not_compensation(t):
+    assert vals(t, T.COMPENSATION) == [], (t, dets(t))
+
+
+def test_thresholds_and_limits_are_not_compensation():
+    for t in ["ESI applies below ₹21,858 gross wages per month.", "requests above ₹7,88,749 require sign-off", "credit limit ₹47,75,891",
+              "Training spend ₹16,85,678 across 349 sessions", "cap of ₹1,50,000 applies"]:
+        assert vals(t, T.COMPENSATION) == [], (t, dets(t))
+    assert vals("salary revised to ₹18,40,000, up from ₹15,00,000", T.COMPENSATION) == ["₹18,40,000", "₹15,00,000"]
+
+
+def test_bare_number_after_keyword_stays_on_its_own_line():
+    t = "[payroll]\nctc = 36.6 LPA\nbank_ac = 71882988809906\n"
+    assert vals(t, T.COMPENSATION) == ["36.6 LPA"]
+    assert vals("basic wages; ESI applies below ₹20,581", T.COMPENSATION) == []
+
+
+# ---- 4. secrets: provider catalogue, credential files, CLI flags, LDIF, generic high-entropy keys
+@pytest.mark.parametrize("tok", [
+    "AIza" + "Sy" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q",
+    "sk_live_" + "4eC39HqLyjWDarjtT1zdp7dc", "rk_live_" + "4eC39HqLyjWDarjtT1zdp7dc", "whsec_" + "abcdEFGH1234abcdEFGH",
+    "SK" + "0123456789abcdef0123456789abcdef",
+    "SG." + "abcdEFGH12345678ijkl" + "." + "mnopQRST1234567890uvwx",
+    "glpat-" + "abcdEFGH1234567890xy", "npm_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8",
+    "ya29." + "a0AfB_byCabcdEFGH1234567890",
+    "key-" + "0123456789abcdef0123456789abcdef", "shpat_" + "0123456789abcdef0123456789abcdef",
+])
+def test_provider_token_catalogue(tok):
+    t = f"value {tok} end"
+    assert vals(t, T.SECRET) == [tok], dets(t)
+
+
+@pytest.mark.parametrize("t", [
+    "AIza short", "sk_live_short", "SKUabc123", "key-abc", "glpat-x", "npm_short", "SG.a.b", "AKIA1234", "risk_live_" + "a" * 20,
+])
+def test_provider_token_negatives(t):
+    assert vals(t, T.SECRET) == [], (t, dets(t))
+
+
+def test_azure_connection_string_keys():
+    cs = "DefaultEndpointsProtocol=https;AccountName=hr;AccountKey=" + "Ab3/dEf9+GhIj1KlMn2OpQr4StUv5WxYz6" + "0123456789abcdefgh==;EndpointSuffix=core.windows.net"
+    got = vals(cs, T.SECRET)
+    assert got and got[0].startswith("Ab3/dEf9") and got[0].endswith("==")
+
+
+def test_pgpass_lines():
+    t = "# ~/.pgpass\nhrms-pg.ap-south-1.rds.amazonaws.com:5432:hrms:reporting_ro:Payroll!5702\ncache.kestrel.local:*:*:app:Mango_1410\n"
+    assert vals(t, T.SECRET) == ["Payroll!5702", "Mango_1410"]
+    for t in ["10:30:45 log", "localhost:5432", "a:b:c:d", "http://host:8080:x:y:z", "Note: see: the: docs: here"]:
+        assert vals(t, T.SECRET) == [], t
+
+
+@pytest.mark.parametrize("cmd,secret", [
+    ("docker login -u ci-bot -p Nimbus!8229 registry.kestrel.local", "Nimbus!8229"),
+    ("docker login registry.io -u bot -p 'Lotus 6089!' ", "Lotus 6089!"),
+    ("+ mysql -h db -u root -pHunter22x hrms", "Hunter22x"),
+    ("tool --password Zx81kkqmn --user a", "Zx81kkqmn"),
+    ("tool --password=Zx81kkqmn", "Zx81kkqmn"),
+    ("sqlcmd -S host -U sa -P Str0ng!Pass -d hr", "Str0ng!Pass"),
+    ("redis-cli -h cache -a Zx81kkqmn ping", "Zx81kkqmn"),
+    ("machine files.corp.in login bot password Zx81kkqmn", "Zx81kkqmn"),
+    ("sshpass -p Tr0ub4dor3 ssh bot@host", "Tr0ub4dor3"),
+])
+def test_cli_flag_passwords(cmd, secret):
+    assert secret in vals(cmd, T.SECRET), dets(cmd)
+
+
+@pytest.mark.parametrize("cmd", [
+    "ssh -p 2222 host", "psql -h db -p 5432 hrms", "mysql -u root -p hrms", "docker login -u bot", "tool --password", "tool --password $PW",
+    "tool --password=${PW}", "tool --pass-through x", "docker run -p 8080:80 nginx", "curl -p proxy", "grep -p pattern file",
+    "docker login -u bot -p $TOKEN",
+])
+def test_cli_flag_negatives(cmd):
+    assert vals(cmd, T.SECRET) == [], (cmd, dets(cmd))
+
+
+def test_ldif_userpassword_plain_and_base64():
+    t = "dn: uid=a,ou=p\nuserPassword:: LyBmRsv5IQ/7pa94mzog0sz/RFDb0HJRAYh7j7az73NI=\nuserPassword: {SSHA}Zx81kkqmn\n"
+    assert vals(t, T.SECRET)[0] == "LyBmRsv5IQ/7pa94mzog0sz/RFDb0HJRAYh7j7az73NI="
+    assert len(vals(t, T.SECRET)) == 2
+
+
+def test_npmrc_auth_token_and_env_style_secrets():
+    assert vals("//registry.npmjs.org/:_authToken=PuQCLNK5tKf63FnedxRtKU8JzOuesnrzRDSkqI1J", T.SECRET) == \
+        ["PuQCLNK5tKf63FnedxRtKU8JzOuesnrzRDSkqI1J"]
+    assert vals("PGPASSWORD=Zx81kkqmn psql", T.SECRET) == ["Zx81kkqmn"]
+    assert vals("aws_secret_access_key = DyM4BIje2GsDEkfepxC/hLGYZBN3xCjVwYNM2bwz", T.SECRET) == ["DyM4BIje2GsDEkfepxC/hLGYZBN3xCjVwYNM2bwz"]
+
+
+def test_generic_high_entropy_values_under_secretish_keys():
+    assert fcv('{"Service_Key": "KLO8Ek0fIgxC4mvpWJidXNNNU0aPxj4PGqdcm0HZ"}', T.SECRET) != []
+    assert fcv('{"session": "vlTngUzknIEt6VRurbNXne24dk1FxqS8"}', T.SECRET) != []
+    assert fcv("vpn seed: 33c0fd5344fccfed2af4a625df9c992b", T.SECRET) != []
+    assert fcv("SERVICE_KEY=KLO8Ek0fIgxC4mvpWJidXNNNU0aPxj4P", T.SECRET) != []
+    for t in ['{"session": "abc"}', '{"session": "active"}', '{"Service_Key": "hr-service-registry-primary"}', '{"sort_key": "created_at_desc_2024"}',
+              '{"primary_key": "0123456789abcdef0123456789abcdef"}', "session=SR9TGI9TiWE6eHnq10Kjp9kptj bytes=14509",
+              "DuplicateKeyException: PreparedStatementCallback; SQL", '{"session_count": "0123456789abcdef0123456789abcdef"}']:
+        assert fcv(t, T.SECRET) == [], t
+
+
+# ---- 5. UPI ids with any PSP word in a UPI context
+@pytest.mark.parametrize("t,val", [
+    ("Please credit to my UPI harold.gibson@pnb or the salary account.", "harold.gibson@pnb"),
+    ("UPI: lydia43@jupiter", "lydia43@jupiter"),
+    ("VPA ekta53@ikwik", "ekta53@ikwik"),
+    ("pay to sasmita57@barodampay today", "sasmita57@barodampay"),
+    ("send to amit@newbank now", "amit@newbank"),
+    ("collect via GPay: rohit9@fbl", "rohit9@fbl"),
+    ("my number 9820012345@barodampay", "9820012345@barodampay"),
+])
+def test_upi_unknown_psp_needs_context_or_phone_handle(t, val):
+    assert vals(t, T.UPI_ID) == [val], dets(t)
+
+
+@pytest.mark.parametrize("t", [
+    "contact rahul@unknownpsp", "user@localhost", "see git@github", "rahul.sharma@corp.co.in via UPI", "email me at amit@newbank",
+    "pay to rahul@corp.com"
+])
+def test_upi_unknown_psp_without_context_is_not_upi(t):
+    assert vals(t, T.UPI_ID) == [], (t, dets(t))
+
+
+def test_upi_and_payment_address_columns():
+    t = "Emp,Payment Address,Mobile\nEMP-1,anshul80@okaxis,98200 12345\nEMP-2,khorshed@ikwik,98200 12346\n"
+    assert vals(t, T.UPI_ID) == ["anshul80@okaxis", "khorshed@ikwik"]
+    t = '{"payee": "X Y", "vpa": "ekta53@ikwik"}'
+    assert vals(t, T.UPI_ID) == ["ekta53@ikwik"]
+
+
+# ---- 6. identity concepts in prose, YAML records, XML sibling type
+@pytest.mark.parametrize("t", [
+    "Invalid national id %s for worker EMP-65450", "Aadhaar no. is %s", "UID: %s", "her national identity number: %s",
+    "govt id %s on file", "Identification number %s", "KYC number - %s", "id proof no %s",
+])
+def test_identity_concept_in_prose_before_value(t):
+    t = t % AAD2
+    assert vals(t, T.AADHAAR) == [AAD2], dets(t)
+
+
+def test_identity_prose_negatives():
+    for t in ["Invalid order id %s", "tracking %s", "the number is %s" % AAD2, "national holiday %s" % AAD2, "nat %s" % AAD_BAD,
+              "Aadhaar %s" % AAD_BAD, "identity %s" % ("1" + AAD2[1:])]:
+        t = t % AAD2 if "%s" in t else t
+        assert vals(t, T.AADHAAR) == [], (t, dets(t))
+
+
+def test_yaml_records_nested_maps_and_lists():
+    y = ("employees:\n  - id: KS/26/3254\n    name: Shikha Shekhawat\n    contact: {email: shikha@kestrelsys.in, phone: '+91-7059679858'}\n"
+         "    nat_id: '%s'\n    dob: 1994-10-10\n  - id: EMP-78356\n    name: Nirav Parikh\n    nat_id: %s\n    dob: 1992-01-28\n" % (AAD2, AAD2))
+    got = {(v, ty) for v, ty, _ in dets(y)}
+    assert (AAD2, T.AADHAAR) in got and ("KS/26/3254", T.EMPLOYEE_ID) in got and ("1994-10-10", T.DATE_OF_BIRTH) in got
+    assert ("+91-7059679858", T.PHONE) in got and ("Nirav Parikh", T.PERSON) in got
+    assert len([1 for v, ty, _ in dets(y) if ty == T.AADHAAR]) == 2
+
+
+def test_xml_sibling_type_text_binds_the_next_id_element():
+    x = ('<wd:National_ID><wd:ID_Type_Reference><wd:ID wd:type="National_ID_Type_Code">IND-AADHAAR</wd:ID></wd:ID_Type_Reference>'
+         '<wd:ID>%s</wd:ID></wd:National_ID>' % AAD2)
+    assert vals(x, T.AADHAAR) == [AAD2]
+    x2 = "<Ident><ID>IND-PAN</ID><ID>%s</ID></Ident>" % PANV
+    assert vals(x2, T.PAN) == [PANV]
+    assert vals("<A><ID>hello</ID><ID>%s</ID></A>" % AAD2, T.AADHAAR) == [AAD2]        # falls back to structural escalation
+    assert vals("<A><ID>ORDER</ID><ID>%s</ID></A>" % AAD2, T.AADHAAR) == [AAD2]
+
+
+# ---- keys and headers seen with abbreviated / synonym names
+@pytest.mark.parametrize("key,typ", [
+    ("BankACNo", T.BANK_ACCOUNT), ("bank_ac", T.BANK_ACCOUNT), ("bank_ac_no", T.BANK_ACCOUNT), ("ACC Number", T.BANK_ACCOUNT),
+    ("ID Proof NO", T.AADHAAR), ("Identity NO", T.AADHAAR), ("uidai_no", T.AADHAAR), ("nat_id", T.AADHAAR), ("TAX ID", T.AADHAAR),
+    ("Payment Address", T.UPI_ID), ("Virtual Payment Address", T.UPI_ID), ("Born ON", T.DATE_OF_BIRTH), ("Birthdate", T.DATE_OF_BIRTH),
+    ("E Mail Address", T.EMAIL), ("mail", T.EMAIL), ("staff_code", T.EMPLOYEE_ID), ("Person Number", T.EMPLOYEE_ID),
+])
+def test_field_synonyms(key, typ):
+    val = {T.BANK_ACCOUNT: "50100234567890", T.AADHAAR: AAD2, T.UPI_ID: "a1b2@okaxis", T.DATE_OF_BIRTH: "1990-05-01",
+           T.EMAIL: "a@b.co.in", T.EMPLOYEE_ID: "EMP-1234"}[typ]
+    t = '{"%s": "%s"}' % (key, val)
+    if key == "TAX ID":
+        assert fcv(t, T.AADHAAR) == [val]
+    else:
+        assert val in [v for v, ty in fc(t)], (key, fc(t))
+
+
+def test_contact_name_header_is_a_person_not_a_phone():
+    t = "Contact Name,TAX ID,ACC Number,Branch Ifsc,Phone,E Mail Address\nAshok Lahiri,YOVTT0723E,319683263467,CIUB0418845,+91-9580882532,a@y.co.in\n"
+    got = fc(t)
+    assert ("Ashok Lahiri", T.PERSON) in got and ("YOVTT0723E", T.PAN) in got and ("319683263467", T.BANK_ACCOUNT) in got
+
+
+def test_employee_id_with_slash_and_generic_formats_in_columns():
+    t = "EMP ID,Name,City\nKS/16/8028,Rahul Sharma,Pune\nEMP-1002,Meera Iyer,Pune\n"
+    assert ("KS/16/8028", T.EMPLOYEE_ID) in fc(t)
+    assert fc("EMP ID,Name,City\n12/03/2024,Rahul Sharma,Pune\n") == [("Rahul Sharma", T.PERSON)]
+
+
+# ---- structural person cues
+@pytest.mark.parametrize("t,name", [
+    ("From: Gulshan Amanullah <gulshan.amanullah@corp.in>", "Gulshan Amanullah"),
+    ("To: \"Meera Iyer\" <meera@corp.in>", "Meera Iyer"),
+    ("> Soumya wrote:\n> current fixed is", "Soumya"),
+    ("Minutes chaired by L. Ramaswamy today", "L. Ramaswamy"),
+    ("Approved by Sheth on the phone", "Sheth"),
+    ("Vendor contact: Isabelle Weber from Redwood", "Isabelle Weber"),
+    ("Your reporting manager Onkar Bandyopadhyay will help", "Onkar Bandyopadhyay"),
+    (" 2. Hugo (child), born 19/09/2008", "Hugo"),
+    ("1. Majumdar (EMP-60315) - promote", "Majumdar"),
+    ("account created for Ilyas Farooqui (KS/17/3321)", "Ilyas Farooqui"),
+    ("Book for Viraf Anklesaria (DOB 24/08/1984, contact", "Viraf Anklesaria"),
+    ("the number above is Jamal's personal mobile", "Jamal"),
+    ("2) Ishita Sathe - 4 yrs, cur 26.6 LPA", "Ishita Sathe"),
+])
+def test_person_label_cues(t, name):
+    assert name in vals(t, T.PERSON), dets(t)
+
+
+@pytest.mark.parametrize("t", [
+    "The Referee's number: +91-88824-14201", "Employee's salary is fixed", "Team's number", "From: <a@b.co.in>",
+    "Approved by the committee", "chaired by hr", "Dear Team <a@b.co.in>", "the company's phone", "wrote: hello",
+])
+def test_person_label_cue_negatives(t):
+    assert vals(t, T.PERSON) == [], (t, dets(t))
+
+
+def test_user_and_owner_keys_need_a_two_word_name():
+    assert fcv('{"user": "Sudip Talukdar", "mobile": "+916144963724"}', T.PERSON) == ["Sudip Talukdar"]
+    assert fc('{"user": "sudip"}') == [] and fc('{"user": "svc-hr"}') == [] and fc('{"owner": "Platform"}') == []
+    assert fc('hrbp: haan wo kal karenge, mail bhej dena') == []
+
+
+def test_display_name_and_json_payout_amount_keys():
+    t = '{"payouts": [{"payee": "Ekta N", "vpa": "ekta53@ikwik", "amt": "INR 7,09,000", "note": "spot award"}, {"amt": "INR 1,00,000"}]}'
+    assert fcv(t, T.COMPENSATION) == ["INR 7,09,000", "INR 1,00,000"]
+    assert fc('{"invoice": {"amt": "INR 7,09,000"}}') == []
+    assert vals('{"evt":"comp.changed","emp":"EMP-1","new":"₹39,90,000"}', T.COMPENSATION) == ["₹39,90,000"]

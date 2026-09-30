@@ -17,7 +17,10 @@ Design notes
 """
 from __future__ import annotations
 
+import bisect
+import collections
 import functools
+import math
 import re
 from typing import Any
 
@@ -39,7 +42,7 @@ def _header_spans(text: str) -> tuple:
     for ln in text.split("\n"):
         end = pos + len(ln)
         if len(ln) < 600:
-            d = "\t" if ln.count("\t") >= 2 else ("," if ln.count(",") >= 3 else None)
+            d = "\t" if ln.count("\t") >= 2 else ("|" if ln.count("|") >= 2 else ("," if ln.count(",") >= 3 else (";" if ln.count(";") >= 3 else None)))
             if d:
                 cells = [c.strip().strip('"') for c in ln.split(d)]
                 if len(cells) >= 3 and sum(bool(_HDR_ALPHA.fullmatch(c)) for c in cells) >= 0.8 * len(cells) \
@@ -72,6 +75,7 @@ _VP = [
 _VINV = [0, 4, 3, 2, 1, 5, 6, 7, 8, 9]
 
 
+@functools.lru_cache(maxsize=4096)
 def verhoeff_valid(digits: str) -> bool:
     c = 0
     for i, ch in enumerate(reversed(digits)):
@@ -137,8 +141,25 @@ def _email(text: str) -> list[Cand]:
     return out
 
 
+_UPI_ANY = re.compile(
+    r"(?<![A-Za-z0-9._%+\-])(?P<h>[A-Za-z0-9._\-]{2,64})@(?P<p>[A-Za-z][A-Za-z0-9]{1,30})(?!\.?[A-Za-z0-9\-@])")
+_UPI_CTX = re.compile(
+    r"(?<![A-Za-z])(?:upi|vpa|bhim|gpay|google[ \t]*pay|phonepe|paytm|pay(?:ment)?[ \t]+to|credit[ \t]+to|transfer[ \t]+to|"
+    r"send[ \t]+to|payee|pay[ \t]+via|collect[ \t]+request)(?![A-Za-z])", re.I)
+
+
 def _upi(text: str) -> list[Cand]:
-    return [(m.start(), m.end(), T.UPI_ID, 0.95, "D2:upi") for m in _UPI.finditer(text)]
+    out: list[Cand] = [(m.start(), m.end(), T.UPI_ID, 0.95, "D2:upi") for m in _UPI.finditer(text)]
+    if "@" in text:
+        for m in _UPI_ANY.finditer(text):
+            h = m.group("h")
+            if m.group("p").lower() in _UPI_PSP:
+                continue                                    # known PSP: already scored above
+            if h.isdigit() and re.fullmatch(r"[6-9]\d{9}", h):
+                out.append((m.start(), m.end(), T.UPI_ID, 0.97, "D2:upi_ctx"))       # <mobile>@<psp>
+            elif _UPI_CTX.search(text[max(0, m.start() - 40):m.start()]):
+                out.append((m.start(), m.end(), T.UPI_ID, 0.97, "D2:upi_ctx"))
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -210,7 +231,10 @@ _AADHAAR_GROUPED = re.compile(
     _NA + r"(?<!\d{4}[ \-])[2-9]\d{3}[ \-]\d{4}[ \-]\d{4}" + _NZ + r"(?![ \-]\d{4})"
 )
 _AADHAAR_CONTIG = re.compile(_NA + r"[2-9]\d{11}" + _NZ)
-_AADHAAR_KW = re.compile(r"(?<![A-Za-z])(?:aadhaar|aadhar|uidai|uid)(?![A-Za-z])|आधार", re.I)
+_AADHAAR_KW = re.compile(
+    r"(?<![A-Za-z])(?:aadhaar|aadhar|uidai|uid)(?![A-Za-z])|आधार|"
+    r"(?<![A-Za-z])(?:national|nat|natl|govt|government|identity|identification|kyc|tax|id[ _\-]?proof)[ _\-]*"
+    r"(?:id|identifier|number|no|num|card|proof)(?![A-Za-z])", re.I)
 
 
 def _aadhaar(text: str) -> list[Cand]:
@@ -333,8 +357,75 @@ def _bank_run(text: str, run: re.Match) -> tuple[int, int] | None:
     return None
 
 
-def _bank(text: str) -> list[Cand]:
+_TIMESTAMP_RUN = re.compile(r"(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{0,6}$")
+_BANK_TOKEN = re.compile(r"(?<![\w.,+\-/])\d{9,18}(?![\w.]|,\d)")
+_BANK_AMOUNT = re.compile(r"(?<![\w.,])(?:\d{1,3}(?:,\d{2,3})+|\d{3,})\.\d{2}(?![\w.])")
+
+
+def _ifsc_lines(text: str):
+    """(line_start, line_end, ifsc_match) for every line/record carrying a valid-shaped IFSC."""
+    for m in _IFSC.finditer(text):
+        ls = text.rfind("\n", 0, m.start()) + 1
+        le = text.find("\n", m.end())
+        yield ls, (len(text) if le == -1 else le), m
+
+
+def _bank_file(text: str) -> list[Cand]:
+    """Fixed-width / delimited bank records: the single 9-18 digit run on an IFSC line is the account number."""
     out: list[Cand] = []
+    seen: set[int] = set()
+    for ls, le, im in _ifsc_lines(text):
+        if ls in seen or le - ls > 400:
+            continue
+        seen.add(ls)
+        line = text[ls:le]
+        cands = [m for m in _BANK_TOKEN.finditer(line)
+                 if not (m.start() < im.end() - ls and m.end() > im.start() - ls) and not _TIMESTAMP_RUN.match(m.group())]
+        if len(cands) > 1:
+            nonphone = [m for m in cands if not re.fullmatch(r"[6-9]\d{9}", m.group())]
+            cands = nonphone if len(nonphone) == 1 else []
+        if len(cands) == 1:
+            out.append((ls + cands[0].start(), ls + cands[0].end(), T.BANK_ACCOUNT, 0.9, "D2:bank_ifsc_line"))
+    return out
+
+
+_DOC_PAY_LOOSE = re.compile(r"(?i)(?:salary|payroll|payout|stipend|bonus|wages?|remuneration|incentive|reimbursement)")
+_BANK_NAME = re.compile(r"[ ]+(?P<n>[A-Z][A-Za-z'.\-]*(?:[ ][A-Z][A-Za-z'.\-]*){0,4})(?=[ ]{2,}|[ ]*$|[ ]+[\d,]+\.\d{2}|[ ]*,)")
+
+
+def _bank_file_names(text: str) -> list[Cand]:
+    """NEFT-style records: the capitalised words right after the IFSC are the beneficiary name."""
+    out: list[Cand] = []
+    seen: set[int] = set()
+    for ls, le, im in _ifsc_lines(text):
+        if ls in seen or le - ls > 400:
+            continue
+        seen.add(ls)
+        m = _BANK_NAME.match(text, im.end(), le)
+        if m and m.group("n").lower() not in _NOT_NAMES and len(m.group("n")) >= 3:
+            out.append((m.start("n"), m.end("n"), T.PERSON, 0.9, "D2:bank_file_name"))
+    return out
+
+
+def _bank_file_amounts(text: str) -> list[Cand]:
+    """The amount on a bank-file record is compensation only if the document speaks of salary / payroll / payout."""
+    out: list[Cand] = []
+    if not _IFSC.search(text) or not _DOC_PAY_LOOSE.search(text):
+        return out
+    seen: set[int] = set()
+    for ls, le, im in _ifsc_lines(text):
+        if ls in seen or le - ls > 400:
+            continue
+        seen.add(ls)
+        ams = [m for m in _BANK_AMOUNT.finditer(text, ls, le)]
+        if ams:
+            m = ams[-1]
+            out.append((m.start(), m.end(), T.COMPENSATION, 0.9, "D2:compensation_bankfile"))
+    return out
+
+
+def _bank(text: str) -> list[Cand]:
+    out: list[Cand] = _bank_file(text)
     for kw in _BANK_KW.finditer(text):
         if _in_header_line(text, kw.start()):
             continue
@@ -365,6 +456,20 @@ _SECRET_SIMPLE: list[tuple[str, re.Pattern]] = [
     ("github", re.compile(_NA + r"gh[pousr]_[A-Za-z0-9]{36,}")),
     ("github_pat", re.compile(_NA + r"github_pat_[A-Za-z0-9_]{22,}")),
     ("slack", re.compile(_NA + r"xox[abposr]-[A-Za-z0-9\-]{10,}")),
+    ("google_api", re.compile(_NA + r"AIza[0-9A-Za-z_\-]{35}")),
+    ("google_oauth", re.compile(_NA + r"ya29\.[0-9A-Za-z_\-]{20,}")),
+    ("stripe", re.compile(_NA + r"(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}")),
+    ("stripe_whsec", re.compile(_NA + r"whsec_[0-9A-Za-z]{16,}")),
+    ("twilio", re.compile(_NA + r"SK[0-9a-f]{32}" + _NZ)),
+    ("sendgrid", re.compile(_NA + r"SG\.[0-9A-Za-z_\-]{16,}\.[0-9A-Za-z_\-]{16,}")),
+    ("gitlab", re.compile(_NA + r"glpat-[0-9A-Za-z_\-]{20,}")),
+    ("npm", re.compile(_NA + r"npm_[0-9A-Za-z]{36}")),
+    ("mailgun", re.compile(_NA + r"key-[0-9a-f]{32}" + _NZ)),
+    ("shopify", re.compile(_NA + r"shp(?:at|ss|ca|pa)_[0-9a-f]{32}")),
+    ("digitalocean", re.compile(_NA + r"dop_v1_[0-9a-f]{64}")),
+    ("age", re.compile(_NA + r"AGE-SECRET-KEY-1[0-9A-Z]{58}")),
+    ("azure_key", re.compile(r"(?<=AccountKey=)[0-9A-Za-z+/]{30,}={0,2}")),
+    ("azure_sas", re.compile(r"(?<=SharedAccessKey=)[0-9A-Za-z+/]{20,}={0,2}")),
     ("jwt", re.compile(r"(?<![A-Za-z0-9_\-])eyJ[\w\-]+\.eyJ[\w\-]+\.[\w\-]+")),
     ("pem", re.compile(
         r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?"
@@ -379,7 +484,7 @@ _BEARER = re.compile(_NA + r"bearer[ \t]+(?P<v>[A-Za-z0-9._~+/=\-]{20,})", re.I)
 _KV = re.compile(
     r"(?-i:(?<![A-Za-z0-9])|(?<=[a-z])(?=[A-Z]))"
     r"(?:password|passwd|pwd|secret|api[_\-]?key|apikey|client[_\-]?secret)(?:[_\-][A-Za-z0-9_\-]{0,20})?"
-    r"[\\\"']*[ \t]*[:=][ \t]*"
+    r"[\\\"']*[ \t]*(?:::|[:=])[ \t]*"
     r"(?:\\?\"(?P<dq>[^\"\\\r\n]+)\\?\"|'(?P<sq>[^'\r\n]+)'|(?P<raw>[^\s\"',;]+))",
     re.I,
 )
@@ -429,6 +534,81 @@ def _uri_secrets(text: str) -> list[Cand]:
     return out
 
 
+# --- credential files and CLI flags
+_PGPASS = re.compile(
+    r"(?m)^[ \t]*(?P<host>[A-Za-z0-9_.\-*]*[A-Za-z.*][A-Za-z0-9_.\-*]*):(?:\d{1,5}|\*):[A-Za-z0-9_.\-*]+:[A-Za-z0-9_.\-@*\\]+:"
+    r"(?P<v>\S[^\r\n]*?)[ \t]*$")
+_CLI_LONG = re.compile(
+    r"(?<![\w\-])--(?:password|passwd|pass|pwd)(?:=|[ \t]+)(?:'(?P<sq>[^'\r\n]+)'|\"(?P<dq>[^\"\r\n]+)\"|(?P<raw>[^\s'\"]+))")
+_CLI_LOGIN_LINE = re.compile(
+    r"(?<![\w\-])(?:docker[ \t]+login|podman[ \t]+login|helm[ \t]+registry[ \t]+login|az[ \t]+login|oc[ \t]+login|"
+    r"kubectl[ \t]+config|login|connect|sshpass|smbclient|ldap\w+|beeline|cqlsh|snowsql)(?![\w\-])")
+_CLI_P_SPACED = re.compile(r"(?<![\w\-])-p[ \t]+(?:'(?P<sq>[^'\r\n]+)'|\"(?P<dq>[^\"\r\n]+)\"|(?P<raw>[^\s'\"]+))")
+_CLI_MYSQL_LINE = re.compile(r"(?<![\w\-])(?:mysql|mysqldump|mysqladmin|mariadb|mysqlpump)(?![\w\-])")
+_CLI_P_ATTACHED = re.compile(r"(?<![\w\-])-p(?P<raw>[^\s\-'\"][^\s'\"]*)")
+_CLI_OTHER = re.compile(r"(?<![\w\-])(?:-P|-a|-W)[ \t]+(?P<raw>[^\s'\"\-][^\s'\"]*)")
+_CLI_OTHER_LINE = re.compile(r"(?<![\w\-])(?:sqlcmd|redis-cli|redis-cli\.exe|isql|bcp|sqlplus)(?![\w\-])")
+_NETRC = re.compile(r"(?m)(?:^|(?<=\s))password[ \t]+(?P<v>[^\s'\"]+)")
+
+
+def _cli_and_files(text: str) -> list[Cand]:
+    out: list[Cand] = []
+
+    def add(m, name):
+        for g in ("sq", "dq", "raw", "v"):
+            try:
+                v = m.group(g)
+            except IndexError:
+                continue
+            if v is not None:
+                if len(v) >= 3 and not _placeholder(v) and not v.startswith(("-", "$", "%")) \
+                        and not (v.isdigit() and len(v) <= 5):
+                    out.append((m.start(g), m.end(g), T.SECRET, 0.99, "D2:secret_" + name))
+                return
+
+    for m in _PGPASS.finditer(text):
+        if not m.group("v").startswith(("//", "/")) and not _placeholder(m.group("v")):
+            out.append((m.start("v"), m.end("v"), T.SECRET, 0.99, "D2:secret_pgpass"))
+    for m in _CLI_LONG.finditer(text):
+        add(m, "cli")
+    if "-p" in text or "-P" in text or "-a" in text:
+        pos = 0
+        for ln in text.split("\n"):
+            if len(ln) < 2000:
+                if _CLI_LOGIN_LINE.search(ln):
+                    for m in _CLI_P_SPACED.finditer(ln):
+                        add(_Off(m, pos), "cli")
+                if _CLI_MYSQL_LINE.search(ln):
+                    for m in _CLI_P_ATTACHED.finditer(ln):
+                        add(_Off(m, pos), "cli")
+                if _CLI_OTHER_LINE.search(ln):
+                    for m in _CLI_OTHER.finditer(ln):
+                        add(_Off(m, pos), "cli")
+            pos += len(ln) + 1
+    if "password" in text:
+        for m in _NETRC.finditer(text):
+            ctx = text[max(0, m.start() - 200):m.start()]
+            if re.search(r"(?<![A-Za-z])(?:machine|login)(?![A-Za-z])", ctx):
+                add(m, "netrc")
+    return out
+
+
+class _Off:
+    """A regex match whose offsets are shifted by a line start."""
+
+    def __init__(self, m: re.Match, off: int):
+        self._m, self._o = m, off
+
+    def group(self, g):
+        return self._m.group(g)
+
+    def start(self, g):
+        return self._m.start(g) + self._o
+
+    def end(self, g):
+        return self._m.end(g) + self._o
+
+
 def _secret(text: str) -> list[Cand]:
     out: list[Cand] = _uri_secrets(text)
     for name, rx in _SECRET_SIMPLE:
@@ -446,11 +626,12 @@ def _secret(text: str) -> list[Cand]:
             v = v.split("&")[0]                       # query-string parameter boundary
         v = v.rstrip(".,;:)]!?")
         mixed = any(c.islower() for c in v) and any(c.isupper() for c in v[1:])
-        if len(v) < 6 or not (any(c.isdigit() for c in v) or any(c in "!@#$%^&*_+=~?/\\|" for c in v) or mixed):
+        if len(v) < 6 or not (any(c.isdigit() for c in v) or any(c in "!@#$%^&*_+=~?|" for c in v) or mixed):
             continue
         if _PASS_PRE_NEG.search(text[max(0, m.start() - 12):m.start()]) or _placeholder(v):
             continue
         out.append((m.start("v"), m.start("v") + len(v), T.SECRET, 0.99, "D2:secret_pass"))
+    out += _cli_and_files(text)
     for m in _CURL_U.finditer(text):
         if not _placeholder(m.group("v")):
             out.append((m.start("v"), m.end("v"), T.SECRET, 0.99, "D2:secret_curl_u"))
@@ -480,6 +661,7 @@ _EMPID_FMT = [
     re.compile(_NA + r"(?i:EMP)[\-_]?\d{4,8}" + _NZ),
     re.compile(_NA + r"E\d{6}" + _NZ),
     re.compile(_NA + r"(?i:WD)-\d{6,8}" + _NZ),
+    re.compile(_NA + r"[A-Z]{2,3}/\d{2}/\d{3,5}" + _NZ),        # tenant code / joining-year / serial
 ]
 _EMPID_KW = re.compile(
     _NA + r"(?:employee[\s_\-]*(?:id|no\.?|number|num)|emp[\s_\-]*(?:id|no\.?)|worker[\s_\-]*id|staff[\s_\-]*id|emp\s*#)(?![A-Za-z])",
@@ -516,9 +698,11 @@ def _employee_id(text: str) -> list[Cand]:
 # COMPENSATION
 # --------------------------------------------------------------------------
 _NUM = r"\d+(?:,\d{2,3})*(?:\.\d+)?"
-_UNIT = r"(?:(?i:lakhs?|lacs?|crores?|crs?|lpa|inr)|k|K|L)"
+_CUR_PRE = (r"(?:₹|€|£|US\$|(?<![A-Za-z0-9])\$|"
+            r"(?<![A-Za-z0-9])(?i:rs\.?|inr|usd|eur|gbp|aed|sgd|cad|aud|chf|jpy))")
+_UNIT = r"(?:(?i:lakhs?|lacs?|crores?|crs?|lpa|inr|usd|eur|gbp|aed|sgd|dollars?|euros?)|k|K|L)"
 _COMP_MARKED = re.compile(
-    r"(?:(?P<pre>(?:₹|(?<![A-Za-z0-9])(?i:rs\.?|inr))[ \t]*)|(?<![A-Za-z0-9])(?<!\d[.,]))"
+    r"(?:(?P<pre>" + _CUR_PRE + r"[ \t]*)|(?<![A-Za-z0-9])(?<!\d[.,]))"
     r"(?P<num>" + _NUM + r")"
     r"(?P<unit>[ \t]*" + _UNIT + r")?"
     r"(?:/-)?" + _NZ
@@ -528,6 +712,7 @@ _COMP_KW = re.compile(
     re.I,
 )
 _COMP_BARE = re.compile(r"(?<![A-Za-z0-9_])(?<!\d[,./\-])" + _NUM + r"(?![A-Za-z0-9_%])(?![/\-]\d)(?!\.\d)")
+_CUR_BEFORE = re.compile(r"(?:₹|€|£|\$|(?<![A-Za-z])(?i:rs\.?|inr|usd|eur|gbp|aed|sgd))[ \t]*$")
 _YEAR_PRE = re.compile(
     r"(?:\b(?:in|since|effective|from|year|fy|for|during|dated|on|of|by|until|till|wef|w\.e\.f\.?)|[Ff][Yy])[\s:\-]*$"
     r"|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ \t\-/]+(?:\d{1,2}(?:st|nd|rd|th)?,?[ \t\-/]+)?$"
@@ -535,13 +720,15 @@ _YEAR_PRE = re.compile(
 
 # Pay-context vocabulary (used for currency-marked amounts, item "precision").
 _PAY_CTX = re.compile(
-    r"(?<![a-z])(?:salary|salaries|sal|ctc|compensation|payroll|pay|payout|stipend|bonus|increment|hike|wages?|"
+    r"(?<![a-z])(?:salary|salaries|sal|ctc|comp|compensation|payroll|pay|payouts?|stipend|bonus|increment|hike|wages?|"
+    r"award|incentive|reward|"
     r"remuneration|package|earnings?|lpa|per\s+annum|p\.a\.?|buyout|severance|gratuity|take[\s-]?home|"
     r"offer(?:ed)?|fixed|variable|gross|net|basic|allowance|arrears|current|expected|revision|revised)(?![a-z])")
 _NONCOMP_CTX = re.compile(
     r"(?<![a-z])(?:invoices?|gst\w*|igst|cgst|sgst|order(?!\s+to\b)s?|prices?|total|subtotal|shares?|stocks?|"
     r"closed\s+at|revenue|budget|actual|variance|turnover|sales|receipt|mrp|discount|tax|charges?|fees?|quotation|"
-    r"purchase|vendor|profit|loss|ebitda|valuation|funding|capex|opex|margin)(?![a-z])")
+    r"purchase|vendor|profit|loss|ebitda|valuation|funding|capex|opex|margin|limits?|threshold|spend|spending|spent|"
+    r"expenditure|ceiling|above|below|caps?)(?![a-z])")
 _PER_ANNUM = re.compile(r"[ \t]*(?:per[ \t]+(?:annum|year|yr)|p\.?a\.?\b|/[ \t]*(?:annum|year|yr)|a[ \t]+year)", re.I)
 
 
@@ -580,11 +767,11 @@ def _comp_ctx_ok(text: str, s: int, e: int, radius: int = 80) -> bool:
     if pay is None:
         return False
     neg = _nearest(_NONCOMP_CTX, before, after)
-    return neg is None or pay <= neg
+    return neg is None or pay < neg
 
 
 def _compensation(text: str) -> list[Cand]:
-    out: list[Cand] = []
+    out: list[Cand] = _bank_file_amounts(text)
     for m in _COMP_MARKED.finditer(text):
         pre, unit = m.group("pre"), m.group("unit")
         if not pre and not unit:
@@ -600,13 +787,19 @@ def _compensation(text: str) -> list[Cand]:
             continue  # CSV/TSV header cell
         if text[kw.end():kw.end() + 1] in ("-", "_") and text[kw.end() + 1:kw.end() + 2].isdigit():
             continue  # ticket / identifier such as PAY-35616
+        nl = text.find("\n", kw.end())
+        line_cut = kw.end() + 30
+        if nl != -1 and text[kw.end():nl].strip():
+            line_cut = min(line_cut, nl)      # the keyword's own line holds its value; do not read the next line
         for m in _COMP_BARE.finditer(text, kw.end()):
-            if m.start() > kw.end() + 30:
+            if m.start() > line_cut:
                 break
             n = m.group()
             intpart = n.split(".")[0].replace(",", "")
             if "," not in n and len(intpart) < 4:
                 continue
+            if _CUR_BEFORE.search(text[max(0, m.start() - 6):m.start()]):
+                continue  # currency-marked: the marked path (with its pay-context rule) decides
             if m.start() >= 2 and text[m.start() - 1] in " \t-/." and text[m.start() - 2].isdigit():
                 continue  # tail of a phone number / date / id
             if "," not in n and "." not in n and len(n) == 4 and 1990 <= int(n) <= 2100 \
@@ -622,7 +815,9 @@ def _compensation(text: str) -> list[Cand]:
 _MON = r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
 _DATE = re.compile(
     r"(?P<iso>(?P<iy>\d{4})[\-/](?P<im>\d{1,2})[\-/](?P<id>\d{1,2}))"
+    r"|(?P<cmp>(?P<cy>(?:19|20)\d{2})(?P<cm>0[1-9]|1[0-2])(?P<cd>0[1-9]|[12]\d|3[01]))"
     r"|(?P<num>(?P<na>\d{1,2})[/\-.](?P<nb>\d{1,2})[/\-.](?P<ny>\d{4}))"
+    r"|(?P<num2>(?P<n2a>\d{1,2})[/\-.](?P<n2b>\d{1,2})[/\-.](?P<n2y>\d{2})(?!\d))"
     r"|(?P<dmy>(?P<dd>\d{1,2})(?:st|nd|rd|th)?[ \-]+" + _MON + r"\.?,?[ \-]+(?P<dy>\d{4}))"
     r"|(?P<mdy>" + _MON + r"\.?[ \-]+(?P<md>\d{1,2})(?:st|nd|rd|th)?,?[ \-]+(?P<my>\d{4}))",
     re.I,
@@ -642,6 +837,11 @@ def _date_ok(m: re.Match, text: str) -> bool:
     if m.group("iso"):
         y, mo, d = int(m.group("iy")), int(m.group("im")), int(m.group("id"))
         return 1900 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31
+    if m.group("cmp"):
+        return True
+    if m.group("num2"):
+        a, b = int(m.group("n2a")), int(m.group("n2b"))
+        return 1 <= a <= 31 and 1 <= b <= 31 and (a <= 12 or b <= 12)
     if m.group("num"):
         a, b, y = int(m.group("na")), int(m.group("nb")), int(m.group("ny"))
         return 1900 <= y <= 2100 and 1 <= a <= 31 and 1 <= b <= 31 and (a <= 12 or b <= 12)
@@ -679,8 +879,16 @@ def _dob(text: str) -> list[Cand]:
 # --------------------------------------------------------------------------
 _AMOUNT = "AMOUNT"   # pseudo-type: COMPENSATION only with pay context nearby
 _IDDOC = "IDDOC"     # pseudo-type: identity-document concept; the value's shape decides AADHAAR / PAN
-_IDDOC_WORDS = {"national", "nationalid", "govt", "government", "governmentid", "govtid", "identity", "identification", "uid",
-                "ssn", "passport", "voter", "licence", "license", "kyc", "taxid", "nric", "uin", "tin"}
+_IDDOC_WORDS = {"national", "nat", "natl", "nationalid", "govt", "government", "governmentid", "govtid", "identity", "identification",
+                "uid", "ssn", "passport", "voter", "licence", "license", "kyc", "taxid", "nric", "uin", "tin", "proof"}
+_PERSONMULTI = "PERSONMULTI"   # pseudo-type: PERSON only when the value is two or more capitalised words
+_PERSON_MULTI_KEYS = {"user", "owner", "assignee", "author", "sender", "recipient", "reporter", "requestedby", "approvedby",
+                      "createdby", "actor", "customer", "client", "agent", "operator"}
+_WEAKSECRET = "WEAKSECRET"   # pseudo-type: only a high-entropy value under a secret-ish key is a SECRET
+_WEAK_WORDS = {"session", "seed", "cookie", "salt", "pepper", "hmac", "sas"}
+_WEAK_KEY_NEG = {"primary", "foreign", "public", "sort", "partition", "cache", "object", "name", "type", "id", "index", "order",
+                 "lookup", "translation", "i18n", "count", "status", "length", "size", "expiry", "expires", "ttl", "timeout",
+                 "duration", "enabled", "flag", "label", "text", "path", "url"}
 _IDDOC_QUAL = {"id", "number", "no", "num", "card", "document", "doc", "code", "identifier", "proof", "details"}
 _IDDOC_SINGLE = {"uid", "ssn", "kyc", "nationalid", "govtid", "governmentid", "taxid", "nric", "uin", "identity", "identification"}
 _IDDOC_NEG = {"type", "issuer", "country", "expiry", "expires", "issue", "issued", "date", "valid", "validity", "authority",
@@ -709,7 +917,7 @@ _NAME_PREFIX = {"full", "legal", "first", "last", "middle", "preferred", "worker
                 "display", "given", "family", "candidate", "beneficiary", "holder", "cardholder", "nominee", "spouse",
                 "father", "mother", "referrer", "reporting", "approver", "requester", "requestor", "contact", "person",
                 "applicant", "payee", "hrbp", "sur", "account", "card", "reviewer", "interviewer", "recruiter", "actor"}
-_NAME_SINGLE = {"manager", "supervisor", "approver", "cardholder", "actor", "requester", "requestor", "payee",
+_NAME_SINGLE = {"member", "dependent", "manager", "supervisor", "approver", "cardholder", "actor", "requester", "requestor", "payee",
                 "beneficiary", "nominee", "spouse", "candidate", "applicant", "employee", "worker", "surname",
                 "interviewer", "recruiter", "hrbp", "reviewer"}
 _NOT_NAMES = {"system", "admin", "administrator", "user", "null", "none", "n/a", "na", "unknown", "active", "inactive",
@@ -718,25 +926,40 @@ _NOT_NAMES = {"system", "admin", "administrator", "user", "null", "none", "n/a",
 _KEY_QUALIFIERS = {"father", "mother", "husband", "wife", "guardian", "emergency", "alternate", "primary", "secondary",
                    "personal", "official", "office", "home", "new", "old", "previous", "current", "bank", "company", "nominee"}
 _ORG_PARENTS_TXT = {"company", "organization", "org", "department", "cost_center", "location", "job_profile", "business_unit",
-                    "division", "team", "supervisory_organization", "position", "workertype", "worker_type", "legal_entity"}
+                    "division", "team", "supervisory_organization", "position", "workertype", "worker_type", "legal_entity",
+                    "info", "collection", "request", "item", "items", "environment", "project", "workspace", "service", "app",
+                    "application", "connector", "connectors", "integration", "integrations", "system", "tool", "api", "endpoint",
+                    "repo", "repository", "package", "plugin", "module", "tenant", "product", "vendor", "config", "settings"}
 
 
-def _key_words(key: str) -> list[str]:
-    s = re.sub(r"(?i)\ba\s*/\s*c\b", " account ", str(key))
-    s = re.sub(r"(?i)\bd\.\s*o\.\s*b\b\.?", " dob ", s)
+_KW_AC = re.compile(r"(?i)\ba\s*/\s*c\b")
+_KW_DOB = re.compile(r"(?i)\bd\.\s*o\.\s*b\b\.?")
+_KW_ACR = re.compile(r"([A-Z]+)([A-Z][a-z])")
+_KW_CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_KW_SPLIT = re.compile(r"[^A-Za-z0-9]+")
+
+
+@functools.lru_cache(maxsize=8192)
+def _key_words_t(key: str) -> tuple:
+    s = _KW_AC.sub(" account ", key)
+    s = _KW_DOB.sub(" dob ", s)
     if ":" in s:
         s = s.rsplit(":", 1)[-1]
-    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", s)
-    s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", s)
+    s = _KW_ACR.sub(r"\1 \2", s)
+    s = _KW_CAMEL.sub(" ", s)
     out: list[str] = []
-    for w in re.split(r"[^A-Za-z0-9]+", s.lower()):
+    for w in _KW_SPLIT.split(s.lower()):
         if not w:
             continue
         if out and out[-1] == "e" and w == "mail":
             out[-1] = "email"
         else:
             out.append(w)
-    return out
+    return tuple(out)
+
+
+def _key_words(key: str) -> list[str]:
+    return list(_key_words_t(str(key)))
 
 
 def _has_seq(words: list[str], *seq: str) -> bool:
@@ -754,7 +977,10 @@ def _classify_words(words: list[str]):
             or _has_seq(words, "private", "key") or _has_seq(words, "secret", "key") or "accesskey" in W) \
             and not W & _SECRET_NEG:
         return T.SECRET
-    if W & {"email", "emailid", "emailaddress"}:
+    if any(len(w) > 8 and w.endswith("password") or len(w) > 6 and w.endswith("passwd") for w in W) \
+            and not W & _SECRET_NEG:
+        return T.SECRET
+    if W & {"email", "emailid", "emailaddress", "mail", "mailid"}:
         return T.EMAIL
     if W & {"aadhaar", "aadhar", "aadhaarnumber", "uidai"}:
         return T.AADHAAR
@@ -762,16 +988,18 @@ def _classify_words(words: list[str]):
         return T.PAN
     if W & {"ifsc", "ifsccode"}:
         return T.IFSC
-    if W & {"upi", "vpa"}:
+    if W & {"upi", "vpa"} or ("address" in W and W & {"payment", "virtual", "pay", "upi"}):
         return T.UPI_ID
     if not W & _IDDOC_NEG and ((W & _IDDOC_WORDS and (W & _IDDOC_QUAL or W & _IDDOC_SINGLE))
                                or ("tax" in W and W & {"id", "number", "no"})):
         return _IDDOC
     if "card" in W and W & {"number", "no", "num"} and not W & {"pan"}:
         return T.CARD
-    if (W & {"account", "acct", "bankaccount"} or ("acc" in W and W & {"no", "number", "num"})) and not W & _ACCT_NEG:
+    if (W & {"account", "acct", "bankaccount"} or ("acc" in W and W & {"no", "number", "num"})
+            or ("ac" in W and W & {"bank", "no", "number", "num", "salary", "payroll"})) and not W & _ACCT_NEG:
         return T.BANK_ACCOUNT
-    if W & {"phone", "mobile", "cell", "telephone", "tel", "mob", "contact", "phoneno", "mobileno"}:
+    if W & {"phone", "mobile", "cell", "telephone", "tel", "mob", "contact", "phoneno", "mobileno"} \
+            and not (W & {"name", "person"} and "contact" in W and not W & {"phone", "mobile", "cell", "tel", "no", "number"}):
         return T.PHONE
     if W & {"dob", "birth", "birthday", "birthdate", "born", "janm", "janam"} and not W & {"place", "country", "city", "state", "certificate"}:
         return T.DATE_OF_BIRTH
@@ -781,12 +1009,16 @@ def _classify_words(words: list[str]):
         return T.COMPENSATION
     if W & {"amount", "amt"} and not W & _AMOUNT_NEG:
         return _AMOUNT
-    if (W & {"employee", "emp", "worker", "staff", "associate", "personnel"} and W & {"id", "no", "number", "num", "code"}) \
+    if (W & {"employee", "emp", "worker", "staff", "associate", "personnel", "person"} and W & {"id", "no", "number", "num", "code"}) \
             or W & {"empcode", "empid", "empno", "employeeid", "workerid", "employeenumber", "employeecode"} \
             or words == ["emp"]:
         return T.EMPLOYEE_ID
+    if (W & _WEAK_WORDS or (words[-1] == "key" and len(W) > 1)) and not W & (_WEAK_KEY_NEG | _SECRET_NEG):
+        return _WEAKSECRET
     if words[-1] in ("name", "names") and set(words[:-1]) <= _NAME_PREFIX:
         return T.PERSON
+    if words[-1] in _PERSON_MULTI_KEYS and set(words[:-1]) <= _NAME_PREFIX:
+        return _PERSONMULTI
     if words[-1] in _NAME_SINGLE and set(words[:-1]) <= (_NAME_PREFIX | {"reporting", "direct", "line", "hr", "functional",
                                                                           "skip", "dotted", "approving", "primary"}):
         return T.PERSON
@@ -795,6 +1027,7 @@ def _classify_words(words: list[str]):
     return None
 
 
+@functools.lru_cache(maxsize=8192)
 def _classify_key(key: str):
     return _classify_words(_key_words(key))
 
@@ -809,8 +1042,8 @@ _R_BANK = re.compile(r"\d{9,18}(?!\d)|\d{3,6}(?:[ \-]\d{3,6}){1,4}(?!\d)")
 _R_UPI = re.compile(r"[A-Za-z0-9._\-]{2,64}@[A-Za-z][A-Za-z0-9]{1,30}(?![A-Za-z0-9.])")
 _R_CARD = re.compile(r"\d(?:[ \-]?\d){12,18}(?!\d)")
 _R_COMP = re.compile(
-    r"(?P<pre>(?:₹|(?i:rs\.?|inr))[ \t]*)?(?P<num>" + _NUM + r")(?P<unit>[ \t]*" + _UNIT + r")?(?:/-)?(?![A-Za-z0-9])(?![\-/.:]\d)")
-_R_EMPID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]{3,19}(?![A-Za-z0-9_\-])")
+    r"(?P<pre>" + _CUR_PRE + r"[ \t]*)?(?P<num>" + _NUM + r")(?P<unit>[ \t]*" + _UNIT + r")?(?:/-)?(?![A-Za-z0-9])(?![\-/.:]\d)")
+_R_EMPID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-/]{3,19}(?![A-Za-z0-9_\-/])")
 _TOK = r"(?:[^\W\d_]|['’])(?:[^\W\d_]|['’.\-])*"
 _R_NAME = re.compile(_TOK + r"(?:(?:,[ \t]*|[ \t]+)" + _TOK + r"){0,4}")
 _PARTICLES = {"bin", "van", "von", "de", "da", "al", "el", "la", "le", "der", "den", "di", "du", "ben", "ibn", "mac", "mc"}
@@ -897,7 +1130,8 @@ def _match_value(t, text: str, pos: int, end: int, whole: bool, bare_name: bool 
         m = _R_EMPID.match(text, pos, end)
         if not m or not any(c.isdigit() for c in m.group()):
             return None
-        if re.fullmatch(r"\d{10,}", m.group()) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", m.group()):
+        if re.fullmatch(r"\d{10,}", m.group()) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", m.group()) \
+                or re.fullmatch(r"\d{1,4}[/\-]\d{1,2}[/\-]\d{1,4}", m.group()):
             return None
         res = (m.start(), m.end())
     elif t is T.PERSON:
@@ -963,6 +1197,18 @@ def _emit_typed(out: list, text: str, t, pos: int, end: int, whole: bool, *, bar
         pos += 1
     while end > pos and text[end - 1] in " \t\r":
         end -= 1
+    if t is _PERSONMULTI:
+        r = _match_value(T.PERSON, text, pos, end, whole)
+        if r is not None:
+            toks = text[r[0]:r[1]].replace(",", " ").split()
+            if len(toks) >= 2 and all(w[0].isupper() for w in toks if w.lower() not in _PARTICLES):
+                out.append((r[0], r[1], T.PERSON, 0.95, "D1:field_ctx"))
+        return
+    if t is _WEAKSECRET:
+        r = _match_value(T.SECRET, text, pos, end, whole)
+        if r is not None and _high_entropy(text[r[0]:r[1]]):
+            out.append((r[0], r[1], T.SECRET, 0.95, "D1:field_ctx"))
+        return
     if t is _IDDOC:
         for cand in (T.AADHAAR, T.PAN):
             r = _match_value(cand, text, pos, end, whole)
@@ -981,6 +1227,19 @@ def _emit_typed(out: list, text: str, t, pos: int, end: int, whole: bool, *, bar
         out.append((r[0], r[1], t, 0.95, "D1:field_ctx"))
 
 
+def _high_entropy(v: str) -> bool:
+    """Random-looking token: >= 16 chars, no spaces, more than one character class, Shannon entropy >= 3 bits/char."""
+    if len(v) < 16 or " " in v or "/" == v[0] or v.startswith(("http", "www.")):
+        return False
+    classes = sum([any(c.islower() for c in v), any(c.isupper() for c in v), any(c.isdigit() for c in v),
+                   any(not c.isalnum() for c in v)])
+    if classes < 2 or not (any(c.isdigit() for c in v) or any(not c.isalnum() and c not in "-_" for c in v)):
+        return False
+    freq = collections.Counter(v)
+    ent = -sum(n / len(v) * math.log2(n / len(v)) for n in freq.values())
+    return ent >= 3.0
+
+
 def _escalate(out: list, text: str, pos: int, end: int, key_words: list) -> None:
     """Structural escalation: a whole Verhoeff-valid 12-digit value in an HRIS-shaped payload is an Aadhaar
     even when its key is unknown (nationalId, uid-like columns, opaque headers). Known non-identity keys skip."""
@@ -997,13 +1256,20 @@ def _escalate(out: list, text: str, pos: int, end: int, key_words: list) -> None
 
 _AMOUNT_CTX = re.compile(
     r"(?<![a-z])(?:salary|salaries|sal|ctc|compensation|pay|payroll|wages?|stipend|bonus|remuneration|earnings?|package|"
-    r"increment|hike|bank\s+advice)(?![a-z])")
-_AMOUNT_ABS_NEG = re.compile(r"(?<![a-z])(?:invoices?|gst\w*|order(?!\s+to\b)s?|prices?|shares?|stocks?|revenue|budget|purchase)(?![a-z])")
+    r"increment|hike|bank\s+advice|payouts?|award|incentive|reward|comp)(?![a-z])")
+_AMOUNT_ABS_NEG = re.compile(r"(?<![a-z])(?:invoices?|gst\w*|order(?!\s+to\b)s?|prices?|shares?|stocks?|revenue|budget|purchase|limits?|"
+                             r"threshold|spend|spending)(?![a-z])")
+
+
+_DOC_PAY = re.compile(r"(?<![a-z])(?:salary|salaries|payroll|payouts?|stipend|bonus|wages?|remuneration|incentive|reimbursement)(?![a-z])")
 
 
 def _amount_ctx(text: str, s: int, e: int) -> bool:
     if not _AMOUNT_CTX.search(_ctx_norm(text[max(0, s - 200):s] + " " + text[e:e + 200])):
-        return False
+        # a bank file (records carrying IFSC codes) whose document speaks of salary / payroll / payout
+        if not ((_IFSC.search(text) and _DOC_PAY_LOOSE.search(text))
+                or (_DOC_PAY.search(_ctx_norm(text)) and not _AMOUNT_ABS_NEG.search(_ctx_norm(text)))):
+            return False
     return not _AMOUNT_ABS_NEG.search(_ctx_norm(text[max(0, s - 80):s] + " " + text[e:e + 80]))
 
 
@@ -1120,18 +1386,55 @@ _XML_EL = re.compile(
 _XML_TYPE_ATTR = re.compile(r"(?:^|[\s:])[\w.\-]*[Tt]ype\s*=\s*[\"']([^\"']*)[\"']")
 
 
+_XML_TAG = re.compile(r"<(/?)([A-Za-z_][\w.\-]*(?::[\w.\-]+)?)(?:\s[^<>]*?)?(/?)>")
+_PARTY_ANC = ("cdtr", "dbtr", "ultmt", "initgpty", "pty", "ownr", "rcpt", "payee", "payer", "beneficiary")
+
+
+def _xml_ancestors(text: str, pos: int) -> list[str]:
+    """Names of the elements still open at `pos` (nearest last), best effort over a bounded look-back."""
+    stack: list[str] = []
+    for m in _XML_TAG.finditer(text, max(0, pos - 500), pos):
+        if m.group(3):
+            continue
+        if m.group(1):
+            if stack and stack[-1] == m.group(2):
+                stack.pop()
+        else:
+            stack.append(m.group(2))
+    return stack
+
+
 def _scan_xml(text: str, out: list) -> None:
     if "</" not in text:
         return
+    hint_t, hint_end = None, -1
     for m in _XML_EL.finditer(text):
         tag = m.group("tag")
         words = _key_words(tag)
         t = _classify_words(words)
+        val = text[m.start("val"):m.end("val")].strip()
         if t is None:
             for a in _XML_TYPE_ATTR.finditer(m.group("attrs")):
                 t = _classify_words(_key_words(a.group(1)))
                 if t is not None:
                     break
+        if t is None and words and set(words) <= {"id", "value", "number", "identifier", "val", "no"} and hint_t is not None \
+                and m.start() - hint_end < 300:
+            t = hint_t                                           # <ID>IND-AADHAAR</ID> ... <ID>value</ID>
+        if t is None and words == ["nm"]:
+            anc = [a.lower() for a in _xml_ancestors(text, m.start())]
+            if any(a.startswith(_PARTY_ANC) for a in anc[-3:]):
+                t = T.PERSON
+        if t is None:
+            for a in reversed(_xml_ancestors(text, m.start())[-4:]):
+                ta = _classify_words(_key_words(a))
+                if ta in (T.BANK_ACCOUNT, T.PHONE, T.EMAIL, T.DATE_OF_BIRTH, T.IFSC, T.PAN, T.AADHAAR, T.CARD, T.UPI_ID, _IDDOC):
+                    t = ta
+                    break
+        if len(val) < 40 and t is None:
+            vt = _classify_words(_key_words(val))
+            if vt in (T.AADHAAR, T.PAN, _IDDOC, T.BANK_ACCOUNT, T.PHONE, T.EMAIL, T.DATE_OF_BIRTH):
+                hint_t, hint_end = vt, m.end()
         if t is None:
             _escalate(out, text, m.start("val"), m.end("val"), words)
             continue
@@ -1177,9 +1480,39 @@ def _split_cells(text: str, s: int, e: int, delim: str) -> list[tuple[int, int]]
 _HEADER_CELL = re.compile(r"[A-Za-z][A-Za-z0-9 _./#()&\-]{0,40}")
 
 
-def _scan_csv(text: str, out: list) -> None:
-    if "," not in text and "\t" not in text:
+# Legend tables: "c1 = employee id, c2 = PAN", "col 3: PAN", "column 4 - date of birth"
+_LEGEND = re.compile(
+    r"(?<![A-Za-z0-9])(?:(?:c|col|column|field|fld|f)[ _\-]?(?P<n1>\d{1,3})|#(?P<n2>\d{1,3}))"
+    r"[ \t]*(?:=|:|-|–|→|->|is)[ \t]*(?P<mean>[A-Za-z][A-Za-z0-9 ./_'’\-]{1,40}?)(?=[,;\n)|\]]|[ \t]{2,}|[ \t]+(?:c|col|column|field)[ _\-]?\d|$)",
+    re.I)
+_COL_LABEL = re.compile(r"(?:c|col|column|field|fld|f)?[ _\-]?(\d{1,3})", re.I)
+
+
+def _legend(text: str) -> dict:
+    """{column number: entity type} from legend lines such as 'c4 = date of birth'."""
+    if not re.search(r"(?i)(?:c|col|column|field|fld|f)[ _\-]?\d|#\d", text):
+        return {}
+    leg = {}
+    for m in _LEGEND.finditer(text):
+        t = _classify_key(m.group("mean").strip())
+        if t is not None:
+            leg[int(m.group("n1") or m.group("n2"))] = t
+    return leg
+
+
+def _table_delim(line: str) -> str | None:
+    best, cnt = None, 1
+    for d in ("\t", "|", ",", ";"):
+        c = line.count(d)
+        if c > cnt:
+            best, cnt = d, c
+    return best
+
+
+def _scan_csv(text: str, out: list, neg: list | None = None) -> None:
+    if not any(d in text for d in (",", "\t", "|", ";")):
         return
+    legend = None
     lines: list[tuple[int, int]] = []
     pos = 0
     for ln in text.split("\n"):
@@ -1190,21 +1523,34 @@ def _scan_csv(text: str, out: list) -> None:
     while i < nl:
         s, e = lines[i]
         line = text[s:e]
-        delim = "\t" if line.count("\t") >= 2 and line.count("\t") >= line.count(",") else ","
-        if line.count(delim) < 2:
+        delim = _table_delim(line)
+        if delim is None:
             i += 1
             continue
         cells = _split_cells(text, s, e, delim)
+        if delim == "|" and cells and not text[cells[0][0]:cells[0][1]].strip():
+            cells = cells[1:]                                   # "| a | b |" tables
+        if delim == "|" and cells and not text[cells[-1][0]:cells[-1][1]].strip():
+            cells = cells[:-1]
         heads = [text[a:b].strip() for a, b in cells]
         if len(cells) < 3 or sum(bool(_HEADER_CELL.fullmatch(h)) for h in heads) < 0.7 * len(heads):
             i += 1
             continue
         col_types = [_classify_key(h) if _HEADER_CELL.fullmatch(h) else None for h in heads]
         if not any(col_types):
-            i += 1
-            continue
+            if legend is None:
+                legend = _legend(text)
+            if legend:
+                for k, h in enumerate(heads):
+                    lm = _COL_LABEL.fullmatch(h)
+                    if lm and int(lm.group(1)) in legend:
+                        col_types[k] = legend[int(lm.group(1))]
+            if not any(col_types):
+                i += 1
+                continue
         n = len(cells)
         j = i + 1
+        matched = 0
         while j < nl:
             rs, re_ = lines[j]
             if not text[rs:re_].strip():
@@ -1213,15 +1559,20 @@ def _scan_csv(text: str, out: list) -> None:
                 j += 1
                 continue                              # a repeated header row is not data
             rcells = _split_cells(text, rs, re_, delim)
+            if delim == "|" and len(rcells) == n + 2 and not text[rcells[0][0]:rcells[0][1]].strip():
+                rcells = rcells[1:-1]
             if len(rcells) == n:
+                matched += 1
                 for (a, b), t, h in zip(rcells, col_types, heads):
                     if t is not None and b > a:
                         _emit_typed(out, text, t, a, b, True, bare_name=(_key_words(h) == ["name"]))
                     elif t is None and b > a:
-                        _escalate(out, text, a, b, _key_words(h))
+                        kw = _key_words(h)
+                        if neg is not None and set(kw) & _ESC_NEG:
+                            neg.append((a, b))            # reference / order / invoice column: digits here are not PII
+                        _escalate(out, text, a, b, kw)
             j += 1
-        i = j
-
+        i = j if matched else i + 1                   # a prose line that only looked like a header must not eat the table
 
 # ---- flattened CSV (D0 turns every newline into a space, so rows are only separated by " ") ----------
 _TOKEN = re.compile(r'"(?:[^"]|"")*"\S*|\S+')
@@ -1470,7 +1821,99 @@ def _scan_csv_flat(text: str, out: list) -> None:
         return
 
 
-_KV_SEP = re.compile(r"[ \t]{0,3}[:=][ \t]{0,6}")
+_SQL_INSERT = re.compile(
+    r"INSERT[ \t\r\n]+(?:OR[ \t]+\w+[ \t]+)?INTO[ \t\r\n]+[\w.`\"\[\]]+[ \t\r\n]*\((?P<cols>[^()]*)\)[ \t\r\n]*VALUES[ \t\r\n]*"
+    r"(?P<vals>\((?:'(?:[^']|'')*'|[^()'])*\)(?:[ \t\r\n]*,[ \t\r\n]*\((?:'(?:[^']|'')*'|[^()'])*\))*)", re.I)
+_SQL_TUPLE = re.compile(r"\((?:'(?:[^']|'')*'|[^()'])*\)")
+_SQL_VALUE = re.compile(r"[ \t\r\n]*(?:'(?P<q>(?:[^']|'')*)'|(?P<n>[^,)'\s][^,)]*?))[ \t\r\n]*(?=,|\)$)")
+_DUP_ENTRY = re.compile(r"Duplicate entry '(?P<v>[^']+)' for key '(?P<k>[^']+)'", re.I)
+
+
+def _scan_sql(text: str, out: list) -> None:
+    if "into" not in text.lower() and "Duplicate" not in text:
+        return
+    for m in _SQL_INSERT.finditer(text):
+        cols = [c.strip().strip('`"[]') for c in m.group("cols").split(",")]
+        types = [_classify_key(c) for c in cols]
+        if not any(types):
+            continue
+        for tm in _SQL_TUPLE.finditer(text, m.start("vals"), m.end("vals")):
+            body_s, body_e = tm.start() + 1, tm.end() - 1
+            pos, k = body_s, 0
+            # split on commas outside quotes
+            cells, cur, inq = [], body_s, False
+            for idx in range(body_s, body_e):
+                ch = text[idx]
+                if ch == "'":
+                    inq = not inq
+                elif ch == "," and not inq:
+                    cells.append((cur, idx))
+                    cur = idx + 1
+            cells.append((cur, body_e))
+            if len(cells) != len(cols):
+                continue
+            for (a, b), t in zip(cells, types):
+                if t is None:
+                    continue
+                while a < b and text[a] in " \t\r\n":
+                    a += 1
+                while b > a and text[b - 1] in " \t\r\n":
+                    b -= 1
+                if b - a >= 2 and text[a] == "'" and text[b - 1] == "'":
+                    a, b = a + 1, b - 1
+                if b > a:
+                    _emit_typed(out, text, t, a, b, True)
+    for m in _DUP_ENTRY.finditer(text):
+        t = _classify_key(m.group("k"))
+        if t is not None:
+            _emit_typed(out, text, t, m.start("v"), m.end("v"), True)
+
+
+# ---- labelled person names in prose (high-precision structural cues)
+_PT = r"[A-Z][A-Za-z'’\-]*\.?"
+_PNAME = _PT + r"(?:[ \t]+" + _PT + r"){0,3}"
+_PERSON_CUES = [
+    ("angle_email", re.compile(r"(?P<n>" + _PNAME + r")[\"']?[ \t]*<[^<>\s@]+@[^<>\s]+>")),
+    ("wrote", re.compile(r"(?m)^[ >\t]*(?P<n>" + _PNAME + r")[ \t]+wrote:")),
+    ("role", re.compile(
+        r"(?i:chaired[ \t]+by|approved[ \t]+by|signed[ \t]+off[ \t]+by|reporting[ \t]+manager|vendor[ \t]+contact|"
+        r"point[ \t]+of[ \t]+contact|contact[ \t]+person|spoke[ \t]+(?:to|with)|referred[ \t]+by|nominated[ \t]+by|"
+        r"escalated[ \t]+to|handover[ \t]+to|attn|attention)[ \t]*[:\-]?[ \t]+(?P<n>" + _PNAME + r")")),
+    ("dependent", re.compile(
+        r"(?m)^[ \t]*\d+[.)][ \t]+(?P<n>" + _PNAME + r")[ \t]*\((?i:spouse|child|son|daughter|father|mother|dependent|parent|"
+        r"sibling|brother|sister|partner|wife|husband)\)")),
+    ("numbered_profile", re.compile(r"(?m)^[ \t]*\d+[.)][ \t]+(?P<n>" + _PT + r"[ \t]+" + _PNAME + r")[ \t]+[-–—][ \t]+\d")),
+    ("before_dob", re.compile(r"(?P<n>" + _PNAME + r")[ \t]*\((?i:dob|d\.o\.b\.?|born|date of birth)\b")),
+    ("possessive", re.compile(
+        r"(?P<n>" + _PT + r")['’]s[ \t]+(?i:personal|official|work|home|new|old|current|primary)?[ \t]*"
+        r"(?i:mobile|phone|number|email|e-mail|aadhaar|aadhar|pan|dob|salary|ctc|bank|account|a/c|ifsc|upi|address|passport)\b")),
+    ("before_empid", re.compile(
+        r"(?P<n>" + _PNAME + r")[ \t]*[\[(][ \t]*(?:EMP[-_]?\d{4,8}|E\d{6}|WD-\d{6,8}|[A-Z]{2}/\d{2}/\d{3,5})[ \t]*[\])]")),
+]
+
+
+def _person_cues(text: str) -> list[Cand]:
+    out: list[Cand] = []
+    if len(text) > 200_000:
+        return out
+    for name, rx in _PERSON_CUES:
+        for m in rx.finditer(text):
+            n = m.group("n").strip().rstrip(".")
+            if n.lower() in _NOT_NAMES or len(n) < 3 or n.split()[0].lower() in _CUE_NOT_FIRST \
+                    or (name == "possessive" and n.lower() in _ROLE_NOUNS):
+                continue
+            out.append((m.start("n"), m.start("n") + len(n), T.PERSON, 0.85, "D2:person_" + name))
+    return out
+
+
+_ROLE_NOUNS = {"referee", "candidate", "employee", "manager", "employer", "company", "customer", "client", "applicant", "member",
+               "user", "vendor", "recruiter", "team", "department", "payroll", "hrbp", "subject", "sender", "recipient", "owner",
+               "landlord", "tenant", "nominee", "contact", "supervisor", "approver", "reviewer", "interviewer", "hr"}
+_CUE_NOT_FIRST = {"the", "this", "that", "please", "dear", "hi", "hello", "regards", "thanks", "team", "from", "to", "cc", "subject",
+                  "re", "fwd", "sent", "date", "on", "at", "in", "and", "or", "for", "with", "ceo", "cfo", "hr", "it"}
+
+
+_KV_SEP = re.compile(r"[ \t]{0,3}(?:::|[:=])[ \t]{0,6}")
 _KV_KEY_TAIL = re.compile(r"((?:[A-Za-z][\w\-/.'’]*[ \t]+){0,2}[A-Za-z][\w\-/.'’]*)$")
 _SNAKE_KEY = re.compile(r"(?<![\w])(?P<key>[A-Za-z]+(?:_[A-Za-z]+)+)[ \t]+(?P<q>['\"]?)")
 
@@ -1503,6 +1946,8 @@ def _scan_kv(text: str, out: list) -> None:
         vs = m.end()
         le = text.find("\n", vs)
         le = len(text) if le == -1 else le
+        if t is _WEAKSECRET and "=" in m.group() and not toks[-1].isupper():
+            continue                       # log-style "session=abc": only env-style KEYS (UPPER_SNAKE=) count
         if t is None:
             if not toks:
                 continue
@@ -1518,7 +1963,7 @@ def _scan_kv(text: str, out: list) -> None:
                 le2 = text.find("\n", q)
                 le2 = len(text) if le2 == -1 else le2
                 if not re.match(r"[A-Za-z][\w ./'’\-]{0,40}[ \t]*[:=]", text[q:le2]):
-                    _emit_typed(out, text, t, q, le2, False, bare_name=(key_words == ["name"]))
+                    _emit_typed(out, text, t, q, le2, False, bare_name=(key_words == ["name"] or (t is T.PERSON and key_words[-1] not in ("name", "names"))))
             continue
         if text[vs:vs + 1] in (" ", "\t"):
             continue
@@ -1526,9 +1971,9 @@ def _scan_kv(text: str, out: list) -> None:
             q = text[vs]
             close = text.find(q, vs + 1, le)
             if close != -1:
-                _emit_typed(out, text, t, vs + 1, close, True, bare_name=(key_words == ["name"]))
+                _emit_typed(out, text, t, vs + 1, close, True, bare_name=(key_words == ["name"] or (t is T.PERSON and key_words[-1] not in ("name", "names"))))
             continue
-        _emit_typed(out, text, t, vs, le, False, bare_name=(key_words == ["name"]))
+        _emit_typed(out, text, t, vs, le, False, bare_name=(key_words == ["name"] or (t is T.PERSON and key_words[-1] not in ("name", "names"))))
     # Snake_Case identifiers followed directly by the value: "Date_of_Birth 01 Nov 1996", "Bank_Account_Number '123...'"
     for m in _SNAKE_KEY.finditer(text):
         t = _classify_key(m.group("key"))
@@ -1553,48 +1998,89 @@ def detect_field_context(text: str) -> list[Detection]:
     """
     if not text:
         return []
+    return _resolve(_field_scan(text)[0])
+
+
+def _field_scan(text: str) -> tuple[list[Cand], list[tuple[int, int]]]:
     cands: list[Cand] = []
+    neg: list[tuple[int, int]] = []
     _scan_json(text, cands)
     _scan_xml(text, cands)
-    _scan_csv(text, cands)
+    _scan_csv(text, cands, neg)
     _scan_csv_flat(text, cands)
     _scan_kv(text, cands)
-    return _resolve(cands)
+    _scan_sql(text, cands)
+    cands.extend(_person_cues(text))
+    return cands, neg
 
 
 # --------------------------------------------------------------------------
 # Fusion
 # --------------------------------------------------------------------------
 def _resolve(cands: list[Cand]) -> list[Detection]:
+    """Greedy by (score, length): O(n log n) - accepted spans stay disjoint, so only the two neighbours matter."""
     order = sorted(cands, key=lambda c: (-c[3], -(c[1] - c[0]), c[0]))
+    starts: list[int] = []
+    ends: list[int] = []
     taken: list[Cand] = []
     for c in order:
         if c[1] <= c[0]:
             continue
-        if all(c[1] <= t[0] or c[0] >= t[1] for t in taken):
-            taken.append(c)
+        i = bisect.bisect_right(starts, c[0])
+        if i > 0 and ends[i - 1] > c[0]:
+            continue
+        if i < len(starts) and starts[i] < c[1]:
+            continue
+        starts.insert(i, c[0])
+        ends.insert(i, c[1])
+        taken.append(c)
     taken.sort(key=lambda c: (c[0], c[1]))
     return [Detection(s, e, ty, sc, src) for s, e, ty, sc, src in taken]
+
+
+class _SpanIndex:
+    """Any-overlap queries against a set of (possibly overlapping) spans in O(log n)."""
+
+    def __init__(self, spans: list[Cand]):
+        srt = sorted(spans, key=lambda c: c[0])
+        self._starts = [c[0] for c in srt]
+        self._max_end: list[int] = []
+        m = -1
+        for c in srt:
+            m = max(m, c[1])
+            self._max_end.append(m)
+
+    def overlaps(self, c: Cand) -> bool:
+        i = bisect.bisect_left(self._starts, c[1])          # spans starting before c ends
+        return i > 0 and self._max_end[i - 1] > c[0]
 
 
 def _overlaps(c: Cand, others: list[Cand]) -> bool:
     return any(c[0] < o[1] and o[0] < c[1] for o in others)
 
 
+_REF_SENSITIVE = frozenset({T.PHONE, T.BANK_ACCOUNT, T.CARD, T.AADHAAR, T.COMPENSATION})
+
+
 def detect_d2(text: str) -> list[Detection]:
     """Deterministic detections: non-overlapping, sorted by start."""
     if not text:
         return []
-    field_ctx = [(d.start, d.end, d.type, d.score, d.source) for d in detect_field_context(text)]
+    fc_cands, neg_spans = _field_scan(text)
+    field_ctx = [(d.start, d.end, d.type, d.score, d.source) for d in _resolve(fc_cands)]
+    neg_ix = _SpanIndex([(a, b, None, 0, "") for a, b in neg_spans]) if neg_spans else None
     cards = _cards(text)
     aadhaar = _aadhaar(text)
-    bank_ctx = [b for b in _bank(text)]
-    bank = [b for b in bank_ctx if not _overlaps(b, cards) and not _overlaps(b, aadhaar)]
+    bank_ctx = _bank(text)
+    card_ix, aad_ix = _SpanIndex(cards), _SpanIndex(aadhaar)
+    bank = [b for b in bank_ctx if not card_ix.overlaps(b) and not aad_ix.overlaps(b)]
     # An explicit account label beats a Luhn-valid contiguous digit run (random 15/16-digit
     # account numbers pass Luhn ~10 % of the time); grouped 4-4-4-4 stays a card.
-    labelled = bank_ctx + [c for c in field_ctx if c[2] is T.BANK_ACCOUNT]
-    cards = [c for c in cards if not (re.fullmatch(r"\d+", text[c[0]:c[1]]) and _overlaps(c, labelled))]
-    bank += [b for b in bank_ctx if b not in bank and not _overlaps(b, cards) and not _overlaps(b, aadhaar)]
+    lab_ix = _SpanIndex(bank_ctx + [c for c in field_ctx if c[2] is T.BANK_ACCOUNT])
+    cards = [c for c in cards if not (text[c[0]:c[1]].isdigit() and lab_ix.overlaps(c))]
+    card_ix = _SpanIndex(cards)
+    kept = set(bank)
+    bank += [b for b in bank_ctx if b not in kept and not card_ix.overlaps(b) and not aad_ix.overlaps(b)]
     phones = _phone(text)
     bank_spans = {(b[0], b[1]) for b in bank + [c for c in field_ctx if c[2] is T.BANK_ACCOUNT]}
     phones = [p for p in phones if (p[0], p[1]) not in bank_spans]
@@ -1602,10 +2088,11 @@ def detect_d2(text: str) -> list[Detection]:
     hdr = _header_spans(text)
     for part in (
         _email(text), _upi(text), phones, aadhaar, _pan(text), _ifsc(text), cards, bank,
-        _secret(text), _employee_id(text), _compensation(text), _dob(text),
+        _secret(text), _employee_id(text), _compensation(text), _dob(text), _bank_file_names(text),
     ):
         # header cells of a CSV/TSV are field names, never values
-        cands.extend(c for c in part if not (hdr and any(a <= c[0] < b for a, b in hdr)))
+        cands.extend(c for c in part if not (hdr and any(a <= c[0] < b for a, b in hdr))
+                     and not (neg_ix and c[2] in _REF_SENSITIVE and neg_ix.overlaps(c)))
     cands.extend(field_ctx)
     return _resolve(cands)
 
