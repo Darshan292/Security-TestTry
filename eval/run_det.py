@@ -242,7 +242,7 @@ def main() -> None:
     ap.add_argument("--out", default=str(ROOT / "results"))
     a = ap.parse_args()
     data = Path(a.data)
-    guard_split(a.split, a.one_shot_test, Path(a.out), data)
+    guard_split(a.split, a.one_shot_test, Path(a.out), data, tag="det" + (f"-ner_{a.ner}" if a.ner else ""))
     if a.heldout_adversarial and not a.one_shot_test:
         raise SystemExit("refusing: held-out adversarial transforms run only inside the one-shot held-out evaluation")
     items = load(data / f"{a.split}.jsonl")

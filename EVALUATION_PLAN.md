@@ -169,3 +169,16 @@ for streaming, which R1 did not measure end-to-end.
      p50/p95 per 1 KB. Model selection uses `dev2` only.
    - *Latency*: detection p50/p95/p99 with and without NER; gate DESIGN N-1.
 4. `test2` is read once, by `eval.run_det --one-shot-test`, on a clean commit.
+
+### Amendment 2026-09-30c — R2 held-out configurations (registered before any test2/ner_test2 read)
+
+Model selection was done on dev splits only (`eval/results/ner_*`). Three fixed configurations are
+evaluated once each; no code or threshold changes between them:
+- **Config A** — D0 views + D1/D2 + roster EDM/D3 + cues + D5 (no NER). Commit recorded in the lock.
+- **Config B** — Config A + D4 `en_core_web_lg` (spaCy 3.8.0) with the name-shape filter.
+  On dev2 it lowers leak (0.58 % → 0.44 %) but PERSON precision is 0.824 (< 0.85 gate): a
+  security/utility trade the owner must decide; both are reported.
+- **Config C** — Config A + `en_core_web_trf`, on `ner_test2` only, as a **reference ceiling**
+  (not deployable inline: ~1.5 s/KB p95 CPU).
+E-STREAM-LEAK runs once on `test2` with Config A detectors (the output gate does not use NER).
+Held-out adversarial kinds run inside the Config A and B `test2` runs.

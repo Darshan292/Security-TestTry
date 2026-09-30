@@ -282,3 +282,11 @@ def test_roster_names_inside_json_and_learned_id_shapes():
     assert ("Godavari Panthaki", "PERSON") in hits
     assert ("KS/99/1234", "EMPLOYEE_ID") in hits          # not in the roster, but the tenant's format
     assert not any('"' in v or ":" in v for v, _ in hits)  # candidates never glue key and value
+
+
+def test_ner_shape_filter_rejects_code_identifiers():
+    from pgw.pipeline import _name_shaped
+    for ok in ("Deepa Rajagopalan", "K. Venkataraman", "D'Souza", "ANINDITA ROUT", "Sutapa"):
+        assert _name_shaped(ok), ok
+    for bad in ("AWS_SECRET_ACCESS_KEY", "BankRepo.save(BankRepo.java", "payroll_rw", "u ci-bot", "Envelope2", "DB"):
+        assert not _name_shaped(bad), bad

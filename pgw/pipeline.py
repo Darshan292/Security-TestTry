@@ -75,6 +75,23 @@ _NOT_NAMES = {"team", "all", "everyone", "sir", "madam", "there", "folks", "hr",
               "support", "admin", "the", "this", "that", "please", "thanks", "regards"}
 
 
+_NAME_TOKEN = re.compile(r"(?:[A-Z][a-z]+(?:['’-][A-Za-z]+)*|[A-Z]\.)$")
+_CAPS_TOKEN = re.compile(r"[A-Z]{2,}(?:['’-][A-Z]+)*$")
+
+
+def _name_shaped(span: str) -> bool:
+    """Shape filter for statistical NER hits (R2, dev2): spaCy tags code identifiers such as
+    AWS_SECRET_ACCESS_KEY, BankRepo.save(BankRepo.java or payroll_rw as PERSON. Accept a span
+    only if every token is a Title-case name word or an initial, or the span is >= 2 all-caps
+    alphabetic words (ANINDITA ROUT). Digits, _ ( ) / = and camelCase never pass."""
+    toks = span.split()
+    if not toks or len(toks) > 5:
+        return False
+    if all(_NAME_TOKEN.match(t) for t in toks):
+        return True
+    return len(toks) >= 2 and all(_CAPS_TOKEN.match(t) for t in toks)
+
+
 def detect_person_cues(text: str) -> list[Detection]:
     out = []
     for rx, score in ((_HONORIFIC, 0.85), (_GREETING, 0.7), (_SIGNOFF, 0.7), (_PREP, 0.6)):
@@ -213,7 +230,7 @@ class Protector:
             if self.roster is not None:
                 dets += self.roster.detect(view)
             if self.ner is not None and name in ("base", "casefold_titled", "despaced"):
-                dets += self.ner.detect(view)
+                dets += [d for d in self.ner.detect(view) if _name_shaped(view[d.start:d.end])]
             for d in dets:
                 s, e = to_original(omap, d.start, d.end)
                 if e > s:
