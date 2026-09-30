@@ -14,6 +14,7 @@ It fails its own pre-registered headline gate on held-out data:
 | Gate (EVALUATION_PLAN.md) | Target | DEV | **TEST** |
 |---|---|---:|---:|
 | Character leak rate on sensitive spans | ≤ 1.0 % | 2.11 % | **2.56 %** |
+| Documents sending ≥ 1 raw sensitive value to the provider | (no gate set) | 9.5 % (377/3,977) | **14.6 % (181/1,240)** |
 | HIGH-risk types recall ≥ 0.98 | all pass | all pass | **AADHAAR 0.918, SECRET 0.916 FAIL** |
 | Leak under the worst adversarial transform | (no gate set) | 45.5 % | **38.0 %** |
 | E-UTIL output quality | ≤ 5 % degradation | **not run** | **not run** |
@@ -97,9 +98,13 @@ only; this is not end-to-end gateway latency). Streaming round-trip was exact on
 2. **Exact-data matching against the roster is the strongest control measured.** 100 % recall on
    5,766 roster-name spans across both splits (DEV 4,446 + TEST 1,320). For HRIS, where most names are employees,
    this is the lever the review's "PERSON ≥ 0.90 is not enough" comment was pointing at.
-3. **The egress invariant never fired, and the data still leaked.** It only checks values that were
-   *detected* (THREAT_MODEL T20). Every leak measured here passed it silently. It is a
-   bug detector, not a recall control, and the numbers confirm this.
+3. **The egress invariant caught nothing real, and it produced false alarms.** Measured after the run
+   by replaying `protect()` + `egress.check()` over both splits with the frozen code:
+   **0 true catches** while 181 TEST documents leaked (it only knows *detected* values, T20), and
+   **8 false alarms** on TEST (0.6 % of items would be blocked). Two bugs combine here. The TSV field-context
+   detector labels header cells ("Date", "IFSC") as values, and the sweep then finds those words
+   *inside our own alias tokens* (`[date_of_birth_…]`). It is a bug detector, not a recall control,
+   and it currently has an availability bug of its own (W9).
 4. **Output-gate defence in depth partly works.** In non-streaming mode the gate
    masked the raw Aadhaar that input detection missed. But the provider had already
    received it, and in streaming mode the gate missed it (W4).
@@ -115,6 +120,7 @@ only; this is not end-to-end gateway latency). Streaming round-trip was exact on
 | W5 | **Minified JSON longer than 256 chars splits aliases** in streaming restore | 26 TEST items (UKG JSON): client receives `[PE` + `RSON_…]` unrestored | Medium (integrity; aliases are pseudonyms) | Cut long runs only at non-alias-prefix boundaries (JSON delimiters `,":{}`). ADR-0008's "impossible by construction" claim is currently false. |
 | W6 | **E-UTIL has never run** | No API key in this environment | Unknown | Run `eval/run_util.py` against the target model. Until then, output-quality equivalence is **unmeasured**, which was the review's central criticism. |
 | W7 | **Synthetic data only**; few templates per split | Corpus design | Unknown, likely negative | E-DET-R spot check inside a client boundary (EVALUATION_PLAN). |
+| W9 | **The egress invariant false-fires on alias text**, and TSV header cells are detected as values | 8/1,240 TEST requests would fail closed | Medium (availability) | Sweep only text outside alias tokens; add a TSV header-row guard. Re-verify on a fresh split. |
 | W8 | Precision on unseen templates | 66 % of TEST negatives flagged | Utility | Remove the preposition cue once NER exists; add a negative context for ticket ids. |
 
 Also out of scope for this slice, and therefore **not evaluated**: pen testing, key management
@@ -163,5 +169,6 @@ Salesforce and AWS.
 python -m eval.synth.generate --out eval/data         # regenerates byte-identical corpus (check MANIFEST)
 python -m pytest tests -q                              # 809 passed, 1 xfailed (documented NER gap)
 python -m eval.run_det --split dev --adversarial       # DEV numbers above
+python -m eval.replay_egress --split dev               # document-level exposure + egress invariant fires
 # TEST is locked for this release. A new release needs a new seed and templates.
 ```
