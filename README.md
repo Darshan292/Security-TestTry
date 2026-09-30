@@ -1,11 +1,24 @@
 # ESU Privacy Gateway — design package
 
 A policy-driven privacy gateway between ESU applications (HRIS/ERP) and LLM
-providers. **Phase 0: design only, no code.**
+providers. **Status: Phase 1 vertical slice built and evaluated. It is not secure enough for real HR data.**
+It fails its own pre-registered leak gate on held-out data: 2.56 % of sensitive characters and
+14.6 % of documents leak. Read [SECURITY_EVALUATION.md](SECURITY_EVALUATION.md) first.
 
 > Extracted from the `Evidence-first-universal-knowledge-graph-compiler` repository with its history; this is now the project's home.
 
-## Read in this order
+## Start here
+
+| If you want… | Read |
+|---|---|
+| The measured truth about the slice | [SECURITY_EVALUATION.md](SECURITY_EVALUATION.md) |
+| Why each decision was made, and how well it is supported | [research/ARCHITECTURE_DECISIONS.md](research/ARCHITECTURE_DECISIONS.md) |
+| Evidence and its quality | [research/EVIDENCE_MATRIX.md](research/EVIDENCE_MATRIX.md), [research/SOURCE_REGISTER.md](research/SOURCE_REGISTER.md), [research/PROVENANCE.md](research/PROVENANCE.md) |
+| Techniques, competitors, unknowns | [research/ALGORITHM_ANALYSIS.md](research/ALGORITHM_ANALYSIS.md), [research/COMPETITIVE_LANDSCAPE.md](research/COMPETITIVE_LANDSCAPE.md), [research/OPEN_QUESTIONS.md](research/OPEN_QUESTIONS.md) |
+| To navigate relationships (source → claim → decision → code → test → metric) | [graph/README.md](graph/README.md) |
+| To run it | `python -m pytest tests -q` · `python -m eval.synth.generate --out eval/data` · `python -m eval.run_det` · `python -m pgw.gateway` |
+
+## Design documents, in order
 
 1. [DESIGN.md](DESIGN.md) — the system: requirements, boundary, lifecycle,
    components, entity taxonomy, keys, deployment, limitations.

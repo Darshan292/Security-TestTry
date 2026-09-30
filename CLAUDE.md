@@ -1,6 +1,17 @@
 # ESU Privacy Gateway — Claude Code notes
 
-**Phase 0: design only, no code yet.** Read [README.md](README.md) for the document order and how decisions are tracked.
+**Phase 1 vertical slice exists (`pgw/`) and has been evaluated. See SECURITY_EVALUATION.md.** Read [README.md](README.md) for the document order.
+
+## Evaluation integrity (do not break)
+
+- Tune only on `dev`/`tune`. `test` is read once per release via `python -m eval.run_det --split test --one-shot-test`, which writes `eval/results/TEST_LOCK.json`. The current test split is **spent**: the next release needs a new seed and new templates.
+- Never commit `eval/data/*.jsonl` (realistic fake secrets); the generator plus MANIFEST hashes reproduce them.
+
+## Provenance
+
+Research files use the IDs and epistemic classes in `research/PROVENANCE.md`. After editing any of them, run
+`python graph/build_provenance_graph.py` and fix every dangling ID it reports in `graph/GRAPH_REPORT.md`.
+Never merge LLM-`INFERRED` edges into the provenance graph.
 
 ## Decision hygiene
 
