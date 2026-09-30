@@ -268,3 +268,17 @@ def test_edm_numeric_candidate_never_spans_tab():
                          "employee_id": "EMP-9", "phone": "9114672942"})
     text = "0094 9282\t9114672942"
     assert {text[d.start:d.end] for d in roster.detect(text)} == {"9114672942"}
+
+
+def test_roster_names_inside_json_and_learned_id_shapes():
+    """R2 dev2: roster names inside JSON log fields were missed; tenant id formats were hard-coded."""
+    roster = RosterIndex(b"E" * 32)
+    for i in range(20):
+        roster.add_employee({"full_name": f"Godavari Panthaki{i}" if i else "Godavari Panthaki",
+                             "first_name": "Godavari", "last_name": "Panthaki", "email": f"g{i}@acme.in",
+                             "employee_id": f"KS/{10 + i}/{8000 + i}", "phone": ""})
+    text = '{"msg":"otp sent","user":"Godavari Panthaki","emp":"KS/99/1234"}'
+    hits = {(text[d.start:d.end], d.type.value) for d in roster.detect(text)}
+    assert ("Godavari Panthaki", "PERSON") in hits
+    assert ("KS/99/1234", "EMPLOYEE_ID") in hits          # not in the roster, but the tenant's format
+    assert not any('"' in v or ":" in v for v, _ in hits)  # candidates never glue key and value

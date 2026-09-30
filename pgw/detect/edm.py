@@ -15,7 +15,10 @@ from collections.abc import Iterable, Iterator
 from ..alias import canon
 from ..types import Context, Detection, EntityType
 
-_TOKEN = re.compile(r"\S+")
+# Tokens split on whitespace AND structural punctuation, so values inside JSON/XML/log fields
+# ("user":"Godavari Panthaki") form proper n-grams (R2: roster names missed in dev2 logs).
+# . @ + - / _ ' stay inside tokens: emails, phones, "KS/13/8338", "D'Souza".
+_TOKEN = re.compile(r"[^\s\"`,;:=|{}\[\]()<>]+")
 _LEAD = "(\"'[<{"
 _TRAIL = ".,;:!?)\"']>}"
 _GREETING = re.compile(
@@ -60,11 +63,17 @@ def _h(key: bytes, t: EntityType, c: str) -> bytes:
 
 
 def candidates(text: str, max_tokens: int = 4) -> Iterator[tuple[int, int, str]]:
-    """Every run of 1..max_tokens whitespace-separated tokens, with edge punctuation trimmed."""
+    """Every run of 1..max_tokens tokens joined only by plain spaces, with edge punctuation trimmed.
+
+    A multi-token candidate never crosses structural punctuation or a line break, so a JSON key
+    and its value, or two TSV cells, are never glued into one candidate.
+    """
     toks = [(m.start(), m.end()) for m in _TOKEN.finditer(text)]
     for i in range(len(toks)):
         for n in range(1, max_tokens + 1):
             if i + n > len(toks):
+                break
+            if n > 1 and text[toks[i + n - 2][1]:toks[i + n - 1][0]].strip(" ") != "":
                 break
             s, e = toks[i][0], toks[i + n - 1][1]
             while s < e and text[s] in _LEAD:
@@ -82,12 +91,32 @@ class RosterIndex:
         self.key = key
         self._full: dict[bytes, EntityType] = {}
         self._single_names: set[bytes] = set()  # first/last names: only matched after a greeting cue
+        self._shape_counts: dict[str, int] = {}
+        self._shape_re: re.Pattern | None = None
 
     def add(self, t: EntityType, value: str) -> None:
         if value:
             self._full[_h(self.key, t, canon(t, value))] = t
 
+    def _shape(self, emp_id: str) -> str:
+        return re.sub(r"\d+", lambda m: "\\d{%d}" % len(m.group()), re.escape(emp_id.upper()))
+
+    def id_shapes(self) -> re.Pattern | None:
+        """Tenant employee-id formats learned from the roster: shapes seen for >= 1 % of employees
+        (and >= 5 of them). Format metadata only; no identifier is stored in plaintext."""
+        if self._shape_re is None and self._shape_counts:
+            total = sum(self._shape_counts.values())
+            keep = [sh for sh, c in self._shape_counts.items() if c >= max(5, 0.01 * total)]
+            if keep:
+                alt = "|".join(sorted(keep, key=len, reverse=True))
+                self._shape_re = re.compile(rf"(?<![\w/-])(?:{alt})(?![\w/-])", re.IGNORECASE)
+        return self._shape_re
+
     def add_employee(self, rec: dict) -> None:
+        if rec.get("employee_id"):
+            sh = self._shape(rec["employee_id"])
+            self._shape_counts[sh] = self._shape_counts.get(sh, 0) + 1
+            self._shape_re = None
         self.add(EntityType.PERSON, rec.get("full_name", ""))
         self.add(EntityType.EMAIL, rec.get("email", ""))
         self.add(EntityType.EMPLOYEE_ID, rec.get("employee_id", ""))
@@ -101,6 +130,10 @@ class RosterIndex:
 
     def detect(self, text: str) -> list[Detection]:
         out: list[Detection] = []
+        shapes = self.id_shapes()
+        if shapes is not None:
+            out += [Detection(m.start(), m.end(), EntityType.EMPLOYEE_ID, 0.9, "D3:roster_shape")
+                    for m in shapes.finditer(text)]
         for s, e, cand in candidates(text, 3):
             n_tok = len(cand.split())
             for t in (EntityType.PERSON, EntityType.EMAIL, EntityType.EMPLOYEE_ID, EntityType.PHONE):
