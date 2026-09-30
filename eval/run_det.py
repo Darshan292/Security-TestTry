@@ -176,12 +176,30 @@ def render(res: dict, title: str) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=str(ROOT / "data"))
-    ap.add_argument("--split", default="test")
+    ap.add_argument("--split", default="dev")
+    ap.add_argument("--one-shot-test", action="store_true",
+                    help="required to evaluate the test split; allowed exactly once (eval/results/TEST_LOCK.json)")
     ap.add_argument("--adversarial", action="store_true")
     ap.add_argument("--no-roster", action="store_true")
     ap.add_argument("--out", default=str(ROOT / "results"))
     a = ap.parse_args()
     data = Path(a.data)
+    lock = Path(a.out) / "TEST_LOCK.json"
+    if a.split == "test":
+        if not a.one_shot_test:
+            raise SystemExit("refusing: the test split is read once per release; pass --one-shot-test deliberately")
+        if lock.exists():
+            raise SystemExit(f"refusing: test split already evaluated ({lock.read_text().strip()})")
+        import subprocess
+        head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        dirty = bool(subprocess.run(["git", "status", "--porcelain", "pgw", "policies"], capture_output=True, text=True).stdout.strip())
+        if dirty:
+            raise SystemExit("refusing: pgw/ or policies/ has uncommitted changes; the test run must be tied to a commit")
+        manifest = json.loads((data / "MANIFEST.json").read_text())
+        Path(a.out).mkdir(parents=True, exist_ok=True)
+        lock.write_text(json.dumps({"code_commit": head, "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "corpus_manifest_sha256": {k: v for k, v in manifest.items() if "sha" in k.lower()}},
+                                   indent=1, default=str))
     items = load(data / f"{a.split}.jsonl")
     prot = build_protector(data, not a.no_roster)
     tag = f"{a.split}{'-noroster' if a.no_roster else ''}"
