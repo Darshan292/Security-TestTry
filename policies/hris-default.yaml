@@ -1,0 +1,44 @@
+# Policy pack: per-entity actions by purpose (ADR-0006).
+# Slice note: pack signing is not implemented yet; packs are loaded from the repo.
+pack: hris-default
+version: 1
+
+defaults:
+  AADHAAR: BLOCK_REQUEST
+  PAN: BLOCK_REQUEST
+  CARD: BLOCK_REQUEST
+  BANK_ACCOUNT: BLOCK_REQUEST
+  UPI_ID: BLOCK_REQUEST
+  SECRET: BLOCK_REQUEST
+  IFSC: ALLOW              # identifies a bank branch, not a person
+  PERSON: TOKENIZE
+  EMAIL: TOKENIZE
+  PHONE: TOKENIZE
+  EMPLOYEE_ID: TOKENIZE
+  COMPENSATION: TOKENIZE
+  DATE_OF_BIRTH: GENERALIZE
+
+purposes:
+  hr_case_summary: {}
+  email_draft: {}
+  ticket_classification: {}
+  comp_band_analysis:
+    COMPENSATION: GENERALIZE
+  integration_debug:       # secrets and IDs are removed, never sent, never restored
+    SECRET: REDACT
+    AADHAAR: REDACT
+    PAN: REDACT
+    CARD: REDACT
+    BANK_ACCOUNT: REDACT
+    UPI_ID: REDACT
+  eval_tokenize_all:       # evaluation only: nothing blocks, so leak rate measures detection
+    AADHAAR: TOKENIZE
+    PAN: TOKENIZE
+    CARD: TOKENIZE
+    BANK_ACCOUNT: TOKENIZE
+    UPI_ID: TOKENIZE
+    SECRET: TOKENIZE
+    IFSC: TOKENIZE
+    DATE_OF_BIRTH: TOKENIZE
+
+never_restore: [SECRET]
