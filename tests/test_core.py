@@ -213,3 +213,28 @@ def test_roster_edm_catches_known_employee_without_cues():
                          "email": "v.iyer@acme.in", "employee_id": "EMP-00412", "phone": "9820012345"})
     p = protector(roster=roster).protect(user("escalation from venkatesh iyer re: late payroll"), CTX)
     assert "venkatesh" not in p.messages[0]["content"].lower()
+
+
+def test_edm_numeric_match_does_not_swallow_neighbours():
+    """Regression: digit-canonicalised roster phones matched any window containing the digits."""
+    roster = RosterIndex(b"E" * 32)
+    roster.add_employee({"full_name": "Nayana Gaikwad", "first_name": "Nayana", "last_name": "Gaikwad",
+                         "email": "nayana.gaikwad@acme.in", "employee_id": "EMP-1", "phone": "9756513174"})
+    text = '"primaryWorkEmail": "nayana.gaikwad@acme.in",\n "mobilePhone": "9756513174"'
+    dets = {(text[d.start:d.end], d.type) for d in roster.detect(text)}
+    assert ("nayana.gaikwad@acme.in", T.EMAIL) in dets
+    assert ("9756513174", T.PHONE) in dets
+    assert all(t is not T.PHONE or "@" not in v for v, t in dets)
+
+
+def test_roster_single_name_rules():
+    roster = RosterIndex(b"E" * 32)
+    roster.add_employee({"full_name": "Payal Mehta", "first_name": "Payal", "last_name": "Mehta",
+                         "email": "p@acme.in", "employee_id": "EMP-2", "phone": ""})
+    roster.add_employee({"full_name": "Will Price", "first_name": "Will", "last_name": "Price",
+                         "email": "w@acme.in", "employee_id": "EMP-3", "phone": ""})
+    hits = lambda t: {t[d.start:d.end] for d in roster.detect(t)}
+    assert "Payal" in hits("Thanks,\nPayal")
+    assert "payal" in hits("[12:24] payal: portal is down")
+    assert hits("We will review the price list in May.") == set()
+    assert "Will" in hits("Dear Will, please review.")

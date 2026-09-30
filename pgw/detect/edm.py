@@ -24,6 +24,37 @@ _GREETING = re.compile(
 )
 
 
+# A candidate must LOOK like the type before its canonical form is compared. Without this,
+# digit-canonicalised types match any window that merely contains the digits (e.g. an
+# email plus the following phone field), producing wrong types and over-wide spans.
+_DIGITISH = re.compile(r"^\+?[\d][\d\s\-().]*\d$")
+_SHAPE = {
+    EntityType.PHONE: _DIGITISH, EntityType.AADHAAR: _DIGITISH, EntityType.CARD: _DIGITISH,
+    EntityType.BANK_ACCOUNT: _DIGITISH,
+    EntityType.EMAIL: re.compile(r"^[^\s@]+@[^\s@]+$"), EntityType.UPI_ID: re.compile(r"^[^\s@]+@[^\s@]+$"),
+    EntityType.EMPLOYEE_ID: re.compile(r"^[\w\-]+$"), EntityType.PAN: re.compile(r"^[\w\-]+$"),
+    EntityType.IFSC: re.compile(r"^[\w\-]+$"),
+    EntityType.PERSON: re.compile(r"^[^\W\d_][^\d\n\"{}:=<>\[\]@]*$"),
+}
+
+
+def shape_ok(t: EntityType, cand: str) -> bool:
+    rx = _SHAPE.get(t)
+    return rx is None or bool(rx.match(cand))
+
+
+# Roster first/last names that are also common English words, months or titles:
+# matched only after an explicit cue, never on capitalisation alone.
+_COMMON_WORDS = frozenset("""
+will may june july august april march mark bill rose grace joy hope faith victor summer rich guy pat dawn
+sunny ray chase art frank page case long young white black brown green park hall king wood stone bell cook
+price reed rice lane gay ash hunter mason miller baker carter taylor cole cash dean drew earl glen jack jean
+lee max neil noble penny rob sage sky star van west north south east love lucky prince raja rani major
+key moon gold silver angel april asha hari om ram shiv sri deep jay rich happy pal das singh
+""".split())
+_SPEAKER = re.compile(r"(?:^|\n)\s*(?:\[[\d:]+\]\s*)?$")
+
+
 def _h(key: bytes, t: EntityType, c: str) -> bytes:
     return hmac.new(key, t.value.encode() + b"\x1f" + c.encode(), hashlib.sha256).digest()[:16]
 
@@ -73,17 +104,22 @@ class RosterIndex:
         for s, e, cand in candidates(text, 3):
             n_tok = len(cand.split())
             for t in (EntityType.PERSON, EntityType.EMAIL, EntityType.EMPLOYEE_ID, EntityType.PHONE):
-                if n_tok > 1 and t in (EntityType.EMAIL, EntityType.EMPLOYEE_ID):
+                if (n_tok > 1 and t in (EntityType.EMAIL, EntityType.EMPLOYEE_ID)) or not shape_ok(t, cand):
                     continue
                 if _h(self.key, t, canon(t, cand)) in self._full:
                     out.append(Detection(s, e, t, 1.0, "D3:edm"))
                     break
             else:
-                # A lone first/last name is only a PERSON when a greeting/honorific precedes it.
-                if n_tok == 1 and cand[:1].isalpha() and \
-                        _h(self.key, EntityType.PERSON, canon(EntityType.PERSON, cand)) in self._single_names and \
-                        _GREETING.search(text[max(0, s - 12):s]):
-                    out.append(Detection(s, e, EntityType.PERSON, 0.9, "D3:edm_single"))
+                # A lone roster first/last name: capitalised and not a common word, or after a cue,
+                # or as a chat speaker ("[12:24] brijesh: ...").
+                if n_tok == 1 and cand[:1].isalpha() and shape_ok(EntityType.PERSON, cand) and \
+                        _h(self.key, EntityType.PERSON, canon(EntityType.PERSON, cand)) in self._single_names:
+                    cued = bool(_GREETING.search(text[max(0, s - 12):s]))
+                    speaker = text[e:e + 1] == ":" and bool(_SPEAKER.search(text[max(0, s - 20):s]))
+                    capital = cand[0].isupper() and cand.casefold() not in _COMMON_WORDS
+                    if cued or speaker or capital:
+                        out.append(Detection(s, e, EntityType.PERSON, 0.9 if (cued or speaker) else 0.8,
+                                             "D3:edm_single"))
         return out
 
 
@@ -135,6 +171,8 @@ class RestoreLedger:
             dets = []
             for s, e, cand in candidates(text, 4):
                 for t in types:
+                    if not shape_ok(t, cand):
+                        continue
                     if self._k(t.value, canon(t, cand)) in hashes:
                         dets.append(Detection(s, e, t, 1.0, "D3b:restore_ledger"))
                         break
