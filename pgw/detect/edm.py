@@ -27,7 +27,7 @@ _GREETING = re.compile(
 # A candidate must LOOK like the type before its canonical form is compared. Without this,
 # digit-canonicalised types match any window that merely contains the digits (e.g. an
 # email plus the following phone field), producing wrong types and over-wide spans.
-_DIGITISH = re.compile(r"^\+?[\d][\d\s\-().]*\d$")
+_DIGITISH = re.compile(r"^\+?[\d][\d \-().]*\d$")   # spaces only: never across a tab/newline (TSV cells)
 _SHAPE = {
     EntityType.PHONE: _DIGITISH, EntityType.AADHAAR: _DIGITISH, EntityType.CARD: _DIGITISH,
     EntityType.BANK_ACCOUNT: _DIGITISH,

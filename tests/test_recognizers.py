@@ -913,11 +913,9 @@ def test_fc_sibling_hints(text, typ, val):
 
 @pytest.mark.parametrize("text", [
     f'{{"type": "AADHAAR", "id": "{AAD_BAD}"}}',           # hint but bad checksum
-    '{"type": "widget", "id": "840681710124"}',            # unknown hint
     '{"from": "Mumbai", "to": "Pune"}',
     '{"from": "12345", "to": "67890"}',                    # too short for an account
     '{"from": "1336420150675096"}',                        # lone `from`: not a diff pair
-    '{"kind": "AADHAAR"} {"id": "%s"}' % AAD,              # different objects
 ])
 def test_fc_sibling_hint_negative(text):
     assert not [1 for v, t in fc(text) if t in (T.AADHAAR, T.BANK_ACCOUNT, T.COMPENSATION)], fc(text)
@@ -1470,3 +1468,226 @@ def test_fc_alias_placeholders_from_the_gateway_are_not_values():
     for t in ['{"name": "[PERSON_7QX2MA]"}', '{"email": "[EMAIL_4B12CD]"}', '{"password": "[SECRET_4B12CD]"}',
               '{"salary": "[COMPENSATION ₹15L–₹20L]"}', '{"employee_id": "[EMPLOYEE_ID_AB12CD]"}', 'phone: [PHONE_AB12CD]']:
         assert fc(t) == [], t
+
+
+# =====================================================================================
+# Round 3: structural generalisation
+# =====================================================================================
+AAD2 = aadhaar_num("27579039923")
+
+
+def dets(t):
+    return [(t[d.start:d.end], d.type, d.score) for d in detect_d2(t)]
+
+
+# ---- 1. credentials inside URIs / connection strings
+@pytest.mark.parametrize("uri,secret", [
+    ("postgresql://hrms:passw0rd_6255#@10.0.4.12:5432/hrms", "passw0rd_6255#"),
+    ("postgresql://hrms:Login52@log@10.0.4.12:5432/hrms", "Login52@log"),           # '@' inside the password
+    ("mysql://root:Sunshine$384@db.internal:3306/hr", "Sunshine$384"),
+    ("mongodb+srv://app:p%40ss-w0rd@cluster0.ab1cd.mongodb.net/hr?retryWrites=true", "p%40ss-w0rd"),
+    ("mongodb://u:pw12345@h1:27017,h2:27017/db", "pw12345"),
+    ("redis://:S3cr3t!x@cache.internal:6379/0", "S3cr3t!x"),                        # empty user
+    ("rediss://default:Zx81kkqmn@redis.example.com:6380", "Zx81kkqmn"),
+    ("amqp://guest:rabbit_9x@rabbit:5672/vhost", "rabbit_9x"),
+    ("sftp://bot:Zx81!kkq@files.corp.in/upload", "Zx81!kkq"),
+    ("smtp://mailer:tr0ub4dor@smtp.corp.in:587", "tr0ub4dor"),
+    ("https://svc:pw123456@api.example.com/v1/x", "pw123456"),
+    ("jdbc:postgresql://svc:Hunter22x@db:5432/hr", "Hunter22x"),
+    ("ftp://anon:abc@ftp.example.org/", "abc"),
+])
+def test_uri_credentials_span_is_the_secret_only(uri, secret):
+    for t in (uri, f'DB_URL = "{uri}"', f"conn: {uri} # prod", f"'{uri}',"):
+        assert secret in vals(t, T.SECRET), (t, dets(t))
+        assert vals(t, T.SECRET)[0] == secret or secret in vals(t, T.SECRET)
+    assert vals(uri, T.EMAIL) == []          # the userinfo is not a mailbox
+
+
+@pytest.mark.parametrize("uri", [
+    "https://user@host.example.com/path", "https://host.example.com:8443/path", "http://localhost:3000/x",
+    "postgresql://user:${DB_PASS}@db/hr", "postgresql://user:{password}@db/hr", "postgresql://user:<password>@db/hr",
+    "postgresql://user:%s@db/hr", "postgresql://user:pass@db/hr", "redis://:@cache:6379", "mysql://root:@db/x",
+    "ssh://git@github.com/org/repo.git", "mailto:someone@corp.in", "see https://example.com/a:b/c@d",
+])
+def test_uri_without_real_password_is_clean(uri):
+    assert vals(uri, T.SECRET) == [], (uri, dets(uri))
+
+
+@pytest.mark.parametrize("url,secret", [
+    ("https://api.x.in/v1/list?token=abcd1234efgh&page=2", "abcd1234efgh"),
+    ("https://api.x.in/v1/list?page=2&api_key=AKx9-Zq81mmnb", "AKx9-Zq81mmnb"),
+    ("https://api.x.in/v1/list?apikey=Zq81mmnbvcx", "Zq81mmnbvcx"),
+    ("https://files.x.in/a.pdf?sv=2024&sig=Ab3dEf9GhIj%2Bk&se=2026", "Ab3dEf9GhIj%2Bk"),
+    ("https://x.in/cb?access_token=ya29.a0AfB_byC&state=1", "ya29.a0AfB_byC"),
+    ("https://x.in/login?user=a&password=Hunter22&next=/home", "Hunter22"),
+    ("jdbc:sqlserver://h:1433;databaseName=hr;user=sa;password=P@ssw0rd9;encrypt=true", "P@ssw0rd9"),
+    ("https://x.in/hook?client_secret=s3cr3tvalue1", "s3cr3tvalue1"),
+])
+def test_query_string_secrets(url, secret):
+    assert vals(url, T.SECRET) == [secret], (url, dets(url))
+
+
+@pytest.mark.parametrize("url", [
+    "https://x.in/list?page=2&sort=name", "https://x.in/a?token_type=bearer&expires=3600", "https://x.in/a?tokenizer=simple",
+    "https://x.in/a?token=", "https://x.in/a?token=abc", "https://x.in/a?token={{TOKEN}}", "https://x.in/a?api_key=${KEY}",
+    "https://x.in/a?key=value1234", "https://x.in/a?sig=<sig>",
+])
+def test_query_string_non_secrets(url):
+    assert vals(url, T.SECRET) == [], (url, dets(url))
+
+
+# ---- 2. semantic field classifier: identity-document concepts
+@pytest.mark.parametrize("key", ["nationalId", "national_id", "NationalIDNumber", "govtId", "Government ID", "identityNumber",
+                                 "identification_no", "UID", "uid", "taxId", "kycNumber", "National Identity Card No", "ssn"])
+def test_identity_concept_keys_bind_aadhaar_by_value_shape(key):
+    assert fcv('{"%s": "%s"}' % (key, AAD2), T.AADHAAR) == [AAD2], key
+    assert fcv('{"%s": %s}' % (key, AAD2), T.AADHAAR) == [AAD2]
+    assert fcv("%s: %s" % (key, group4(AAD2)), T.AADHAAR) == [group4(AAD2)]
+    assert fcv("<%s>%s</%s>" % (key.replace(" ", "_"), AAD2, key.replace(" ", "_")), T.AADHAAR) == [AAD2]
+
+
+def test_identity_concept_value_shape_decides_the_type():
+    assert fcv('{"taxId": "ABCPE1234F"}', T.PAN) == ["ABCPE1234F"]
+    assert fcv('{"nationalId": "ABCPE1234F"}', T.PAN) == ["ABCPE1234F"]
+    assert fc('{"nationalId": "%s"}' % AAD_BAD) == []                 # bad checksum
+    assert fc('{"nationalId": "K1234567"}') == []                     # passport-like: no type to assign
+    assert fc('{"passportNumber": "K1234567"}') == []
+    assert fc('{"nationalIdType": "AADHAAR", "nationalIdIssuer": "UIDAI"}') == []
+    assert fc('{"identityVerified": "true"}') == [] and fc('{"nationality": "Indian"}') == []
+    assert fc('{"government": "%s"}' % AAD2) != [] or True             # unknown concept alone may escalate, never crash
+
+
+def test_uid_and_national_columns_in_tsv_far_from_any_keyword():
+    hdr = "Name\tUID\tGrade\tEmpCode\tDate of Birth\tMobile\tLocation\n"
+    rows = "".join(f"Person{i}\t{aadhaar_num(str(2 + i % 8) + '0000000%03d' % i)}\tL5\tEMP-{i:05d}\t1980-01-01\t9820012345\tPune\n"
+                   for i in range(60))
+    got = fc(hdr + rows)
+    assert len([1 for v, ty in got if ty == T.AADHAAR]) == 60
+    last = [v for v, ty in fc(hdr + rows) if ty == T.AADHAAR][-1]
+    assert last == aadhaar_num(str(2 + 59 % 8) + "0000000059")          # header applies to every row, whatever the distance
+
+
+def test_csv_column_header_applies_at_any_distance_and_grouped_values():
+    rows = "".join(f"Person{i},{group4(aadhaar_num('3' + '%010d' % (i * 7919)))},Pune\n" for i in range(120))
+    got = fc("Name,National ID,Location\n" + rows)
+    assert len([1 for v, ty in got if ty == T.AADHAAR]) == 120
+
+
+# ---- 2b. structural escalation (no keyword at all)
+@pytest.mark.parametrize("t", [
+    '{"foo": "%s"}' % AAD2, '{"foo": %s}' % AAD2, '{"emp": {"x1": "%s"}}' % AAD2, "<Blob>%s</Blob>" % AAD2,
+    "widget: %s" % AAD2, "widget = %s" % AAD2, "Name,Blob,City\nA,%s,Pune\n" % AAD2, "Name\tBlob\tCity\nA\t%s\tPune\n" % AAD2,
+    '{"foo": "%s"}' % group4(AAD2),
+])
+def test_structural_escalation_unknown_key_verhoeff_valid_12_digits(t):
+    got = [(v, ty, sc) for v, ty, sc in dets(t) if ty == T.AADHAAR]
+    assert got and got[0][0] in (AAD2, group4(AAD2)), (t, dets(t))
+
+
+def test_structural_escalation_score_and_source():
+    ds = detect_field_context('{"foo": "%s"}' % AAD2)
+    assert [(d.type, d.score, d.source) for d in ds] == [(T.AADHAAR, 0.85, "D1:field_ctx")]
+
+
+@pytest.mark.parametrize("t", [
+    '{"foo": "%s"}' % AAD_BAD,                       # checksum fails
+    '{"orderId": "%s"}' % AAD2, '{"tracking_no": "%s"}' % AAD2, '{"invoiceRef": "%s"}' % AAD2, '{"txnId": "%s"}' % AAD2,
+    '{"awb": "%s"}' % AAD2, '{"meetingId": "%s"}' % AAD2, '{"phoneNumber": "%s"}' % AAD2,
+    "Order ID: %s" % AAD2, "PO Ref: %s  Order ID: %s" % (AAD2, AAD2), "order_id=%s sku=1" % AAD2,
+    "Name,OrderNo,City\nA,%s,Pune\n" % AAD2, "<Reference>%s</Reference>" % AAD2,
+    '{"foo": "1%s"}' % AAD2, '{"foo": "%s0"}' % AAD2,          # 13 digits
+    '{"note": "id %s ok"}' % AAD2,                             # embedded in prose, not a whole value
+    "the id %s appears" % AAD2, "widget: value %s" % AAD2,     # prose
+    '{"foo": "0%s"}' % AAD2[1:],                               # first digit 0/1
+])
+def test_structural_escalation_precision(t):
+    assert [1 for v, ty, sc in dets(t) if ty == T.AADHAAR] == [], (t, dets(t))
+
+
+def test_structural_escalation_does_not_override_typed_keys():
+    assert [ty for v, ty, sc in dets('{"bankAccount": "%s"}' % AAD2)] == [T.BANK_ACCOUNT]
+    assert not [1 for v, ty, sc in dets('{"employeeId": "%s"}' % AAD2) if ty == T.AADHAAR]
+
+
+def test_random_12_digit_order_ids_in_structured_payloads_are_not_flagged():
+    rnd = random.Random(5)
+    hits = 0
+    for _ in range(300):
+        n = str(rnd.randint(2, 9)) + "".join(rnd.choice("0123456789") for _ in range(11))
+        for t in ('{"orderId": "%s"}' % n, "order_id=%s status=ok" % n, "Order ID: %s" % n, "Name,Order Id\nx,%s\n" % n):
+            hits += any(ty == T.AADHAAR for _, ty, _ in dets(t))
+    assert hits == 0
+
+
+# ---- 2c. far context: label line, value on a later line
+def test_form_label_value_on_a_later_line_binds_within_the_block():
+    t = "Employee details\n\nAadhaar:\n\n   %s\n\nPAN:\n\n ABCPE1234F\n" % group4(AAD2)
+    assert fcv(t, T.AADHAAR) == [group4(AAD2)] and fcv(t, T.PAN) == ["ABCPE1234F"]
+    assert fcv("Date of Birth:\n\n1984-03-12\n", T.DATE_OF_BIRTH) == ["1984-03-12"]
+    assert fcv("Mobile:\n\t+91 98200 12345\n", T.PHONE) == ["+91 98200 12345"]
+    assert fcv("A/c No:\r\n\r\n50100234567890\r\n", T.BANK_ACCOUNT) == ["50100234567890"]
+
+
+def test_form_label_far_binding_stops_at_the_next_label_or_block():
+    assert fc("Aadhaar:\n\nPAN: ABCPE1234F\n") == [("ABCPE1234F", T.PAN)]
+    assert fc("Aadhaar:" + "\n" * 8 + group4(AAD2)) == []                 # too far
+    assert fc("Aadhaar:\n\nplease see the attached form\n") == []          # value does not validate
+    assert fc("Password:\n\nnext line of prose\n") == []                   # never far-bind free-form types
+    assert fc("Name:\n\nRahul Sharma\n") == []
+
+
+# ---- 3. TSV / CSV header guard (W9)
+TSV_HDR = "Emp ID\tName\tPAN No\tBank A/c\tDOB\tIFSC\tDate of Joining\tUID\tEmployee ID\tIFSC Code"
+
+
+def test_tsv_header_cells_are_never_values():
+    t = (TSV_HDR + "\nEMP-1001\tMeera Iyer\tABCPE1234F\t50100234567890\t14/03/1988\tHDFC0001234\t2020-01-05\t%s\tEMP-1001\tHDFC0001234\n"
+         % AAD2)
+    ds = detect_d2(t)
+    hdr_end = t.index("\n")
+    assert [d for d in ds if d.start < hdr_end] == [], [(t[d.start:d.end], d.type) for d in ds if d.start < hdr_end]
+    got = {(t[d.start:d.end], d.type) for d in ds}
+    for v, ty in [("EMP-1001", T.EMPLOYEE_ID), ("Meera Iyer", T.PERSON), ("ABCPE1234F", T.PAN), ("50100234567890", T.BANK_ACCOUNT),
+                  ("14/03/1988", T.DATE_OF_BIRTH), ("HDFC0001234", T.IFSC), (AAD2, T.AADHAAR)]:
+        assert (v, ty) in got, (v, got)
+    assert ("2020-01-05", T.DATE_OF_BIRTH) not in got                     # joining date, not DOB
+
+
+@pytest.mark.parametrize("hdr", [
+    "Emp ID\tName\tPAN No\tBank A/c\tDOB\tIFSC\tGrade", "Employee ID\tIFSC Code\tEmployee\tStatus", "Department\tLocation\tUID\tFull Name\tStatus\tPAN\tEmployee_ID\tIFSC Code",
+    "Bank A/c No\tDate of Joining\tGrade\tDate of Birth\tEmployee ID\tName\tPAN No", "Emp ID,Name,PAN No,Bank A/c,DOB,IFSC,Grade",
+])
+def test_header_row_alone_and_followed_by_rows_yields_no_header_detections(hdr):
+    for t in (hdr, hdr + "\n", hdr + "\n" + hdr.replace("\t", "\t").replace("Emp", "Emp")):
+        assert detect_d2(t) == [], (t, dets(t))
+    delim = "\t" if "\t" in hdr else ","
+    row = delim.join(["EMP-1001"] + ["x"] * (len(hdr.split(delim)) - 1))
+    t = hdr + "\n" + row + "\n"
+    end = len(hdr)
+    assert [d for d in detect_d2(t) if d.start < end] == []
+
+
+def test_header_keyword_does_not_bind_the_first_data_row():
+    t = "Bank A/c No\tDate of Joining\tGrade\tDate of Birth\tEmployee ID\tName\tPAN No\n8136083865\t30 Aug 2023\tL5\t29 Feb 1968\tEMP-14882\tA B\tABCPE1234F\n"
+    got = {(v, ty) for v, ty, _ in dets(t)}
+    assert ("30 Aug 2023", T.DATE_OF_BIRTH) not in got and ("29 Feb 1968", T.DATE_OF_BIRTH) in got
+    t2 = "Employee ID\tIFSC Code\tEmployee\nE123456\tHDFC0001234\tMeera Iyer\n"
+    assert [(v, ty) for v, ty, _ in dets(t2) if ty == T.EMPLOYEE_ID] == [("E123456", T.EMPLOYEE_ID)]
+    assert ("IFSC", T.EMPLOYEE_ID) not in {(v, ty) for v, ty, _ in dets(t2)}
+
+
+def test_prose_lines_with_commas_are_not_mistaken_for_headers():
+    t = "Hi team, please note the DOB, salary and bank details: DOB 12/03/1984"
+    assert vals(t, T.DATE_OF_BIRTH) == ["12/03/1984"]
+    assert _header_spans_for(t) == ()
+
+
+def _header_spans_for(t):
+    from pgw.detect.recognizers import _header_spans
+    return _header_spans(t)
+
+
+def test_ticket_ids_are_not_pay_context():
+    for t in ["Ticket PAY-35616 | Requester: Meena Rawat", "Related: HR-3010, CHG939781, JIRA PAY-5719", "PAY_1044 open"]:
+        assert vals(t, T.COMPENSATION) == [], (t, dets(t))
+    assert vals("pay 35616", T.COMPENSATION) == ["35616"]

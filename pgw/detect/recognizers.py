@@ -17,6 +17,7 @@ Design notes
 """
 from __future__ import annotations
 
+import functools
 import re
 from typing import Any
 
@@ -28,6 +29,28 @@ _NA = r"(?<![A-Za-z0-9])"      # not inside a longer alnum token (left)
 _NZ = r"(?![A-Za-z0-9])"       # not inside a longer alnum token (right)
 
 Cand = tuple[int, int, T, float, str]
+
+
+@functools.lru_cache(maxsize=8)
+def _header_spans(text: str) -> tuple:
+    """Spans of lines that are the header row of a CSV/TSV table (cells are field names, never values)."""
+    spans = []
+    pos = 0
+    for ln in text.split("\n"):
+        end = pos + len(ln)
+        if len(ln) < 600:
+            d = "\t" if ln.count("\t") >= 2 else ("," if ln.count(",") >= 3 else None)
+            if d:
+                cells = [c.strip().strip('"') for c in ln.split(d)]
+                if len(cells) >= 3 and sum(bool(_HDR_ALPHA.fullmatch(c)) for c in cells) >= 0.8 * len(cells) \
+                        and sum(_classify_key(c) is not None for c in cells if _HDR_ALPHA.fullmatch(c)) >= 2:
+                    spans.append((pos, end))
+        pos = end + 1
+    return tuple(spans)
+
+
+def _in_header_line(text: str, pos: int) -> bool:
+    return any(a <= pos <= b for a, b in _header_spans(text))
 
 
 # --------------------------------------------------------------------------
@@ -107,6 +130,9 @@ def _email(text: str) -> list[Cand]:
             continue  # URL userinfo / DSN keys / hashes, not a mailbox
         if m.group().rsplit(".", 1)[-1].lower() in _FILE_TLD:
             continue
+        if re.search(r"://[^\s/'\"<>]*$", text[max(0, m.start() - 256):m.start()]) and \
+                re.search(r"://[^\s/'\"<>]*:[^\s/'\"<>]*$", text[max(0, m.start() - 256):m.start() + len(local)]):
+            continue  # userinfo of scheme://user:pass@host
         out.append((m.start(), m.end(), T.EMAIL, 0.99, "D2:email"))
     return out
 
@@ -194,7 +220,8 @@ def _aadhaar(text: str) -> list[Cand]:
             digits = re.sub(r"\D", "", m.group())
             if not verhoeff_valid(digits):
                 continue
-            ctx = bool(_AADHAAR_KW.search(text[max(0, m.start() - 120):m.start()]))
+            lo = max(0, m.start() - 120)
+            ctx = any(not _in_header_line(text, lo + k.start()) for k in _AADHAAR_KW.finditer(text[lo:m.start()]))
             if not (grouped or ctx):
                 continue
             out.append((m.start(), m.end(), T.AADHAAR, 0.95 if (grouped and ctx) else 0.85, "D2:aadhaar"))
@@ -309,6 +336,8 @@ def _bank_run(text: str, run: re.Match) -> tuple[int, int] | None:
 def _bank(text: str) -> list[Cand]:
     out: list[Cand] = []
     for kw in _BANK_KW.finditer(text):
+        if _in_header_line(text, kw.start()):
+            continue
         bare = kw.group("q") is None and kw.group("w").lower() in ("account", "acc") \
             and not re.match(r"(?i)(bank|beneficiary|salary|savings?|current|payee)", kw.group())
         if bare:
@@ -357,13 +386,13 @@ _KV = re.compile(
 _KV_SKIP = {"true", "false", "null", "none", "undefined"}
 # casual chat: "pass Monsoon@8765", "password is xY7#kq9", "pwd: abc123"
 _PASS_CASUAL = re.compile(
-    _NA + r"(?:pass(?:word|wd)?|pwd)(?:[ \t]*[:=][ \t]*|[ \t]+(?:is[ \t]+|was[ \t]+)?)(?P<v>[^\s\"'<>]{6,})", re.I)
+    _NA + r"(?:pass(?:word|wd)?|pwd)(?:[ \t]*[:=][ \t]*|[ \t]+(?:is[ \t]+|was[ \t]+)?)(?P<v>[^\s\"'<>;]{6,})", re.I)
 _PASS_PRE_NEG = re.compile(
     r"(?:boarding|bus|train|metro|season|day|gate|free|hall|entry|parking|travel|lift|access|guest|vip|mountain|rail|"
     r"fast|press|back|by|over|hall|security|visitor)[ \t]+$", re.I)
 _CURL_U = re.compile(r"(?<![\w\-])(?:-u|--user)[ \t]+\\?[\"']?[^\s:'\"\\]+:(?P<v>[^\s'\"\\]+)")
 _PLACEHOLDER = re.compile(
-    r"^(?:\*+.*|x{3,}|<[^>]*>|\{\{.*\}\}|\$\{.*\}|\$[A-Za-z_][\w]*|%[\w]+%|\[?redacted\]?|changeme|change[_\- ]?me|"
+    r"^(?:\*+.*|\{[^}]*\}|%[sd]|%\(.*\)s|pass|pwd|user|username|<[^>]*>|x{3,}|<[^>]*>|\{\{.*\}\}|\$\{.*\}|\$[A-Za-z_][\w]*|%[\w]+%|\[?redacted\]?|changeme|change[_\- ]?me|"
     r"placeholder|your[_\- ].*|example|dummy|\.{3,}|null|none|true|false|required|optional|n/?a|undefined|empty|"
     r"hidden|masked|secret|password|token|string|xxxx.*)$", re.I)
 
@@ -373,8 +402,35 @@ def _placeholder(v: str) -> bool:
     return len(v) < 4 or bool(_PLACEHOLDER.match(v))
 
 
-def _secret(text: str) -> list[Cand]:
+# scheme://user:password@host  (postgresql, mysql, mongodb+srv, redis://:pw@, amqp, sftp, smtp, https basic auth, jdbc:...)
+# The password may itself contain '@', '#', '?' ... so it runs to the LAST '@' that is followed by a host.
+_URI_CRED = re.compile(
+    r"(?<![A-Za-z0-9+.\-])[A-Za-z][A-Za-z0-9+.\-]{1,30}://(?P<user>[^\s/:@;'\"<>]*):(?P<v>[^\s/;'\"<>]+)@"
+    r"(?=[A-Za-z0-9_\-.\[\]]+(?::\d+)?(?:[/?#\s'\"<>,;)\\]|$))")
+_QS_PARAM = re.compile(r"(?<=[?&;])(?P<k>[A-Za-z0-9_.\-\[\]]{1,40})=(?P<v>[^&\s'\"<>#;]{4,})")
+_QS_EXTRA_SECRET_KEYS = {"sig", "signature", "auth", "xamzsignature", "xamzcredential", "xgoogsignature", "sas", "jwt", "otp"}
+
+
+def _uri_secrets(text: str) -> list[Cand]:
     out: list[Cand] = []
+    for m in _URI_CRED.finditer(text):
+        v = m.group("v")
+        if len(v) < 3 or _PLACEHOLDER.match(v):
+            continue
+        out.append((m.start("v"), m.end("v"), T.SECRET, 0.99, "D2:secret_uri"))
+    for m in _QS_PARAM.finditer(text):
+        kw = _key_words(m.group("k"))
+        if not (_classify_words(kw) is T.SECRET or "".join(kw) in _QS_EXTRA_SECRET_KEYS):
+            continue
+        v = m.group("v").rstrip(".,)")
+        if len(v) < 4 or _PLACEHOLDER.match(v):
+            continue
+        out.append((m.start("v"), m.start("v") + len(v), T.SECRET, 0.99, "D2:secret_qs"))
+    return out
+
+
+def _secret(text: str) -> list[Cand]:
+    out: list[Cand] = _uri_secrets(text)
     for name, rx in _SECRET_SIMPLE:
         for m in rx.finditer(text):
             out.append((m.start(), m.end(), T.SECRET, 0.99, f"D2:secret_{name}"))
@@ -385,7 +441,10 @@ def _secret(text: str) -> list[Cand]:
                 continue
             out.append((m.start("v"), m.end("v"), T.SECRET, 0.99, "D2:secret_auth"))
     for m in _PASS_CASUAL.finditer(text):
-        v = m.group("v").rstrip(".,;:)]!?")
+        v = m.group("v")
+        if m.start() > 0 and text[m.start() - 1] in "?&":
+            v = v.split("&")[0]                       # query-string parameter boundary
+        v = v.rstrip(".,;:)]!?")
         mixed = any(c.islower() for c in v) and any(c.isupper() for c in v[1:])
         if len(v) < 6 or not (any(c.isdigit() for c in v) or any(c in "!@#$%^&*_+=~?/\\|" for c in v) or mixed):
             continue
@@ -401,6 +460,9 @@ def _secret(text: str) -> list[Cand]:
         s, e = m.start(g), m.end(g)
         if _PLACEHOLDER.match(v.strip()):
             continue
+        if g == "raw" and m.start() > 0 and text[m.start() - 1] in "?&" and "&" in v:
+            e -= len(v) - v.index("&")                  # inside a query string '&' separates parameters
+            v = v[:v.index("&")]
         if g == "raw":
             stripped = v.rstrip("})].,:!?")
             e -= len(v) - len(stripped)
@@ -433,7 +495,7 @@ def _employee_id(text: str) -> list[Cand]:
         for m in rx.finditer(text):
             out.append((m.start(), m.end(), T.EMPLOYEE_ID, 0.9, "D2:employee_id"))
     for kw in _EMPID_KW.finditer(text):
-        if _in_header_cell(text, kw.start(), kw.end()):
+        if _in_header_cell(text, kw.start(), kw.end()) or _in_header_line(text, kw.start()):
             continue
         nl = text.find("\n", kw.end())
         lim = min(kw.end() + 25, nl if nl != -1 else len(text))
@@ -534,8 +596,10 @@ def _compensation(text: str) -> list[Cand]:
             continue
         out.append((m.start(), m.end(), T.COMPENSATION, 0.9, "D2:compensation"))
     for kw in _COMP_KW.finditer(text):
-        if _in_header_cell(text, kw.start(), kw.end()):
-            continue  # CSV header cell
+        if _in_header_cell(text, kw.start(), kw.end()) or _in_header_line(text, kw.start()):
+            continue  # CSV/TSV header cell
+        if text[kw.end():kw.end() + 1] in ("-", "_") and text[kw.end() + 1:kw.end() + 2].isdigit():
+            continue  # ticket / identifier such as PAY-35616
         for m in _COMP_BARE.finditer(text, kw.end()):
             if m.start() > kw.end() + 30:
                 break
@@ -589,8 +653,8 @@ def _date_ok(m: re.Match, text: str) -> bool:
 def _dob(text: str) -> list[Cand]:
     out: list[Cand] = []
     for kw in _DOB_KW.finditer(text):
-        if _in_header_cell(text, kw.start(), kw.end()):
-            continue  # CSV header cell (",Date of Birth"): the next cell is not its value
+        if _in_header_cell(text, kw.start(), kw.end()) or _in_header_line(text, kw.start()):
+            continue  # CSV/TSV header cell: the next cell is not its value
         end = min(len(text), kw.end() + 60 + 40)
         for m in _DATE.finditer(text, kw.end(), end):
             if m.start() > kw.end() + 60:
@@ -614,6 +678,18 @@ def _dob(text: str) -> list[Cand]:
 # D1 in free text: values found by the FIELD NAME attached to them
 # --------------------------------------------------------------------------
 _AMOUNT = "AMOUNT"   # pseudo-type: COMPENSATION only with pay context nearby
+_IDDOC = "IDDOC"     # pseudo-type: identity-document concept; the value's shape decides AADHAAR / PAN
+_IDDOC_WORDS = {"national", "nationalid", "govt", "government", "governmentid", "govtid", "identity", "identification", "uid",
+                "ssn", "passport", "voter", "licence", "license", "kyc", "taxid", "nric", "uin", "tin"}
+_IDDOC_QUAL = {"id", "number", "no", "num", "card", "document", "doc", "code", "identifier", "proof", "details"}
+_IDDOC_SINGLE = {"uid", "ssn", "kyc", "nationalid", "govtid", "governmentid", "taxid", "nric", "uin", "identity", "identification"}
+_IDDOC_NEG = {"type", "issuer", "country", "expiry", "expires", "issue", "issued", "date", "valid", "validity", "authority",
+              "name", "status", "verified", "verification", "photo", "image", "place", "state", "document_type"}
+# keys whose 12-digit values are known non-Aadhaar identifiers: never escalated structurally
+_ESC_NEG = {"order", "invoice", "ref", "reference", "txn", "transaction", "tracking", "awb", "utr", "ticket", "shipment", "po",
+            "consignment", "imei", "serial", "sku", "meeting", "conference", "room", "webinar", "pallet", "batch", "lot", "rrn",
+            "arn", "cheque", "check", "gst", "pincode", "zip", "request", "job", "case", "session", "trace", "correlation",
+            "amount", "total", "price", "phone", "mobile", "account", "acct", "card", "otp", "timestamp", "ts", "epoch"}
 
 _SECRET_WORDS = {"password", "passwd", "pwd", "passcode", "passphrase", "secret", "secrets", "token", "apikey", "credential", "credentials"}
 _SECRET_NEG = {"type", "expires", "expiry", "expiration", "ttl", "policy", "length", "count", "age", "hint", "label",
@@ -688,6 +764,9 @@ def _classify_words(words: list[str]):
         return T.IFSC
     if W & {"upi", "vpa"}:
         return T.UPI_ID
+    if not W & _IDDOC_NEG and ((W & _IDDOC_WORDS and (W & _IDDOC_QUAL or W & _IDDOC_SINGLE))
+                               or ("tax" in W and W & {"id", "number", "no"})):
+        return _IDDOC
     if "card" in W and W & {"number", "no", "num"} and not W & {"pan"}:
         return T.CARD
     if (W & {"account", "acct", "bankaccount"} or ("acc" in W and W & {"no", "number", "num"})) and not W & _ACCT_NEG:
@@ -884,6 +963,13 @@ def _emit_typed(out: list, text: str, t, pos: int, end: int, whole: bool, *, bar
         pos += 1
     while end > pos and text[end - 1] in " \t\r":
         end -= 1
+    if t is _IDDOC:
+        for cand in (T.AADHAAR, T.PAN):
+            r = _match_value(cand, text, pos, end, whole)
+            if r is not None:
+                out.append((r[0], r[1], cand, 0.95, "D1:field_ctx"))
+                return
+        return
     if t is _AMOUNT:
         t = T.COMPENSATION
         r = _match_value(t, text, pos, end, whole)
@@ -893,6 +979,20 @@ def _emit_typed(out: list, text: str, t, pos: int, end: int, whole: bool, *, bar
         r = _match_value(t, text, pos, end, whole, bare_name)
     if r is not None:
         out.append((r[0], r[1], t, 0.95, "D1:field_ctx"))
+
+
+def _escalate(out: list, text: str, pos: int, end: int, key_words: list) -> None:
+    """Structural escalation: a whole Verhoeff-valid 12-digit value in an HRIS-shaped payload is an Aadhaar
+    even when its key is unknown (nationalId, uid-like columns, opaque headers). Known non-identity keys skip."""
+    if set(key_words) & _ESC_NEG:
+        return
+    while pos < end and text[pos] in " \t":
+        pos += 1
+    while end > pos and text[end - 1] in " \t\r":
+        end -= 1
+    r = _match_value(T.AADHAAR, text, pos, end, True)
+    if r is not None:
+        out.append((r[0], r[1], T.AADHAAR, 0.85, "D1:field_ctx"))
 
 
 _AMOUNT_CTX = re.compile(
@@ -1011,6 +1111,8 @@ def _scan_json(text: str, out: list) -> None:
                 m = _R_COMP.match(val)
                 if m and (m.group("pre") or m.group("unit")) and m.end() == len(val):
                     out.append((p["vs"], p["vs"] + len(val), T.COMPENSATION, 0.95, "D1:field_ctx"))
+                    continue
+        _escalate(out, text, p["vs"], p["ve"], _key_words(p["key"]))
 
 
 _XML_EL = re.compile(
@@ -1031,6 +1133,7 @@ def _scan_xml(text: str, out: list) -> None:
                 if t is not None:
                     break
         if t is None:
+            _escalate(out, text, m.start("val"), m.end("val"), words)
             continue
         bare = words == ["name"]
         if bare:
@@ -1106,11 +1209,16 @@ def _scan_csv(text: str, out: list) -> None:
             rs, re_ = lines[j]
             if not text[rs:re_].strip():
                 break
+            if _in_header_line(text, rs):
+                j += 1
+                continue                              # a repeated header row is not data
             rcells = _split_cells(text, rs, re_, delim)
             if len(rcells) == n:
                 for (a, b), t, h in zip(rcells, col_types, heads):
                     if t is not None and b > a:
                         _emit_typed(out, text, t, a, b, True, bare_name=(_key_words(h) == ["name"]))
+                    elif t is None and b > a:
+                        _escalate(out, text, a, b, _key_words(h))
             j += 1
         i = j
 
@@ -1190,7 +1298,7 @@ def _emit_prefix_cell(out: list, text: str, t, a: int, b: int) -> None:
     _emit_typed(out, text, t, a, b, False)
 
 
-_STRONG = frozenset({T.EMAIL, T.PHONE, T.AADHAAR, T.PAN, T.IFSC, T.BANK_ACCOUNT, T.CARD, T.DATE_OF_BIRTH, T.UPI_ID,
+_STRONG = frozenset({_IDDOC, T.EMAIL, T.PHONE, T.AADHAAR, T.PAN, T.IFSC, T.BANK_ACCOUNT, T.CARD, T.DATE_OF_BIRTH, T.UPI_ID,
                      T.EMPLOYEE_ID, T.COMPENSATION})
 
 
@@ -1241,6 +1349,8 @@ def _flat_rows(text: str, chunks: list, ctext: list, i0: int, n: int, max_rows: 
             _emit_cell(probe, text, types[col], a, b, _key_words(heads[col]) == ["name"])
             count(types[col], probe)
             out.extend(probe)
+            if types[col] is None:
+                _escalate(out, text, a, b, _key_words(heads[col]))
             continue
         tk = [(a + m.start(), a + m.end()) for m in _TOKEN.finditer(text[a:b])]
         if k == K - 1 and rel > 0:                           # tail: last col of the final row (+ trailing prose)
@@ -1390,11 +1500,26 @@ def _scan_kv(text: str, out: list) -> None:
                         if prev and not set(prev) <= _NAME_PREFIX:
                             t = None      # "Bank Name", "Department Name", "File Name": not a person
                     break
-        if t is None:
-            continue
         vs = m.end()
         le = text.find("\n", vs)
         le = len(text) if le == -1 else le
+        if t is None:
+            if not toks:
+                continue
+            _escalate(out, text, vs, le, _key_words(" ".join(toks[-2:])))
+            continue
+        if not text[vs:le].strip():
+            # a label line whose value sits on a later line of the same block ("Aadhaar:\n\n   2341 ...")
+            q, nls = vs, 0
+            while q < len(text) and text[q] in " \t\r\n":
+                nls += text[q] == "\n"
+                q += 1
+            if q < len(text) and nls <= 4 and t in _STRONG:
+                le2 = text.find("\n", q)
+                le2 = len(text) if le2 == -1 else le2
+                if not re.match(r"[A-Za-z][\w ./'’\-]{0,40}[ \t]*[:=]", text[q:le2]):
+                    _emit_typed(out, text, t, q, le2, False, bare_name=(key_words == ["name"]))
+            continue
         if text[vs:vs + 1] in (" ", "\t"):
             continue
         if vs < le and text[vs] in "\"'":
@@ -1474,11 +1599,14 @@ def detect_d2(text: str) -> list[Detection]:
     bank_spans = {(b[0], b[1]) for b in bank + [c for c in field_ctx if c[2] is T.BANK_ACCOUNT]}
     phones = [p for p in phones if (p[0], p[1]) not in bank_spans]
     cands: list[Cand] = []
+    hdr = _header_spans(text)
     for part in (
         _email(text), _upi(text), phones, aadhaar, _pan(text), _ifsc(text), cards, bank,
-        _secret(text), _employee_id(text), _compensation(text), _dob(text), field_ctx,
+        _secret(text), _employee_id(text), _compensation(text), _dob(text),
     ):
-        cands.extend(part)
+        # header cells of a CSV/TSV are field names, never values
+        cands.extend(c for c in part if not (hdr and any(a <= c[0] < b for a, b in hdr)))
+    cands.extend(field_ctx)
     return _resolve(cands)
 
 

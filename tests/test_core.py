@@ -259,3 +259,12 @@ def test_egress_invariant_ignores_own_alias_tokens_but_still_catches_values():
         check(b'{"x": "[DATE_OF_BIRTH_82PYXM] Date of joining"}', sens)       # the real value outside an alias
     with pytest.raises(EgressViolation):
         check(b'{"x": "DATE_OF_BIRTH_82PYXM"}', [(T.PERSON, "birth_82pyxm")])  # unbracketed text is still swept
+
+
+def test_edm_numeric_candidate_never_spans_tab():
+    """R1 TEST: a phone candidate spanning a TSV tab stole an Aadhaar span."""
+    roster = RosterIndex(b"E" * 32)
+    roster.add_employee({"full_name": "A B", "first_name": "Abc", "last_name": "Bcd", "email": "a@b.in",
+                         "employee_id": "EMP-9", "phone": "9114672942"})
+    text = "0094 9282\t9114672942"
+    assert {text[d.start:d.end] for d in roster.detect(text)} == {"9114672942"}
