@@ -24,3 +24,5 @@ secrets/
 # contains realistic fake secrets that trip secret scanners
 eval/data/*.jsonl
 eval/results/det_*.json
+graph/cache/
+graphify-out/
