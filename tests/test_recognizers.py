@@ -1467,6 +1467,6 @@ def test_fc_pass_style_keys():
 
 
 def test_fc_alias_placeholders_from_the_gateway_are_not_values():
-    for t in ['{"name": "[PERSON_7QX2MA]"}', '{"email": "[EMAIL_AB12CD]"}', '{"password": "[SECRET_AB12CD]"}',
+    for t in ['{"name": "[PERSON_7QX2MA]"}', '{"email": "[EMAIL_4B12CD]"}', '{"password": "[SECRET_4B12CD]"}',
               '{"salary": "[COMPENSATION ₹15L–₹20L]"}', '{"employee_id": "[EMPLOYEE_ID_AB12CD]"}', 'phone: [PHONE_AB12CD]']:
         assert fc(t) == [], t

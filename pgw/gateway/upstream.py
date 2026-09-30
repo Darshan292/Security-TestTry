@@ -269,7 +269,7 @@ class MockLLMUpstream:
         if b == "mangle":
             return _ALIAS.sub(lambda m: m.group(0)[1:-1].lower(), s)
         if b == "fabricate":
-            fake = "[PERSON_ZZZZZ9]"
+            fake = "[PERSON_9ZZZZZ]"
             while fake in aliases:
                 fake = fake[:-1] + "Y"
             return s + f" Escalate to {fake}."

@@ -49,6 +49,9 @@ def test_parse_alias_lenient():
     assert parse_alias("person_7qx2ma") == ("PERSON", "7QX2MA")
     assert parse_alias("[EMPLOYEE_ID_7QX2MA]") == ("EMPLOYEE_ID", "7QX2MA")
     assert parse_alias("PERSON_7QX2M") is None
+    # ordinary identifiers must never look like aliases (regression: XML tags were rewritten)
+    for word in ("Phone_Number", "Bank_Account_Number", "EMAIL_STATUS", "PERSON_STREET", "PHONE_TYPE_A"):
+        assert parse_alias(word) is None, word
 
 
 # --- normalize ----------------------------------------------------------------------
@@ -172,9 +175,17 @@ def test_stream_restore_every_split_offset():
 
 def test_output_gate_fabricated_alias_and_split_raw_aadhaar():
     r = Restorer({})
-    out = _stream(r, "See [PERSON_ZZZZZZ] and id 2341 2341 2346 ok", [8, 30, 33])
+    out = _stream(r, "See [PERSON_9ZZZZZ] and id 2341 2341 2346 ok", [8, 30, 33])
     assert "[unknown PERSON]" in out and "2341 2341 2346" not in out
     assert {e.kind for e in r.events} == {"fabricated_alias", "raw_pii"}
+
+
+def test_gate_leaves_ordinary_identifiers_alone():
+    r = Restorer({})
+    xml = "<wd:Phone_Number>[PHONE_3QX2MA]</wd:Phone_Number> <Bank_Account_Number/>"
+    out = r.feed(xml) + r.finish()
+    assert "<wd:Phone_Number>" in out and "<Bank_Account_Number/>" in out
+    assert [e.kind for e in r.events] == ["fabricated_alias"]      # only the real alias-shaped token
 
 
 def test_never_restore_secret():

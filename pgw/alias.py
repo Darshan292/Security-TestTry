@@ -21,7 +21,10 @@ CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _TYPE_NAMES = "|".join(sorted((t.value for t in EntityType), key=len, reverse=True))
 
 # Strict form as we emit it, and the lenient forms we accept back from a model.
-ALIAS_RE = re.compile(rf"\[?\b({_TYPE_NAMES})_([0-9A-Z]{{6}}(?:[0-9A-Z]{{2}})?)\b\]?", re.IGNORECASE)
+# Suffix = one decimal digit + Crockford base32 (no I, L, O, U). Ordinary identifiers such as
+# "Phone_Number" or "Bank_Account_Number" can therefore never parse as an alias.
+_CK = "0-9A-HJKMNP-TV-Z"
+ALIAS_RE = re.compile(rf"\[?\b({_TYPE_NAMES})_([0-9][{_CK}]{{5}}(?:[{_CK}]{{2}})?)\b\]?", re.IGNORECASE)
 MAX_ALIAS_LEN = 1 + max(len(t.value) for t in EntityType) + 1 + 8 + 1
 
 
@@ -52,8 +55,9 @@ def canon(t: EntityType, value: str) -> str:
 
 
 def _b32(digest: bytes, n: int) -> str:
-    bits = int.from_bytes(digest[:5], "big")  # 40 bits is enough for 8 chars
-    return "".join(CROCKFORD[(bits >> (35 - 5 * i)) & 31] for i in range(n))
+    """First char is a decimal digit (log2 10 bits), the rest Crockford base32: ~28.3 bits for n=6."""
+    bits = int.from_bytes(digest[:6], "big")
+    return str(digest[6] % 10) + "".join(CROCKFORD[(bits >> (43 - 5 * i)) & 31] for i in range(n - 1))
 
 
 def make_alias(k_scope: bytes, t: EntityType, value: str, length: int = 6) -> str:
