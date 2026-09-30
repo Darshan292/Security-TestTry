@@ -26,6 +26,9 @@ from .types import EntityType
 
 HOLD_MAX = 64            # max chars of trailing risky tokens held back (numbers/dates/amounts span spaces)
 TOKEN_MAX = 256          # longest whitespace-free run held back before a delimiter cut is attempted
+LINE_MAX = 2048          # incremental mode releases whole lines; longer lines fall back to word cuts
+GUARD_LOOKBACK = 4096    # released context the straddle guard re-reads
+NAME_TOKENS = 2          # complete words always held (max roster n-gram is 3 words)
 MIN_RELEASE = 48         # batch size for releases in incremental mode
 GATE_CONTEXT_MAX = 32_768  # beyond this much output, incremental degrades to buffered
 
@@ -63,8 +66,9 @@ class Restorer:
         if len(self._released_aliased) + len(self._buf) > GATE_CONTEXT_MAX:
             self._degraded = True          # hold everything; judged at finish()
             return ""
-        cut = self._cut(self._buf)
-        if cut < MIN_RELEASE and "\n" not in self._buf[:cut]:
+        cut = self._line_cut(self._buf)
+        cut = self._straddle_guard(cut)
+        if cut <= 0:
             return ""
         region, self._buf = self._buf[:cut], self._buf[cut:]
         return self._process(region)
@@ -74,6 +78,35 @@ class Restorer:
         return self._process(region)
 
     # -- internals ----------------------------------------------------------
+    def _line_cut(self, b: str) -> int:
+        """Release whole lines only: recognisers use same-line right context (an IFSC after an account
+        number, "DOB X, not Y"). A line longer than LINE_MAX falls back to the word-level cut."""
+        nl = b.rfind("\n")
+        pending = len(b) - (nl + 1)
+        if pending <= LINE_MAX:
+            return nl + 1 if nl >= 0 else 0
+        return self._cut(b)
+
+    def _straddle_guard(self, cut: int) -> int:
+        """Never release part of something the gate would mask once more text is seen: detect on
+        (released tail + buffer) and pull the cut back to the start of any detection crossing it."""
+        if cut <= 0:
+            return 0
+        tail = self._released_aliased[-GUARD_LOOKBACK:]
+        text = tail + self._buf
+        off = len(tail)
+        spans = [(d.start, d.end) for d in recognizers.detect_d2(text) if d.type in _GATE_TYPES]
+        if self.roster is not None:
+            spans += [(d.start, d.end) for d in self.roster.detect(text)]
+        c = off + cut
+        moved = True
+        while moved:
+            moved = False
+            for s, e in spans:
+                if s < c < e:
+                    c, moved = s, True
+        return max(0, c - off)
+
     def _cut(self, b: str) -> int:
         ws = max(b.rfind(" "), b.rfind("\n"), b.rfind("\t"))
         cut = ws + 1
@@ -81,6 +114,19 @@ class Restorer:
             cut = self._delimiter_cut(b, cut)
             if cut is None:
                 return 0
+        # hold the last NAME_TOKENS complete words: roster names match as <= 3-word n-grams, so a word
+        # that could still become the start of a match must not be released yet (R2 dev2: "bhavesh"
+        # leaked when "bhavesh chauhan" arrived across two releases)
+        for _ in range(NAME_TOKENS):
+            j = cut - 1
+            while j >= 0 and b[j].isspace():
+                j -= 1
+            k = j
+            while k >= 0 and not b[k].isspace():
+                k -= 1
+            if j < 0 or len(b) - (k + 1) > HOLD_MAX:
+                break
+            cut = k + 1
         # step back over preceding risky tokens (numbers/dates/amounts/emails spanning spaces)
         while cut > 0:
             j = cut - 1

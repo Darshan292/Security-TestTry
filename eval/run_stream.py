@@ -73,7 +73,10 @@ def main() -> None:
             t_stream += time.perf_counter() - t0
             if got != want:
                 doc_bad = True
-                stream_only_leaks += sum(1 for g in gold if g in got and g not in want)
+                # any gold value OR any word (>= 3 chars) of one that the stream shows more often than
+                # the buffered output (partial leaks count: "bhavesh" of "bhavesh chauhan")
+                parts = gold | {w for g in gold for w in re.findall(r"\w{3,}", g)}
+                stream_only_leaks += sum(1 for g in parts if got.count(g) > want.count(g))
                 fragments += len(FRAGMENT.findall(got)) - len(FRAGMENT.findall(want))
         mismatched_docs += doc_bad
         n += 1

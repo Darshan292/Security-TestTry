@@ -77,3 +77,18 @@ def test_buffered_mode_releases_nothing_until_finish():
     r = Restorer({}, mode="buffered")
     assert r.feed("hello " * 100) == ""
     assert r.finish() == "hello " * 100
+
+
+def test_multi_token_roster_name_not_partially_released():
+    """R2 dev2: 'bhavesh ' was released before 'chauhan' arrived; buffered masked the whole name."""
+    from pgw.detect.edm import RosterIndex
+    roster = RosterIndex(b"E" * 32)
+    roster.add_employee({"full_name": "Bhavesh Chauhan", "first_name": "Bhavesh", "last_name": "Chauhan",
+                         "email": "b@acme.in", "employee_id": "EMP-1", "phone": ""})
+    text = '{"id": "x", "username": "bhavesh chauhan", "extra": {"k": "some more trailing text here"}}\n'
+    want = run(Restorer({}, roster=roster, mode="buffered"), text, [])
+    assert "bhavesh" not in want
+    rng = random.Random(1)
+    for _ in range(300):
+        cuts = rng.sample(range(1, len(text)), k=rng.randint(1, 40))
+        assert run(Restorer({}, roster=roster, mode="incremental"), text, cuts) == want
