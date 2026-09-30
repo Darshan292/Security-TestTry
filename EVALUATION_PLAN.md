@@ -137,3 +137,35 @@ Each release produces `EVAL_REPORT_<version>.md`: gold hash, detector-set
 version, policy pack versions, per-type table, failures by category with 20
 sampled misses each (synthetic data, so safe to show), and an explicit
 "what these numbers do not show" section.
+
+## Amendment 2026-09-30b — Release 2 protocol (registered before any R2 fix is measured)
+
+Trigger: the R1 one-shot TEST (SECURITY_EVALUATION.md) failed the leak gate; R1 TEST is spent.
+**No existing gate or metric definition is changed by this amendment.** It adds metrics, and one gate
+for streaming, which R1 did not measure end-to-end.
+
+1. **Corpus v2.** New seed, **new templates** written by an author who has not read the detector
+   code or the R2 fixes. Splits: `dev2` (tuning allowed), `test2` (one-shot, locked), `ner_test2`
+   (free text whose PERSON names are all absent from the roster, for E-NER). The manifest hash is
+   committed **before** any R2 fix is evaluated. All R1 splits become dev data.
+2. **Held-out adversarial transforms.** The six R1 transforms are known to fixers. The corpus author
+   defines ≥ 3 additional transform kinds, which stay undisclosed to fixers until after the `test2` run.
+   Both sets are reported separately.
+3. **Metrics (definitions fixed now):**
+   - *Character leak rate*: unchanged. Gate ≤ 1.0 %.
+   - *Document exposure*: the fraction of documents whose protected outbound body contains ≥ 1 raw
+     gold value of length ≥ 4 (`eval/replay_egress.py`). Reporting only (a gate is the owner's decision).
+   - *Per-type recall/precision*: unchanged gates and minimum n.
+   - *E-STREAM-LEAK* (new, **gate**): simulated model outputs (the protected text, plus raw gold
+     values the model "echoes", plus aliases) are streamed through the gateway restorer and output
+     gate with ≥ 5 random chunkings each. **Gate: for every document and chunking, the client-visible
+     streamed output is identical to the buffered output** (0 stream-only leaks, 0 alias fragments).
+     Purposes classed RESTRICTED are buffered by policy and are measured anyway.
+   - *Egress invariant false-alarm rate*: invariant fires on replayed `test2` traffic where no detected
+     value is actually present. Gate: 0. It is never reported as a recall metric.
+   - *False-positive rate on negatives*: items with ≥ 1 detection / negative items. Reporting only
+     (type precision gates still apply).
+   - *E-NER*: per candidate model, PERSON recall and precision on `ner_test2`, and CPU latency
+     p50/p95 per 1 KB. Model selection uses `dev2` only.
+   - *Latency*: detection p50/p95/p99 with and without NER; gate DESIGN N-1.
+4. `test2` is read once, by `eval.run_det --one-shot-test`, on a clean commit.
