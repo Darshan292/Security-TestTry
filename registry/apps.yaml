@@ -1,0 +1,9 @@
+# App registry (ADR-0004): who may call, for which declared purposes, on which models.
+# key_sha256 = sha256 of the app's bearer key. The demo key below is "demo-app-key-change-me"; replace it.
+apps:
+  - app_id: hr-assistant
+    tenant: acme
+    key_sha256: 7dd315a9dbd5d1a31d7e2d196495cdc4874275b9e37456699116f8059c781a47
+    purposes: [hr_case_summary, email_draft, ticket_classification, comp_band_analysis]
+    restore_output: true
+    models: [mock-1, gpt-4o-mini]

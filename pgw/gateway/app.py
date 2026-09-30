@@ -23,6 +23,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from ..detect.edm import RestoreLedger, RosterIndex
+from ..detect.recognizers import detect_d2
 from ..egress import check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
 from ..policy import PolicyPack, UnknownPurpose
@@ -190,6 +191,15 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(403, "model_forbidden", "model not permitted for this app")
         stream = bool(body.get("stream", False))
 
+        # tools/stop are not message content, but they still leave the building: they must be clean.
+        aux = [json.dumps(body[k], ensure_ascii=False) for k in ("tools", "stop") if k in body]
+        try:
+            dirty = any(detect_d2(a) or (roster is not None and roster.detect(a)) for a in aux)
+        except Exception:
+            raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
+        if dirty:
+            raise _Reject(400, "sensitive_data_in_parameters", "tools/stop contain data that must not be sent")
+
         ctx = Context(app.tenant, app.app_id, purpose, conv, app.restore_output)
         t0 = time.perf_counter()
 
@@ -247,7 +257,7 @@ def create_app(settings: Settings) -> Starlette:
         try:
             data = await upstream.complete(up_body)
         except UpstreamError as e:
-            raise _Reject(502, "upstream_error", str(e)) from None
+            raise _Reject(502, "upstream_error", "upstream provider error") from None
         except Exception as e:
             raise _Reject(502, "upstream_error", type(e).__name__) from None
         try:
@@ -292,7 +302,7 @@ def create_app(settings: Settings) -> Starlette:
         except StopAsyncIteration:
             first = None
         except UpstreamError as e:
-            raise _Reject(502, "upstream_error", str(e)) from None
+            raise _Reject(502, "upstream_error", "upstream provider error") from None
         except Exception as e:
             raise _Reject(502, "upstream_error", type(e).__name__) from None
 
