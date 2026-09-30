@@ -35,7 +35,7 @@ def normalize(text: str) -> tuple[str, list[int]]:
         n = unicodedata.normalize("NFKC", ch)
         for c in n:
             c = _CONFUSABLES.get(c, c)
-            if c.isspace():
+            if c.isspace() and c not in "\n\t":   # keep line/column structure for CSV/TSV/logs
                 c = " "
             out.append(c)
             omap.append(i)
