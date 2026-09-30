@@ -286,7 +286,8 @@ def test_roster_names_inside_json_and_learned_id_shapes():
 
 def test_ner_shape_filter_rejects_code_identifiers():
     from pgw.pipeline import _name_shaped
-    for ok in ("Deepa Rajagopalan", "K. Venkataraman", "D'Souza", "ANINDITA ROUT", "Sutapa"):
+    for ok in ("Deepa Rajagopalan", "K. Venkataraman", "D'Souza", "Neil O'Brien", "Anne-Marie Fernandes",
+               "ANINDITA ROUT", "Sutapa"):
         assert _name_shaped(ok), ok
     for bad in ("AWS_SECRET_ACCESS_KEY", "BankRepo.save(BankRepo.java", "payroll_rw", "u ci-bot", "Envelope2", "DB"):
         assert not _name_shaped(bad), bad

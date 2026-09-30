@@ -75,7 +75,7 @@ _NOT_NAMES = {"team", "all", "everyone", "sir", "madam", "there", "folks", "hr",
               "support", "admin", "the", "this", "that", "please", "thanks", "regards"}
 
 
-_NAME_TOKEN = re.compile(r"(?:[A-Z][a-z]+(?:['’-][A-Za-z]+)*|[A-Z]\.)$")
+_NAME_TOKEN = re.compile(r"(?:[A-Z][a-z]+(?:-[A-Z][a-z]+)*|[A-Z]['’][A-Z][a-z]+|[A-Z][a-z]+['’][a-z]+|[A-Z]\.)$")
 _CAPS_TOKEN = re.compile(r"[A-Z]{2,}(?:['’-][A-Z]+)*$")
 
 
