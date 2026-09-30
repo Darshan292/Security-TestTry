@@ -23,6 +23,8 @@ secrets/
 # Generated eval corpus: reproducible from eval/synth/generate.py (hashes in MANIFEST.json);
 # contains realistic fake secrets that trip secret scanners
 eval/data/*.jsonl
+# Release-2 corpus (v2): reproducible from eval/synth2/generate.py; hashes in eval/data2/MANIFEST.json
+eval/data2/*.jsonl
 eval/results/det_*.json
 graph/cache/
 graphify-out/

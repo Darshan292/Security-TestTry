@@ -1,0 +1,349 @@
+{
+  "files": {
+    "dev2.jsonl": "843156ab944238761eec1ce0453c57bd353cefd4a4c023b837597a882bc33a23",
+    "ner_test2.jsonl": "1820b120cf4f008646f50c84a206dc2b11ea50248d3efe35a210fcdb2364b958",
+    "roster.jsonl": "e0748558e7b9adcac75f729af2b77b6aa57d384372a6a601e33a831deef5139c",
+    "test2.jsonl": "19505614b6405f910092c6c2f3276c235aaace931c6f00aca1d993cd79a1073c"
+  },
+  "generator": "eval.synth2.generate",
+  "generator_version": "2.0.0",
+  "seed": 20260930,
+  "splits": {
+    "dev2": {
+      "items": {
+        "hr_free_text": 620,
+        "hris_structured": 420,
+        "integration_debug": 270,
+        "negatives": 420
+      },
+      "person_mentions_external_share": 0.4276,
+      "positives_by_slice_type": {
+        "hr_free_text": {
+          "AADHAAR": 37,
+          "BANK_ACCOUNT": 36,
+          "CARD": 73,
+          "COMPENSATION": 808,
+          "DATE_OF_BIRTH": 1014,
+          "EMAIL": 402,
+          "EMPLOYEE_ID": 1305,
+          "IFSC": 36,
+          "PAN": 941,
+          "PERSON": 1423,
+          "PHONE": 1381,
+          "SECRET": 58,
+          "UPI_ID": 36
+        },
+        "hris_structured": {
+          "AADHAAR": 856,
+          "BANK_ACCOUNT": 559,
+          "CARD": 103,
+          "COMPENSATION": 611,
+          "DATE_OF_BIRTH": 835,
+          "EMAIL": 495,
+          "EMPLOYEE_ID": 1159,
+          "IFSC": 517,
+          "PAN": 317,
+          "PERSON": 1036,
+          "PHONE": 1035,
+          "SECRET": 84,
+          "UPI_ID": 676
+        },
+        "integration_debug": {
+          "AADHAAR": 36,
+          "BANK_ACCOUNT": 54,
+          "CARD": 18,
+          "COMPENSATION": 36,
+          "DATE_OF_BIRTH": 18,
+          "EMAIL": 199,
+          "EMPLOYEE_ID": 144,
+          "IFSC": 18,
+          "PAN": 36,
+          "PERSON": 139,
+          "PHONE": 140,
+          "SECRET": 378
+        },
+        "negatives": {}
+      },
+      "positives_total": {
+        "AADHAAR": 929,
+        "BANK_ACCOUNT": 649,
+        "CARD": 194,
+        "COMPENSATION": 1455,
+        "DATE_OF_BIRTH": 1867,
+        "EMAIL": 1096,
+        "EMPLOYEE_ID": 2608,
+        "IFSC": 571,
+        "PAN": 1294,
+        "PERSON": 2598,
+        "PHONE": 2556,
+        "SECRET": 520,
+        "UPI_ID": 712
+      },
+      "templates": {
+        "hr_free_text": [
+          "bank_change_request",
+          "corp_card_issue",
+          "hinglish_wa_thread",
+          "insurance_enrolment",
+          "it_joiner_credentials",
+          "legend_then_rows",
+          "number_first_explained_later",
+          "offer_negotiation_thread",
+          "promotion_committee_minutes",
+          "recruiter_profile_share",
+          "relocation_offer_mail",
+          "resignation_accept",
+          "salary_advance_ask",
+          "tax_proof_mail",
+          "teams_hrbp_sync",
+          "travel_booking_request",
+          "wellness_vendor_thread"
+        ],
+        "hris_structured": [
+          "csv_long_export_far_header",
+          "csv_vendor_payee_master",
+          "fixed_width_neft_file",
+          "ini_employee_sections",
+          "json_comp_history",
+          "json_darwinbox_employee",
+          "json_greythr_employee",
+          "json_integration_settings",
+          "json_keka_profile",
+          "json_payroll_run_lines",
+          "json_upi_payout_batch",
+          "ldif_directory_entry",
+          "ndjson_hr_events",
+          "tsv_cards_register",
+          "xml_attr_roster",
+          "xml_bank_advice_camt",
+          "xml_payslip_ns",
+          "xml_sf_compound_employee",
+          "xml_workday_soap_get_workers",
+          "yaml_employee_records"
+        ],
+        "integration_debug": [
+          "cred_files_aws_pgpass",
+          "curl_basic_auth_and_token",
+          "gh_actions_log",
+          "git_remote_and_history",
+          "java_exception_sql",
+          "jenkins_console",
+          "k8s_secret_yaml",
+          "kafka_message_dump",
+          "nginx_access_log",
+          "postman_collection_json",
+          "python_traceback_payload",
+          "sentry_event",
+          "soap_fault_pii",
+          "splunk_json_log",
+          "sql_update_where_debug"
+        ],
+        "negatives": [
+          "card_like_orders",
+          "device_inventory",
+          "hr_stats_report",
+          "invoice_register",
+          "market_watch",
+          "meeting_minutes_public",
+          "network_inventory",
+          "order_tracking",
+          "policy_titles_text",
+          "vendor_onboarding_ids"
+        ]
+      }
+    },
+    "ner_test2": {
+      "items": {
+        "ner_free_text": 425
+      },
+      "positives_by_slice_type": {
+        "ner_free_text": {
+          "BANK_ACCOUNT": 25,
+          "COMPENSATION": 100,
+          "DATE_OF_BIRTH": 25,
+          "EMAIL": 150,
+          "IFSC": 25,
+          "PAN": 25,
+          "PERSON": 1500,
+          "PHONE": 300,
+          "UPI_ID": 25
+        }
+      },
+      "positives_total": {
+        "BANK_ACCOUNT": 25,
+        "COMPENSATION": 100,
+        "DATE_OF_BIRTH": 25,
+        "EMAIL": 150,
+        "IFSC": 25,
+        "PAN": 25,
+        "PERSON": 1500,
+        "PHONE": 300,
+        "UPI_ID": 25
+      },
+      "templates": {
+        "ner_free_text": [
+          "n_alumni_note",
+          "n_bank_kyc_vendor_note",
+          "n_bereavement_case_note",
+          "n_buddy_intro_mail",
+          "n_customer_escalation",
+          "n_event_speaker_mail",
+          "n_exit_interview_free",
+          "n_family_emergency_contacts",
+          "n_hinglish_chat",
+          "n_incident_witnesses",
+          "n_interview_feedback",
+          "n_legal_notice_summary",
+          "n_reference_check",
+          "n_referral_note",
+          "n_talent_meeting_notes",
+          "n_vendor_email",
+          "n_wa_group_lowercase"
+        ]
+      }
+    },
+    "test2": {
+      "items": {
+        "hr_free_text": 627,
+        "hris_structured": 428,
+        "integration_debug": 280,
+        "negatives": 420
+      },
+      "person_mentions_external_share": 0.3464,
+      "positives_by_slice_type": {
+        "hr_free_text": {
+          "AADHAAR": 181,
+          "BANK_ACCOUNT": 180,
+          "CARD": 43,
+          "COMPENSATION": 550,
+          "DATE_OF_BIRTH": 183,
+          "EMAIL": 255,
+          "EMPLOYEE_ID": 481,
+          "IFSC": 144,
+          "PAN": 144,
+          "PERSON": 1511,
+          "PHONE": 444,
+          "SECRET": 74,
+          "UPI_ID": 79
+        },
+        "hris_structured": {
+          "AADHAAR": 448,
+          "BANK_ACCOUNT": 763,
+          "CARD": 90,
+          "COMPENSATION": 921,
+          "DATE_OF_BIRTH": 931,
+          "EMAIL": 810,
+          "EMPLOYEE_ID": 1458,
+          "IFSC": 776,
+          "PAN": 833,
+          "PERSON": 2242,
+          "PHONE": 1580,
+          "UPI_ID": 129
+        },
+        "integration_debug": {
+          "AADHAAR": 49,
+          "BANK_ACCOUNT": 67,
+          "CARD": 28,
+          "COMPENSATION": 18,
+          "DATE_OF_BIRTH": 49,
+          "EMAIL": 172,
+          "EMPLOYEE_ID": 85,
+          "IFSC": 67,
+          "PAN": 67,
+          "PERSON": 95,
+          "PHONE": 18,
+          "SECRET": 526,
+          "UPI_ID": 36
+        },
+        "negatives": {}
+      },
+      "positives_total": {
+        "AADHAAR": 678,
+        "BANK_ACCOUNT": 1010,
+        "CARD": 161,
+        "COMPENSATION": 1489,
+        "DATE_OF_BIRTH": 1163,
+        "EMAIL": 1237,
+        "EMPLOYEE_ID": 2024,
+        "IFSC": 987,
+        "PAN": 1044,
+        "PERSON": 3848,
+        "PHONE": 2042,
+        "SECRET": 600,
+        "UPI_ID": 244
+      },
+      "templates": {
+        "hr_free_text": [
+          "attrition_review_mail",
+          "bgv_discrepancy",
+          "calibration_notes",
+          "chat_paste_credentials",
+          "contractor_payout_mail",
+          "dob_fix_request",
+          "fnf_settlement_mail",
+          "gratuity_letter",
+          "grievance_hinglish_email",
+          "helpdesk_case_export",
+          "joining_docs_checklist",
+          "long_form_top_label",
+          "medical_leave_note",
+          "pf_withdrawal_form_mail",
+          "posh_committee_summary",
+          "reference_call_notes",
+          "wellness_reimbursement"
+        ],
+        "hris_structured": [
+          "csv_bank_advice_semicolon",
+          "csv_candidate_pipeline",
+          "csv_employee_master",
+          "csv_reimbursement_upi",
+          "json_ats_candidate",
+          "json_card_vault_records",
+          "json_columnar_far_header",
+          "json_dependents",
+          "json_oracle_hcm_items",
+          "json_referral_ledger",
+          "json_sf_odata_user",
+          "json_workday_rest_worker",
+          "kv_pipe_export",
+          "markdown_table_paste",
+          "positional_flatfile_records",
+          "sap_infotype_dump",
+          "tsv_leave_balance",
+          "vcard_contact_export",
+          "xml_ats_candidate_feed",
+          "xml_ukg_timecard"
+        ],
+        "integration_debug": [
+          "airflow_conn_log",
+          "card_gateway_debug",
+          "conn_uri_cli_history",
+          "conn_uri_sentences",
+          "curl_api_key_body",
+          "docker_compose_env",
+          "dotenv_file",
+          "http_request_response_dump",
+          "jdbc_properties_file",
+          "long_config_secret_at_bottom",
+          "smtp_and_webhook_conf",
+          "sql_insert_dump",
+          "terraform_tfvars",
+          "upi_callback_log",
+          "yaml_app_config"
+        ],
+        "negatives": [
+          "bank_txn_lookalikes",
+          "budget_table",
+          "code_placeholder_secrets",
+          "hash_uuid_table",
+          "holiday_calendar_dates",
+          "isin_cin_codes",
+          "product_catalog",
+          "purchase_orders",
+          "release_notes",
+          "ticket_export"
+        ]
+      }
+    }
+  }
+}
