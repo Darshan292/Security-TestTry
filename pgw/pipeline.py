@@ -19,7 +19,15 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from .alias import AliasAllocator, canon, scope_key
 from .detect import recognizers
 from .detect.edm import RestoreLedger, RosterIndex
+from . import normalize as _normalize_mod
 from .normalize import normalize, to_original
+
+
+def _views(text: str):
+    """D0 views if available (R2), else the single base view."""
+    if hasattr(_normalize_mod, "views"):
+        return _normalize_mod.views(text)
+    return [("base", *normalize(text))]
 from .policy import PolicyPack, generalize
 from .types import Action, BlockedRequest, Context, Detection, Entity, EntityType
 
@@ -185,23 +193,31 @@ class Protected:
 
 class Protector:
     def __init__(self, policy: PolicyPack, keys: Keys, roster: RosterIndex | None = None,
-                 ledger: RestoreLedger | None = None):
+                 ledger: RestoreLedger | None = None, ner=None):
         self.policy = policy
         self.keys = keys
         self.roster = roster
         self.ledger = ledger
+        self.ner = ner          # D4 (pgw.detect.ner.NerDetector) or None; its errors propagate = fail closed
 
     def detect_text(self, text: str) -> list[Detection]:
-        """D0 + D2 + person cues + D3 on one string; offsets in the ORIGINAL string."""
-        norm, omap = normalize(text)
-        dets = recognizers.detect_d2(norm) + detect_person_cues(norm)
-        if self.roster is not None:
-            dets += self.roster.detect(norm)
+        """D0 views + D2 + person cues + D3 (+ D4 NER) on one string; offsets in the ORIGINAL string.
+
+        Every detector runs on every D0 view (base, de-spaced, de-obfuscated, digit-joined,
+        case-restored); each view's offset map sends spans back to the original text, and
+        overlaps are resolved later, so an evasion only has to be undone by one view.
+        """
         out = []
-        for d in dets:
-            s, e = to_original(omap, d.start, d.end)
-            if e > s:
-                out.append(Detection(s, e, d.type, d.score, d.source))
+        for name, view, omap in _views(text):
+            dets = recognizers.detect_d2(view) + detect_person_cues(view)
+            if self.roster is not None:
+                dets += self.roster.detect(view)
+            if self.ner is not None and name in ("base", "casefold_titled", "despaced"):
+                dets += self.ner.detect(view)
+            for d in dets:
+                s, e = to_original(omap, d.start, d.end)
+                if e > s:
+                    out.append(Detection(s, e, d.type, d.score, f"{d.source}@{name}" if name != "base" else d.source))
         return out
 
     def protect(self, messages: list[dict], ctx: Context) -> Protected:

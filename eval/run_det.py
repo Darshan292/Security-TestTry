@@ -21,7 +21,9 @@ from pathlib import Path
 from pgw.detect.edm import RosterIndex
 from pgw.pipeline import Keys, Protector
 from pgw.policy import PolicyPack
+from pgw.egress import check as egress_check
 from pgw.stream import Restorer
+from pgw.types import EgressViolation
 from pgw.types import Context, EntityType
 
 ROOT = Path(__file__).resolve().parent
@@ -54,14 +56,48 @@ def load(path: Path) -> list[dict]:
     return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
 
 
-def build_protector(data: Path, use_roster: bool) -> Protector:
+def build_protector(data: Path, use_roster: bool, ner: str | None = None) -> Protector:
     keys = Keys(bytes(32))
     roster = None
     if use_roster and (data / "roster.jsonl").exists():
         roster = RosterIndex(keys.derive("eval", "edm"))
         for rec in load(data / "roster.jsonl"):
             roster.add_employee(rec)
-    return Protector(PolicyPack.load(ROOT.parent / "policies/hris-default.yaml"), keys, roster)
+    ner_det = None
+    if ner:
+        from pgw.detect.ner import NerDetector
+        ner_det = NerDetector(ner)
+    return Protector(PolicyPack.load(ROOT.parent / "policies/hris-default.yaml"), keys, roster, ner=ner_det)
+
+
+def is_heldout(split: str) -> bool:
+    return split == "test" or split.startswith("test") or split.startswith("ner_test")
+
+
+def guard_split(split: str, one_shot: bool, out: Path, data: Path, tag: str = "det") -> None:
+    """Held-out splits are evaluated once per release, on a clean commit; the lock records both hashes."""
+    if not is_heldout(split):
+        return
+    lock = out / ("TEST_LOCK.json" if (split == "test" and tag == "det") else f"LOCK_{tag}_{split}.json")
+    if not one_shot:
+        raise SystemExit(f"refusing: {split} is held out; pass --one-shot-test deliberately")
+    if lock.exists():
+        raise SystemExit(f"refusing: {split} already evaluated for {tag} ({lock.read_text().strip()[:200]})")
+    import hashlib
+    import subprocess
+    dirty = subprocess.run(["git", "status", "--porcelain", "pgw", "policies", "eval/run_det.py", "eval/run_stream.py"],
+                           capture_output=True, text=True).stdout.strip()
+    if dirty:
+        raise SystemExit("refusing: code under test has uncommitted changes; the held-out run must be tied to a commit")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    file_sha = hashlib.sha256((data / f"{split}.jsonl").read_bytes()).hexdigest()
+    manifest = json.loads((data / "MANIFEST.json").read_text())
+    listed = json.dumps(manifest)
+    if file_sha not in listed:
+        raise SystemExit(f"refusing: {split}.jsonl sha256 {file_sha[:16]} is not in MANIFEST.json (corpus changed?)")
+    out.mkdir(parents=True, exist_ok=True)
+    lock.write_text(json.dumps({"split": split, "tag": tag, "code_commit": head, "split_sha256": file_sha,
+                                "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, indent=1))
 
 
 def evaluate(items: list[dict], prot: Protector, stream_check: bool = True, seed: int = 0) -> dict:
@@ -72,6 +108,7 @@ def evaluate(items: list[dict], prot: Protector, stream_check: bool = True, seed
     neg_fp = defaultdict(int); neg_items = neg_items_fp = 0
     lat_ms: list[float] = []
     rt_ok = rt_ci = rt_n = 0
+    docs = docs_exposed = egress_fires = egress_true = 0
     misses: dict[str, list[str]] = defaultdict(list)
     rng = random.Random(seed)
 
@@ -108,8 +145,18 @@ def evaluate(items: list[dict], prot: Protector, stream_check: bool = True, seed
             for p in fps:
                 neg_fp[p[2]] += 1
 
+        # document exposure + egress invariant on the replayed outbound body (R2 metrics)
+        pr0 = prot.protect(msgs, CTX)
+        out0 = pr0.messages[0]["content"]
+        docs += 1
+        docs_exposed += any(text[g[0]:g[1]] in out0 for g in gold if g[1] - g[0] >= 4)
+        try:
+            egress_check(json.dumps({"model": "m", "messages": pr0.messages}).encode(), pr0.sensitive_values)
+        except EgressViolation:
+            egress_fires += 1
+            egress_true += any(v in out0 for _, v in pr0.sensitive_values)   # a detected value really is present
         if stream_check:
-            pr = prot.protect(msgs, CTX)
+            pr = pr0
             aliased = pr.messages[0]["content"]
             r = Restorer(pr.alias_map)
             cuts = sorted(rng.sample(range(1, len(aliased)), k=min(len(aliased) - 1, rng.randint(1, 30)))) if len(aliased) > 2 else []
@@ -151,6 +198,10 @@ def evaluate(items: list[dict], prot: Protector, stream_check: bool = True, seed
         "negatives": {"items": neg_items, "items_with_fp": neg_items_fp, "fp_by_type": dict(neg_fp)},
         "latency_ms": {"p50": q[49], "p95": q[94], "p99": q[98], "max": max(lat_ms)},
         "stream_roundtrip": {"n": rt_n, "exact": rt_ok, "case_insensitive": rt_ci},
+        "document_exposure": {"docs": docs, "docs_with_raw_gold_value_in_body": docs_exposed,
+                              "rate": docs_exposed / docs if docs else 0.0},
+        "egress_invariant": {"fires": egress_fires, "true_catches": egress_true,
+                             "false_alarms": egress_fires - egress_true},
     }
 
 
@@ -169,7 +220,11 @@ def render(res: dict, title: str) -> str:
         f"Negatives: {res['negatives']['items_with_fp']}/{res['negatives']['items']} items with ≥1 false positive; by type {res['negatives']['fp_by_type']}",
         f"Latency (detect only, CPU, ms): p50 {res['latency_ms']['p50']:.2f} · p95 {res['latency_ms']['p95']:.2f} · p99 {res['latency_ms']['p99']:.2f} · max {res['latency_ms']['max']:.1f}",
         f"Stream round-trip (random chunking): exact {res['stream_roundtrip']['exact']}/{res['stream_roundtrip']['n']}, "
-        f"case-insensitive {res['stream_roundtrip']['case_insensitive']}/{res['stream_roundtrip']['n']}", ""]
+        f"case-insensitive {res['stream_roundtrip']['case_insensitive']}/{res['stream_roundtrip']['n']}",
+        f"Document exposure (>= 1 raw gold value in outbound body): **{res['document_exposure']['rate']:.2%}** "
+        f"({res['document_exposure']['docs_with_raw_gold_value_in_body']}/{res['document_exposure']['docs']})",
+        f"Egress invariant: fires {res['egress_invariant']['fires']}, true catches {res['egress_invariant']['true_catches']}, "
+        f"false alarms {res['egress_invariant']['false_alarms']} (gate: 0 false alarms; never a recall metric)", ""]
     return "\n".join(L)
 
 
@@ -181,28 +236,18 @@ def main() -> None:
                     help="required to evaluate the test split; allowed exactly once (eval/results/TEST_LOCK.json)")
     ap.add_argument("--adversarial", action="store_true")
     ap.add_argument("--no-roster", action="store_true")
+    ap.add_argument("--ner", default=None, help="spaCy model name for the D4 NER layer")
+    ap.add_argument("--heldout-adversarial", action="store_true",
+                    help="also run eval.synth2.adversarial_heldout kinds (one-shot runs only)")
     ap.add_argument("--out", default=str(ROOT / "results"))
     a = ap.parse_args()
     data = Path(a.data)
-    lock = Path(a.out) / "TEST_LOCK.json"
-    if a.split == "test":
-        if not a.one_shot_test:
-            raise SystemExit("refusing: the test split is read once per release; pass --one-shot-test deliberately")
-        if lock.exists():
-            raise SystemExit(f"refusing: test split already evaluated ({lock.read_text().strip()})")
-        import subprocess
-        head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-        dirty = bool(subprocess.run(["git", "status", "--porcelain", "pgw", "policies"], capture_output=True, text=True).stdout.strip())
-        if dirty:
-            raise SystemExit("refusing: pgw/ or policies/ has uncommitted changes; the test run must be tied to a commit")
-        manifest = json.loads((data / "MANIFEST.json").read_text())
-        Path(a.out).mkdir(parents=True, exist_ok=True)
-        lock.write_text(json.dumps({"code_commit": head, "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                                    "corpus_manifest_sha256": {k: v for k, v in manifest.items() if "sha" in k.lower()}},
-                                   indent=1, default=str))
+    guard_split(a.split, a.one_shot_test, Path(a.out), data)
+    if a.heldout_adversarial and not a.one_shot_test:
+        raise SystemExit("refusing: held-out adversarial transforms run only inside the one-shot held-out evaluation")
     items = load(data / f"{a.split}.jsonl")
-    prot = build_protector(data, not a.no_roster)
-    tag = f"{a.split}{'-noroster' if a.no_roster else ''}"
+    prot = build_protector(data, not a.no_roster, ner=a.ner)
+    tag = f"{a.split}{'-noroster' if a.no_roster else ''}{'-ner_' + a.ner if a.ner else ''}"
     results = {"clean": evaluate(items, prot)}
     md = [render(results["clean"], f"E-DET — {tag}")]
     if a.adversarial:
@@ -212,6 +257,13 @@ def main() -> None:
             adv = [transform(it, kind, rng) for it in items if it.get("slice") != "negatives"]
             results[kind] = evaluate(adv, prot, stream_check=False)
             md.append(render(results[kind], f"E-ADV — {kind}"))
+    if a.heldout_adversarial:
+        from eval.synth2.adversarial_heldout import KINDS, transform as ho_transform
+        rng = random.Random(1234)
+        for kind in KINDS:
+            adv = [ho_transform(it, kind, rng) for it in items if it.get("slice") != "negatives"]
+            results[f"heldout:{kind}"] = evaluate(adv, prot, stream_check=False)
+            md.append(render(results[f"heldout:{kind}"], f"E-ADV held-out — {kind}"))
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     (out / f"det_{tag}.json").write_text(json.dumps(results, indent=1, ensure_ascii=False))
     (out / f"det_{tag}.md").write_text("\n".join(md))
