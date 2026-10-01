@@ -19,13 +19,14 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from .alias import AliasAllocator, canon, scope_key
 from .detect import recognizers
 from .detect.edm import RestoreLedger, RosterIndex
+from . import ablation as _abl
 from . import normalize as _normalize_mod
 from .normalize import normalize, to_original
 
 
 def _views(text: str):
     """D0 views if available (R2), else the single base view."""
-    if hasattr(_normalize_mod, "views"):
+    if hasattr(_normalize_mod, "views") and _abl.get().D0:
         return _normalize_mod.views(text)
     return [("base", *normalize(text))]
 from .policy import PolicyPack, generalize
@@ -94,6 +95,8 @@ def _name_shaped(span: str) -> bool:
 
 def detect_person_cues(text: str) -> list[Detection]:
     out = []
+    if not _abl.get().CUES:
+        return out
     for rx, score in ((_HONORIFIC, 0.85), (_GREETING, 0.7), (_SIGNOFF, 0.7), (_PREP, 0.6)):
         for m in rx.finditer(text):
             name = m.group(1)
@@ -227,9 +230,9 @@ class Protector:
         out = []
         for name, view, omap in _views(text):
             dets = recognizers.detect_d2(view) + detect_person_cues(view)
-            if self.roster is not None:
+            if self.roster is not None and _abl.get().D3:
                 dets += self.roster.detect(view)
-            if self.ner is not None and name in ("base", "casefold_titled", "despaced"):
+            if self.ner is not None and _abl.get().D4 and name in ("base", "casefold_titled", "despaced"):
                 dets += [d for d in self.ner.detect(view) if _name_shaped(view[d.start:d.end])]
             for d in dets:
                 s, e = to_original(omap, d.start, d.end)
@@ -261,12 +264,15 @@ class Protector:
                 per_seg[i] += [Detection(*to_original(omap, d.start, d.end), d.type, d.score, d.source)
                                for d in dets]
 
+        if not _abl.get().D5:   # ablation: no propagation step at all (still resolve overlaps)
+            return [_resolve(d) for d in per_seg]
+
         # 2. Known values: everything detected anywhere, plus D1 field values.
         known: dict[tuple[EntityType, str], float] = {}
         for seg, dets in zip(segs, per_seg):
             for d in _resolve(dets):
                 known[(d.type, seg.text[d.start:d.end])] = max(d.score, known.get((d.type, seg.text[d.start:d.end]), 0))
-            for t, v in _field_values(seg.text):
+            for t, v in (_field_values(seg.text) if _abl.get().D1 else []):
                 known[(t, v)] = max(0.95, known.get((t, v), 0))
         # PERSON partial mentions: "Rahul" after "Rahul Sharma" (D5).
         for (t, surface), sc in list(known.items()):

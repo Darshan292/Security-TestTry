@@ -41,6 +41,11 @@ Code `a51c22d`; corpus seed 1337 (MANIFEST hashes). "Repro" = the command that r
 | M-28 | Known R1 evasions on test2, B | 5.8–6.9 % except case 10.2 % (≈ baseline 6.1 %) | same | Supports D0 views (A-01) |
 | M-29 | Detection latency, test2 | A p95 9.2 ms · B p95 47 ms, p99 132 ms | same | Meets N-1 |
 | M-30 | Overfit gap dev2 → test2 | char leak A 0.58 % → 8.24 %; rules-only external names 0.992 → 0.133 | dev2 runs + FROZEN_R2 | W-10: rule tuning does not generalise |
+| M-31 | Root-cause attribution of test2 leak (B, 13,119 chars) | manual: schema 32.4 %, structure 20.2 %, prose context 16.7 %, external PERSON 15.8 %, parser bugs 14.8 %, lexical 0.2 %; automatic: 28.7 / 18.5 / 27.4 / 16.8 / 8.3 (partial) / 0.2 | `eval.root_cause` → `root_cause_r2.json` | ROOT_CAUSE_ANALYSIS_R2 §A; context-typing failure 69–75 % under both methods |
+| M-32 | Attribution method agreement and concentration | methods agree on 51.9 % of leaked chars; 8 of 47 template×type cells = 53 % of leak | same | Only coarse categories are reliable |
+| M-33 | Component ablation, marginal leak pp (dev2 / test2 / ner_test2) | D1 +16.6 / +8.0 / +0.1; D2 +15.2 / +23.7 / +32.0; D4 +0.1 / +2.1 / +38.6; D3 +1.7 / +3.4 / 0; D0 ≈ 0 clean, spaced 5.8 → 37.3 % | `eval.run_ablation` → `ablation_r2.md` | D1 overfits; validators and NER generalise (PD-13) |
+| M-34 | Minimal configurations, test2 | ENTITY_ONLY 56.9 % leak / 74.3 % docs; RULES_ONLY 16.3 % / 44.8 %; D4_ONLY 88.7 % | same | Entity-centric alone cannot replace rules |
+| M-35 | Context-free shape ceiling and cost | 61.9 % of leaked chars shape-flaggable (82.8 % schema, 83.3 % structure, 80.9 % prose, 0 % PERSON, 0 % COMPENSATION); dev2 cost: DATE hits 210/420 negatives, entropy 84, Verhoeff 24 | `eval.root_cause` (`shape_ceiling`, `shape_cost_dev`) | Context needed for precision, not recall (PD-13); refutes "mask every date" as-is (PD-10) |
 
 
 ## Part B — External claims (C-NN)

@@ -12,6 +12,7 @@ Read [SECURITY_EVALUATION_R2.md](SECURITY_EVALUATION_R2.md) first (R1: [SECURITY
 | If you want… | Read |
 |---|---|
 | The measured truth about the slice | [SECURITY_EVALUATION.md](SECURITY_EVALUATION.md) |
+| Why it leaks and the proposed architecture change (R2 root cause, ablation) | [ROOT_CAUSE_ANALYSIS_R2.md](ROOT_CAUSE_ANALYSIS_R2.md) |
 | Why each decision was made, and how well it is supported | [research/ARCHITECTURE_DECISIONS.md](research/ARCHITECTURE_DECISIONS.md) |
 | Evidence and its quality | [research/EVIDENCE_MATRIX.md](research/EVIDENCE_MATRIX.md), [research/SOURCE_REGISTER.md](research/SOURCE_REGISTER.md), [research/PROVENANCE.md](research/PROVENANCE.md) |
 | Techniques, competitors, unknowns | [research/ALGORITHM_ANALYSIS.md](research/ALGORITHM_ANALYSIS.md), [research/COMPETITIVE_LANDSCAPE.md](research/COMPETITIVE_LANDSCAPE.md), [research/OPEN_QUESTIONS.md](research/OPEN_QUESTIONS.md) |

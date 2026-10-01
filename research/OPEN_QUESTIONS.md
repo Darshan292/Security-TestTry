@@ -33,8 +33,10 @@ Priority: **P0** blocks any real-data use · **P1** blocks the next phase gate �
 | Q-23 | Do PII Shield or Skyflow document restore semantics, streaming and tool handling? | Would inform ADR-0002/0003 layering | ADR-0002, ADR-0003 | Vendor self-description only (CLAIM-V) | Read the primary product docs | Research | P2 |
 | Q-24 | Does Purview or Azure Content Safety mask prompts? | Competitive row accuracy only | — | Absence (CLAIM-S) | Read the primary Learn docs | Research | P2 |
 
-| Q-25 | Is context-free value-shape masking (PD-10) acceptable on precision/utility for RESTRICTED HR purposes? | Rule tuning does not generalise (M-30); shape masking might | PD-10 | None yet | Fresh-split measurement + E-UTIL with a real model | Architect + privacy office | **P0** |
+| Q-25 | Is context-free value-shape masking (PD-10, now inside PD-13) acceptable on precision/utility for RESTRICTED HR purposes? | Shape tests flag 61.9 % of leaked chars but DATE hits 210/420 dev2 negatives (M-35) | PD-13 | M-35 (cost side, dev2) | Third-corpus run + E-UTIL | Architect + privacy office | **P0** |
 | Q-26 | May huggingface.co be allowed in the build environment (for GLiNER)? | Only spaCy could be benchmarked; best deployable external-name recall is 0.794 | PD-12 | environment policy (FACT-M: host refused) | Environment owner decision | Owner | P1 |
+| Q-27 | Can person-record anchoring decide date/number sensitivity accurately enough that release-by-context keeps precision? | PD-13 recall depends on it not at all; precision depends on it entirely | PD-13 | None | Third-corpus L3 ablation (precision vs recall shift) | Architect | **P0** |
+| Q-28 | Who authors corpus v3, with what generator design, so it is independent of the fixers and of this analysis? | test2 now informs the design and cannot validate it | PD-14 | M-32 | Owner decision before any PD-13 code | Owner | **P0** |
 
 ## Closed in this iteration
 

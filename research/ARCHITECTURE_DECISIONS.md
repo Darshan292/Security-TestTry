@@ -52,6 +52,8 @@ evasions, W-12 external names at 0.794, W-13 secrets in new places.
 | PD-10 | **Value-shape masking under RESTRICTED purposes**: mask Verhoeff-valid 12-digit numbers, Luhn card-length numbers, dates in person-bearing documents (month/year) and high-entropy tokens regardless of context; measure on a third fresh split | M-23, M-30 | W-10, W-13 |
 | PD-11 | D0 views for line-wrapped values, HTML entities and OCR confusions (O↔0, l↔1) inside digit runs | M-27 | W-11 |
 | PD-12 | Re-evaluate GLiNER when huggingface.co is allowed; keep spaCy `lg` meanwhile | M-24 | W-12 |
+| PD-13 | **Invert detection (proposed 2026-10-01, ROOT_CAUSE_ANALYSIS_R2 §C):** context-free candidates (validators, entropy, EDM, NER) for recall; generic parsing into a record graph; field semantics from standard dictionaries + column statistics used to *release*, not to *find*; RESTRICTED default-deny for shape-flagged values in person-bearing records; ML may add masking, never remove it. Absorbs PD-10 (with the date cost of M-35) and PD-11. Not implemented | M-31, M-33, M-34, M-35 | W-10, W-11, W-13 |
+| PD-14 | **Third corpus from an independent generator design**, frozen before any PD-13 code; families held out by family, ≥ 10 templates per family; gates pre-registered first (refines PD-6) | M-32 (template concentration); a reseed of synth2 reshuffles spent templates | Evaluation integrity |
 
 ## Required amendments (documentation only; the code already reflects the first)
 

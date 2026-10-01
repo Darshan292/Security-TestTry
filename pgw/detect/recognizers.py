@@ -24,6 +24,7 @@ import math
 import re
 from typing import Any
 
+from pgw import ablation as _ablation
 from pgw.types import Detection, EntityType as T
 
 __all__ = ["detect_d2", "detect_fields", "detect_field_context", "verhoeff_valid", "verhoeff_check_digit", "luhn_valid"]
@@ -2067,6 +2068,8 @@ def detect_d2(text: str) -> list[Detection]:
     if not text:
         return []
     fc_cands, neg_spans = _field_scan(text)
+    if not _ablation.get().D1:   # ablation: drop D1 candidates only; CSV negative-span suppression of D2 is kept
+        fc_cands = []
     field_ctx = [(d.start, d.end, d.type, d.score, d.source) for d in _resolve(fc_cands)]
     neg_ix = _SpanIndex([(a, b, None, 0, "") for a, b in neg_spans]) if neg_spans else None
     cards = _cards(text)
@@ -2086,7 +2089,7 @@ def detect_d2(text: str) -> list[Detection]:
     phones = [p for p in phones if (p[0], p[1]) not in bank_spans]
     cands: list[Cand] = []
     hdr = _header_spans(text)
-    for part in (
+    for part in () if not _ablation.get().D2 else (
         _email(text), _upi(text), phones, aadhaar, _pan(text), _ifsc(text), cards, bank,
         _secret(text), _employee_id(text), _compensation(text), _dob(text), _bank_file_names(text),
     ):

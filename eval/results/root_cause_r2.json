@@ -1,0 +1,522 @@
+{
+ "split": "test2",
+ "ner": "en_core_web_lg",
+ "total_gold_chars": 215077,
+ "leaked_chars": 13119,
+ "leak_rate": 0.06099675930015762,
+ "automatic": {
+  "missing-schema-knowledge": {
+   "chars": 3767,
+   "share": 0.2871
+  },
+  "missing-semantic-context": {
+   "chars": 3594,
+   "share": 0.274
+  },
+  "unseen-structure": {
+   "chars": 2433,
+   "share": 0.1855
+  },
+  "external-person": {
+   "chars": 2206,
+   "share": 0.1682
+  },
+  "bug:partial-boundary": {
+   "chars": 1091,
+   "share": 0.0832
+  },
+  "unseen-lexical-form": {
+   "chars": 28,
+   "share": 0.0021
+  }
+ },
+ "manual": {
+  "missing-schema-knowledge": {
+   "chars": 4253,
+   "share": 0.3242
+  },
+  "unseen-structure": {
+   "chars": 2647,
+   "share": 0.2018
+  },
+  "missing-semantic-context": {
+   "chars": 2185,
+   "share": 0.1666
+  },
+  "external-person": {
+   "chars": 2067,
+   "share": 0.1576
+  },
+  "detector-parser-bug": {
+   "chars": 1939,
+   "share": 0.1478
+  },
+  "unseen-lexical-form": {
+   "chars": 28,
+   "share": 0.0021
+  }
+ },
+ "auto_x_manual": {
+  "unseen-structure -> unseen-structure": 2000,
+  "missing-schema-knowledge -> missing-schema-knowledge": 1964,
+  "missing-semantic-context -> missing-schema-knowledge": 1520,
+  "missing-semantic-context -> missing-semantic-context": 1427,
+  "external-person -> external-person": 1387,
+  "missing-schema-knowledge -> detector-parser-bug": 1054,
+  "missing-schema-knowledge -> missing-semantic-context": 749,
+  "bug:partial-boundary -> external-person": 680,
+  "missing-semantic-context -> unseen-structure": 647,
+  "external-person -> missing-schema-knowledge": 448,
+  "bug:partial-boundary -> detector-parser-bug": 390,
+  "external-person -> detector-parser-bug": 371,
+  "unseen-structure -> missing-schema-knowledge": 309,
+  "unseen-structure -> detector-parser-bug": 124,
+  "unseen-lexical-form -> unseen-lexical-form": 28,
+  "bug:partial-boundary -> missing-schema-knowledge": 12,
+  "bug:partial-boundary -> missing-semantic-context": 9
+ },
+ "shape_ceiling": [
+  {
+   "manual": "missing-schema-knowledge",
+   "type": "SECRET",
+   "shape": "HIGH_ENTROPY",
+   "chars": 2425
+  },
+  {
+   "manual": "external-person",
+   "type": "PERSON",
+   "shape": "none",
+   "chars": 2067
+  },
+  {
+   "manual": "missing-semantic-context",
+   "type": "SECRET",
+   "shape": "HIGH_ENTROPY",
+   "chars": 1440
+  },
+  {
+   "manual": "unseen-structure",
+   "type": "AADHAAR",
+   "shape": "VERHOEFF12",
+   "chars": 1392
+  },
+  {
+   "manual": "unseen-structure",
+   "type": "DATE_OF_BIRTH",
+   "shape": "DATE",
+   "chars": 800
+  },
+  {
+   "manual": "missing-schema-knowledge",
+   "type": "DATE_OF_BIRTH",
+   "shape": "DATE",
+   "chars": 798
+  },
+  {
+   "manual": "detector-parser-bug",
+   "type": "COMPENSATION",
+   "shape": "none",
+   "chars": 705
+  },
+  {
+   "manual": "detector-parser-bug",
+   "type": "DATE_OF_BIRTH",
+   "shape": "DATE",
+   "chars": 591
+  },
+  {
+   "manual": "detector-parser-bug",
+   "type": "PERSON",
+   "shape": "none",
+   "chars": 553
+  },
+  {
+   "manual": "missing-schema-knowledge",
+   "type": "PERSON",
+   "shape": "none",
+   "chars": 448
+  },
+  {
+   "manual": "unseen-structure",
+   "type": "BANK_ACCOUNT",
+   "shape": "none",
+   "chars": 443
+  },
+  {
+   "manual": "missing-semantic-context",
+   "type": "DATE_OF_BIRTH",
+   "shape": "DATE",
+   "chars": 320
+  },
+  {
+   "manual": "missing-semantic-context",
+   "type": "COMPENSATION",
+   "shape": "none",
+   "chars": 300
+  },
+  {
+   "manual": "missing-schema-knowledge",
+   "type": "AADHAAR",
+   "shape": "VERHOEFF12",
+   "chars": 300
+  },
+  {
+   "manual": "missing-schema-knowledge",
+   "type": "COMPENSATION",
+   "shape": "none",
+   "chars": 263
+  },
+  {
+   "manual": "detector-parser-bug",
+   "type": "PHONE",
+   "shape": "none",
+   "chars": 90
+  },
+  {
+   "manual": "missing-semantic-context",
+   "type": "DATE_OF_BIRTH",
+   "shape": "none",
+   "chars": 68
+  },
+  {
+   "manual": "missing-semantic-context",
+   "type": "SECRET",
+   "shape": "none",
+   "chars": 49
+  },
+  {
+   "manual": "unseen-lexical-form",
+   "type": "AADHAAR",
+   "shape": "VERHOEFF12",
+   "chars": 28
+  },
+  {
+   "manual": "missing-schema-knowledge",
+   "type": "BANK_ACCOUNT",
+   "shape": "none",
+   "chars": 18
+  },
+  {
+   "manual": "unseen-structure",
+   "type": "BANK_ACCOUNT",
+   "shape": "VERHOEFF12",
+   "chars": 12
+  },
+  {
+   "manual": "missing-semantic-context",
+   "type": "EMPLOYEE_ID",
+   "shape": "HIGH_ENTROPY",
+   "chars": 8
+  },
+  {
+   "manual": "missing-schema-knowledge",
+   "type": "SECRET",
+   "shape": "none",
+   "chars": 1
+  }
+ ],
+ "shape_cost_dev": {
+  "split": "dev2",
+  "docs": 1730,
+  "negative_docs": 420,
+  "fp_spans": {
+   "HIGH_ENTROPY": 499,
+   "DATE": 816,
+   "VERHOEFF12": 31
+  },
+  "docs_with_fp": {
+   "HIGH_ENTROPY": 218,
+   "DATE": 326,
+   "VERHOEFF12": 24
+  },
+  "negative_docs_with_fp": {
+   "HIGH_ENTROPY": 84,
+   "DATE": 210,
+   "VERHOEFF12": 24
+  }
+ },
+ "by_template": [
+  {
+   "template": "chat_paste_credentials",
+   "type": "SECRET",
+   "manual": "missing-semantic-context",
+   "chars": 1489
+  },
+  {
+   "template": "positional_flatfile_records",
+   "type": "AADHAAR",
+   "manual": "unseen-structure",
+   "chars": 1200
+  },
+  {
+   "template": "smtp_and_webhook_conf",
+   "type": "SECRET",
+   "manual": "missing-schema-knowledge",
+   "chars": 874
+  },
+  {
+   "template": "yaml_app_config",
+   "type": "SECRET",
+   "manual": "missing-schema-knowledge",
+   "chars": 832
+  },
+  {
+   "template": "positional_flatfile_records",
+   "type": "DATE_OF_BIRTH",
+   "manual": "unseen-structure",
+   "chars": 800
+  },
+  {
+   "template": "upi_callback_log",
+   "type": "SECRET",
+   "manual": "missing-schema-knowledge",
+   "chars": 720
+  },
+  {
+   "template": "csv_candidate_pipeline",
+   "type": "PERSON",
+   "manual": "detector-parser-bug",
+   "chars": 553
+  },
+  {
+   "template": "vcard_contact_export",
+   "type": "DATE_OF_BIRTH",
+   "manual": "missing-schema-knowledge",
+   "chars": 530
+  },
+  {
+   "template": "long_form_top_label",
+   "type": "BANK_ACCOUNT",
+   "manual": "unseen-structure",
+   "chars": 455
+  },
+  {
+   "template": "vcard_contact_export",
+   "type": "PERSON",
+   "manual": "missing-schema-knowledge",
+   "chars": 448
+  },
+  {
+   "template": "csv_candidate_pipeline",
+   "type": "DATE_OF_BIRTH",
+   "manual": "detector-parser-bug",
+   "chars": 425
+  },
+  {
+   "template": "calibration_notes",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 388
+  },
+  {
+   "template": "dob_fix_request",
+   "type": "DATE_OF_BIRTH",
+   "manual": "missing-semantic-context",
+   "chars": 388
+  },
+  {
+   "template": "chat_paste_credentials",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 317
+  },
+  {
+   "template": "markdown_table_paste",
+   "type": "COMPENSATION",
+   "manual": "detector-parser-bug",
+   "chars": 304
+  },
+  {
+   "template": "attrition_review_mail",
+   "type": "COMPENSATION",
+   "manual": "missing-semantic-context",
+   "chars": 300
+  },
+  {
+   "template": "sap_infotype_dump",
+   "type": "COMPENSATION",
+   "manual": "missing-schema-knowledge",
+   "chars": 263
+  },
+  {
+   "template": "sap_infotype_dump",
+   "type": "AADHAAR",
+   "manual": "missing-schema-knowledge",
+   "chars": 252
+  },
+  {
+   "template": "csv_candidate_pipeline",
+   "type": "COMPENSATION",
+   "manual": "detector-parser-bug",
+   "chars": 235
+  },
+  {
+   "template": "posh_committee_summary",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 202
+  },
+  {
+   "template": "positional_flatfile_records",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 200
+  },
+  {
+   "template": "long_form_top_label",
+   "type": "AADHAAR",
+   "manual": "unseen-structure",
+   "chars": 192
+  },
+  {
+   "template": "fnf_settlement_mail",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 180
+  },
+  {
+   "template": "sap_infotype_dump",
+   "type": "DATE_OF_BIRTH",
+   "manual": "missing-schema-knowledge",
+   "chars": 168
+  },
+  {
+   "template": "json_referral_ledger",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 167
+  },
+  {
+   "template": "csv_employee_master",
+   "type": "DATE_OF_BIRTH",
+   "manual": "detector-parser-bug",
+   "chars": 166
+  },
+  {
+   "template": "csv_bank_advice_semicolon",
+   "type": "COMPENSATION",
+   "manual": "detector-parser-bug",
+   "chars": 166
+  },
+  {
+   "template": "attrition_review_mail",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 136
+  },
+  {
+   "template": "reference_call_notes",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 133
+  },
+  {
+   "template": "pf_withdrawal_form_mail",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 113
+  },
+  {
+   "template": "kv_pipe_export",
+   "type": "DATE_OF_BIRTH",
+   "manual": "missing-schema-knowledge",
+   "chars": 100
+  },
+  {
+   "template": "helpdesk_case_export",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 92
+  },
+  {
+   "template": "json_ats_candidate",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 56
+  },
+  {
+   "template": "kv_pipe_export",
+   "type": "AADHAAR",
+   "manual": "missing-schema-knowledge",
+   "chars": 48
+  },
+  {
+   "template": "contractor_payout_mail",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 41
+  },
+  {
+   "template": "bgv_discrepancy",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 36
+  },
+  {
+   "template": "long_form_top_label",
+   "type": "AADHAAR",
+   "manual": "unseen-lexical-form",
+   "chars": 28
+  },
+  {
+   "template": "bgv_discrepancy",
+   "type": "PHONE",
+   "manual": "detector-parser-bug",
+   "chars": 24
+  },
+  {
+   "template": "dob_fix_request",
+   "type": "PHONE",
+   "manual": "detector-parser-bug",
+   "chars": 18
+  },
+  {
+   "template": "pf_withdrawal_form_mail",
+   "type": "BANK_ACCOUNT",
+   "manual": "missing-schema-knowledge",
+   "chars": 18
+  },
+  {
+   "template": "joining_docs_checklist",
+   "type": "PHONE",
+   "manual": "detector-parser-bug",
+   "chars": 12
+  },
+  {
+   "template": "posh_committee_summary",
+   "type": "PHONE",
+   "manual": "detector-parser-bug",
+   "chars": 12
+  },
+  {
+   "template": "pf_withdrawal_form_mail",
+   "type": "PHONE",
+   "manual": "detector-parser-bug",
+   "chars": 12
+  },
+  {
+   "template": "http_request_response_dump",
+   "type": "EMPLOYEE_ID",
+   "manual": "missing-semantic-context",
+   "chars": 8
+  },
+  {
+   "template": "medical_leave_note",
+   "type": "PHONE",
+   "manual": "detector-parser-bug",
+   "chars": 6
+  },
+  {
+   "template": "grievance_hinglish_email",
+   "type": "PERSON",
+   "manual": "external-person",
+   "chars": 6
+  },
+  {
+   "template": "grievance_hinglish_email",
+   "type": "PHONE",
+   "manual": "detector-parser-bug",
+   "chars": 6
+  }
+ ]
+}
