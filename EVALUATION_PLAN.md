@@ -182,3 +182,59 @@ evaluated once each; no code or threshold changes between them:
   (not deployable inline: ~1.5 s/KB p95 CPU).
 E-STREAM-LEAK runs once on `test2` with Config A detectors (the output gate does not use NER).
 Held-out adversarial kinds run inside the Config A and B `test2` runs.
+
+## Amendment 2026-10-01 — Release 3: corpus v3 and the PD-13 experiment (registered before v3 exists)
+
+Corpus rules are in `eval/v3/SPEC.md`, `eval/v3/CONTAMINATION.md` and `eval/v3/SEPARATION.md`. No existing gate is relaxed.
+
+### Arms (all three run from one commit; spaCy `en_core_web_lg` NER and the roster are identical across arms)
+
+- **A — current architecture:** R2 Config B as of `ddd6e3f` (D0+D1+D2+cues+D3+D4+D5).
+- **B — PD-13 minimum:**
+  - L0 normalisation views;
+  - L1 record parsing with standard parsers;
+  - L2 context-free candidates (existing validators, entropy, roster EDM, NER);
+  - L3 deterministic field semantics (standard dictionaries + column statistics);
+  - L4 release policy (RESTRICTED default-deny for shape-flagged values in person-bearing records);
+  - D5 propagation.
+  - D1 is removed.
+  - No general-purpose LLM. No ML beyond the existing NER, because the minimum experiment omits the ML key mapper and the prose classifier (PD-13 L5).
+- **C — B without L3.**
+
+### Metrics
+
+| ID | Definition |
+|---|---|
+| **CSVE** (COMPLETE-SENSITIVE-VALUE-EXPOSURE), primary | % of documents in which ≥ 1 gold taxonomy value of ≥ 4 characters reaches the outbound body **complete**. Complete means one of two things: (a) the gold surface appears verbatim, or (b) for digit-bearing types (AADHAAR, PAN, BANK_ACCOUNT, CARD, PHONE, EMPLOYEE_ID, COMPENSATION, DOB) its digit sequence appears with only `[ \-./ ]` between digits; for other types its case-folded, whitespace-collapsed form appears |
+| CSVE-HIGH | CSVE restricted to AADHAAR, PAN, BANK_ACCOUNT, CARD, SECRET, DATE_OF_BIRTH, COMPENSATION |
+| PIE (partial-identifying exposure) | % of documents where a HIGH value is not complete but has ≥ 8 digits of a ≥ 12-digit identifier, or ≥ 50 % of a SECRET's characters, outbound contiguously. Reported only |
+| CSVE-OOT | CSVE over OOT spans. Reported only, never gated |
+| Character leak | As E-DET (gate ≤ 1 %) |
+| Entity recall / precision | Per type, overlap definition of `eval/run_det.py`, with Wilson CIs |
+| False positives | Negative items with ≥ 1 detection, and FP spans per 1,000 negative characters |
+| Collateral masking | Masked non-gold characters / all non-gold characters, positive items (utility proxy) |
+| Adversarial | CSVE and character leak per transform kind, split into known and held-out |
+| Latency | Detection p95, serial, single process, same machine for all arms |
+| Generalisation gap | CSVE(test3) / CSVE(dev3), Laplace-smoothed ((x+1)/(n+1)), per arm; also by family |
+| L3 transfer | ΔFP = FP(C) − FP(B) and ΔCSVE = CSVE(C) − CSVE(B), on dev3 and test3 |
+| Key novelty strata | All metrics on test3 split by whether a span's field key occurs in v1/v2 (CONTAMINATION C8) |
+
+Uncertainty: 95 % CIs on test3 come from a **family-cluster bootstrap** (10,000 resamples of the 18 test families, seed 0). Per-family results are always reported.
+
+### Gates (evaluated once, on test3)
+
+| Gate | Condition | Decides |
+|---|---|---|
+| G1 | CSVE(B) ≤ 0.5 × CSVE(A) **and** the bootstrap CI upper bound of CSVE(B) − CSVE(A) is < 0 | B beats A on unseen families |
+| G2 | Negative items with FP: B ≤ 1.5 × A. Collateral masking: B ≤ 2 × A and ≤ 5 % | Precision/utility cost acceptable |
+| G3 | Generalisation gap of B ≤ 2.0 | Not overfit to dev3 |
+| G4 | For every held-out adversarial kind: CSVE(B) ≤ CSVE(A) + 2 pp | No new evasion weakness |
+| G5 | p95 detection latency of B ≤ 250 ms (N-1) | Performance |
+| G6 (L3 verdict) | **L3 generalises** iff (a) \|CSVE(C) − CSVE(B)\| ≤ 2 pp on test3 (recall does not depend on vocabulary) **and** (b) ΔFP(test3) ≥ 0.5 × ΔFP(dev3) > 0 (its precision benefit transfers). If (a) fails, PD-13's central claim is **refuted** even if G1 passes. If (b) fails with ΔFP(dev3) > 0, L3 is vocabulary overfitting | Whether L3 is worth keeping |
+
+**PD-13 is adopted only if G1–G6 all pass.** Passing them is **not** readiness. Readiness for real HR data still requires every absolute gate in this plan, plus the following added gate, which is stricter and loosens nothing:
+- CSVE-HIGH ≤ 1 % on test3 with bootstrap upper bound ≤ 2 %;
+- character leak ≤ 1 %;
+- E-STREAM-LEAK;
+- E-UTIL;
+- E-DET-R.
