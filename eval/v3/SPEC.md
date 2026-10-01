@@ -107,3 +107,7 @@ v1/v2 adversarial kinds: homoglyph, zero_width, spaced, obfuscated_email, case, 
 ## 10. Sizes
 
 36 families × 75 items = 2,700 items, before adversarial transforms. The assembler assigns families to splits (SEPARATION.md): about 1,350 items per split.
+
+## Amendment 2026-10-01b (before any family module exists)
+
+Each span may carry an optional `"key"`: the field name, column header or label that introduces the value as it appears in the text (for example `"dob"`, `"Date of Birth"`, `"GBDAT"`), or `null` for prose. It is annotation only and does not change gold. It supports the key-novelty strata (EVALUATION_PLAN 2026-10-01). Family authors fill it wherever a key or label exists.
