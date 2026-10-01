@@ -157,6 +157,8 @@ def summarise(fam, tp_r, n_gold, tp_p, n_pred, strata, lat) -> dict:
         "csve": r(tot["csve_docs"], tot["docs"]), "csve_high": r(tot["csve_high_docs"], tot["docs"]),
         "pie": r(tot["pie_docs"], tot["docs"]), "csve_oot": r(tot["oot_exposed_docs"], tot["oot_docs"]),
         "char_leak": r(tot["leaked_chars"], tot["gold_chars"]),
+        "char_leak_family_macro": (sum(f["leaked_chars"] / f["gold_chars"] for f in fam.values() if f["gold_chars"]) /
+                                   max(1, sum(1 for f in fam.values() if f["gold_chars"]))),
         "neg_fp_item_rate": r(tot["neg_fp_items"], tot["neg_items"]),
         "neg_fp_spans_per_1k_chars": r(1000 * tot["neg_fp_spans"], tot["neg_chars"]),
         "collateral_masking": r(tot["collateral_chars"], tot["nongold_chars"]),

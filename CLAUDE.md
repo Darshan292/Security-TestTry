@@ -32,3 +32,8 @@ Gates are pre-registered in [EVALUATION_PLAN.md](EVALUATION_PLAN.md). They may o
 ## Data policy
 
 **Never put real personal data in this repository.** Use synthetic examples only. Verify before committing.
+
+## Corpus v3 (Release 3)
+
+- `eval/data3/*.jsonl.gz` hold dev3build/dev3val/roster (gunzip before use; plain `.jsonl` stays gitignored). test3 lives only in `eval/v3/sealed_v3.tar.enc`.
+- **Never decrypt, list or read the sealed archive or `/home/user/v3-sealed/`** unless running the one-shot test3 evaluation of `EVALUATION_PLAN` amendment 2026-10-01. dev3val is read through `eval.run_v3` only (max 5 logged runs).

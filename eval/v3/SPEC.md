@@ -111,3 +111,17 @@ v1/v2 adversarial kinds: homoglyph, zero_width, spaced, obfuscated_email, case, 
 ## Amendment 2026-10-01b (before any family module exists)
 
 Each span may carry an optional `"key"`: the field name, column header or label that introduces the value as it appears in the text (for example `"dob"`, `"Date of Birth"`, `"GBDAT"`), or `null` for prose. It is annotation only and does not change gold. It supports the key-novelty strata (EVALUATION_PLAN 2026-10-01). Family authors fill it wherever a key or label exists.
+
+## Amendment 2026-10-01c (after generation, before freeze; no item content was read by the orchestrator)
+
+Audit aggregates (`eval/v3/FREEZE.md`) showed that two pre-registered corpus rules were mis-specified. They are corrected here and the residuals disclosed. No metric or gate changes.
+
+1. **§6 cap "no family > 6 % of its split's gold characters" is infeasible.** With 12 dev3build families the mean share is 8.3 %. Replacement: every family contributes exactly 75 documents (CSVE, the primary metric, is per document, so families weigh equally). Character leak is additionally reported **macro-averaged over families** (`char_leak_family_macro`). Actual max/mean family gold-character share: dev3build 1.96, dev3val 1.89, test3 2.19.
+2. **CONTAMINATION C8 "values: 0 overlap" applies to identifiers.**
+   - Identifier overlap with v1/v2 is 0.
+   - Chance collisions of non-identifiers are reported, not removed: test3 has 110 COMPENSATION amounts and 30 DOB strings that also occur in v1/v2.
+   - Full-name collisions with v1/v2 (test3 78 mentions, roster 21 names) are chance collisions of common name pairs. No arm holds v1/v2 names: arm A's roster EDM is built from the v3 roster, and NER is pre-trained. So they are reported, not removed.
+3. **Residual separation defects (disclosed):**
+   - 17 non-roster EMPLOYEE_ID values and 15 non-roster external-name tokens occur in both dev3 and test3.
+   - Shared roster values (employee IDs, e-mails, phones) are by design.
+   - 9 spoken IFSC codes in test3 are gold but intentionally not format-valid (speech transcripts).

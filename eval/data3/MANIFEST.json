@@ -1,0 +1,23 @@
+{
+ "corpus": "v3",
+ "registration_commit": "f2799b5e22a440ecb1aaf3ad93251b8afc1aef99",
+ "catalogue_sha256": "c8697701f5ffd9fb7596f607de496dca275555f6f370d8ecc5f7200ae772e7ea",
+ "seed_hex": "ca4e4437cc265ceb",
+ "files": {
+  "dev3build.jsonl": "c3a98303d9fba8ed27812e9777a819061e713b5229318d6936e0fd0be3854aaa",
+  "dev3val.jsonl": "91b6000d8d645cd0c60375256048977211cbd2cd0d035a9a7b4dc31e41ed43ef",
+  "roster.jsonl": "a0370eab745ddae8c39ef0c4adb9792c58314d5ecf300d2022d9a8d34190fffc",
+  "test3.jsonl": "9c73fee114d08d65300267a0e2d0af2388deaf3c73e4ff54b679afc286f32391",
+  "assignment.json": "a6e05d19f85a9d4e98b2b794cc98e734907d7e8147b29c5c019da9fd5933f083"
+ },
+ "items": {
+  "dev3build": 900,
+  "dev3val": 450,
+  "test3": 1350
+ },
+ "families": {
+  "dev3build": 12,
+  "dev3val": 6,
+  "test3": 18
+ }
+}

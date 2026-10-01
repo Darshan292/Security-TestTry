@@ -30,4 +30,21 @@ R2 relied on instructions alone for T-B: test2 templates sat in the repo next to
 
 ## Audit results
 
-(Filled in at freeze time.)
+### Deviations recorded during authoring
+
+- **D-1 (2026-10-01 09:19 UTC, C6 partially breached).** After the authoring agents were interrupted by an API usage limit, the orchestrator ran `ls -la families/` to check progress, which printed the **file names** of the 32 family modules written so far into its context. It did not see their contents, the catalogue text, or the dev/test assignment, which had not been computed yet. Consequence: the orchestrator knows the family names (which hint at representations). Mitigations:
+  - no family name or representation is passed to the PD-13 implementer;
+  - the orchestrator does not edit L3 dictionaries or L1 parsers itself;
+  - review comments to the implementer are limited to correctness on dev3 items, and the review log is committed.
+  - From this point, progress checks use counts only.
+- **D-2 (observation).** PD13_DESIGN.md (`f56a3f9`) names Indian statutory forms as an allowed L3 dictionary source. It was committed before any family existed. The catalogue author, working blind, independently chose some statutory-file families. If any of those land in test3, B's L3 may benefit from a standards source that the designer and the corpus author both chose from shared priors. The test3 report must show L3 decisions by dictionary provenance and by key-novelty stratum, so this effect is visible.
+
+- **D-1 widened at freeze.** The assembler publishes the dev family ids by design. Combined with D-1, the orchestrator can infer **the names of 14 of the 18 test families** by elimination. It has still not read any test family's catalogue entry, code or items. The mitigations in D-1 apply unchanged, and the implementer's prompt contains no family names other than the published dev ids.
+
+### Audit results at freeze
+See `eval/v3/FREEZE.md`:
+- 0 forbidden-path reads by any author (one author's scratchpad was moved unread into the sealed directory);
+- stdlib-only generators;
+- 0.08 % 8-gram overlap with v1/v2;
+- 83 % of field keys unseen in v1/v2;
+- 0 identifier collisions with v1/v2.

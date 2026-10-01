@@ -1,0 +1,24 @@
+{
+ "dev3build": [
+  "c_campus_drive_deck_text",
+  "c_exit_clearance_form_pdf",
+  "c_raw_mime_training_sponsorship",
+  "c_security_guard_police_verification_ocr",
+  "i_grpc_textproto_payout_debug",
+  "i_mongosh_benefits_shell",
+  "i_psql_result_grid_ticket",
+  "i_vba_payroll_macro_module",
+  "s_epfo_employer_upload_txt",
+  "s_gratuity_actuarial_census",
+  "s_iso20022_pain001_salary_batch",
+  "s_tally_xml_voucher_export"
+ ],
+ "dev3val": [
+  "c_form12bb_pdf_text",
+  "c_kyc_document_ocr_bundle",
+  "i_abap_short_dump_st22",
+  "i_bank_sftp_push_script",
+  "s_employee_transport_trip_manifest",
+  "s_esic_monthly_contribution_sheet"
+ ]
+}
