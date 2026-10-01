@@ -1,0 +1,246 @@
+{
+ "arm": "B",
+ "split": "dev3val",
+ "clean": {
+  "docs": 450,
+  "csve": 0.23333333333333334,
+  "csve_high": 0.09111111111111111,
+  "pie": 0.0,
+  "csve_oot": 0.5986842105263158,
+  "char_leak": 0.061748824246646926,
+  "char_leak_family_macro": 0.08612402841821597,
+  "neg_fp_item_rate": 0.5444444444444444,
+  "neg_fp_spans_per_1k_chars": 2.0596415871562863,
+  "collateral_masking": 0.03937759240305663,
+  "positive_docs": 360,
+  "per_type": {
+   "AADHAAR": {
+    "n_gold": 51,
+    "recall": 0.9019607843137255,
+    "recall_ci95": [
+     0.7902151004554693,
+     0.957392555046923
+    ],
+    "n_pred": 46,
+    "precision": 1.0
+   },
+   "BANK_ACCOUNT": {
+    "n_gold": 37,
+    "recall": 0.972972972972973,
+    "recall_ci95": [
+     0.8617562156243666,
+     0.9952131489450925
+    ],
+    "n_pred": 175,
+    "precision": 0.2057142857142857
+   },
+   "COMPENSATION": {
+    "n_gold": 310,
+    "recall": 0.9935483870967742,
+    "recall_ci95": [
+     0.9767851618062455,
+     0.998228985457852
+    ],
+    "n_pred": 588,
+    "precision": 0.5238095238095238
+   },
+   "DATE_OF_BIRTH": {
+    "n_gold": 150,
+    "recall": 0.9133333333333333,
+    "recall_ci95": [
+     0.8573705468757647,
+     0.9486533114304411
+    ],
+    "n_pred": 326,
+    "precision": 0.42024539877300615
+   },
+   "EMAIL": {
+    "n_gold": 63,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9425268096514744,
+     0.9999999999999998
+    ],
+    "n_pred": 63,
+    "precision": 1.0
+   },
+   "EMPLOYEE_ID": {
+    "n_gold": 238,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9841152225258184,
+     0.9999999999999998
+    ],
+    "n_pred": 244,
+    "precision": 0.9754098360655737
+   },
+   "IFSC": {
+    "n_gold": 37,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9059390425448562,
+     1.0000000000000002
+    ],
+    "n_pred": 39,
+    "precision": 0.9487179487179487
+   },
+   "PAN": {
+    "n_gold": 139,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9731058739190823,
+     1.0
+    ],
+    "n_pred": 139,
+    "precision": 1.0
+   },
+   "PERSON": {
+    "n_gold": 1404,
+    "recall": 0.9451566951566952,
+    "recall_ci95": [
+     0.931987077014388,
+     0.9558969008422118
+    ],
+    "n_pred": 1793,
+    "precision": 0.7428890128276632
+   },
+   "PHONE": {
+    "n_gold": 256,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9852156082782743,
+     1.0
+    ],
+    "n_pred": 535,
+    "precision": 0.4785046728971963
+   },
+   "SECRET": {
+    "n_gold": 75,
+    "recall": 0.52,
+    "recall_ci95": [
+     0.4087401957316927,
+     0.6293107824321195
+    ],
+    "n_pred": 143,
+    "precision": 0.2727272727272727
+   }
+  },
+  "key_strata": {
+   "unseen": {
+    "exposed": 108,
+    "n": 1668,
+    "rate": 0.06474820143884892
+   },
+   "none": {
+    "exposed": 21,
+    "n": 275,
+    "rate": 0.07636363636363637
+   },
+   "seen": {
+    "exposed": 6,
+    "n": 817,
+    "rate": 0.0073439412484700125
+   }
+  },
+  "latency_ms": {
+   "p50": 38.06449300054737,
+   "p95": 93.9963535996867,
+   "p99": 109.69607648955389,
+   "max": 4076.727034999749
+  },
+  "per_family": {
+   "c_form12bb_pdf_text": {
+    "docs": 75.0,
+    "gold_chars": 4181.0,
+    "leaked_chars": 169.0,
+    "csve_docs": 9.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 52423.0,
+    "collateral_chars": 1467.0,
+    "neg_items": 15.0,
+    "neg_chars": 13279.0,
+    "neg_fp_items": 15.0,
+    "neg_fp_spans": 42.0
+   },
+   "c_kyc_document_ocr_bundle": {
+    "docs": 75.0,
+    "gold_chars": 4068.0,
+    "leaked_chars": 310.0,
+    "csve_docs": 22.0,
+    "csve_high_docs": 13.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 20345.0,
+    "collateral_chars": 947.0,
+    "oot_docs": 35.0,
+    "oot_exposed_docs": 31.0,
+    "neg_items": 15.0,
+    "neg_chars": 3733.0,
+    "neg_fp_items": 7.0,
+    "neg_fp_spans": 18.0
+   },
+   "i_abap_short_dump_st22": {
+    "docs": 75.0,
+    "gold_chars": 3302.0,
+    "leaked_chars": 771.0,
+    "csve_docs": 43.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 114881.0,
+    "collateral_chars": 2437.0,
+    "oot_docs": 1.0,
+    "oot_exposed_docs": 0.0,
+    "neg_items": 15.0,
+    "neg_chars": 28641.0,
+    "neg_fp_items": 11.0,
+    "neg_fp_spans": 22.0
+   },
+   "i_bank_sftp_push_script": {
+    "docs": 75.0,
+    "gold_chars": 5161.0,
+    "leaked_chars": 838.0,
+    "csve_docs": 28.0,
+    "csve_high_docs": 27.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 32261.0,
+    "collateral_chars": 857.0,
+    "neg_items": 15.0,
+    "neg_chars": 5075.0,
+    "neg_fp_items": 11.0,
+    "neg_fp_spans": 20.0
+   },
+   "s_employee_transport_trip_manifest": {
+    "docs": 75.0,
+    "gold_chars": 9588.0,
+    "leaked_chars": 29.0,
+    "csve_docs": 2.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "oot_docs": 60.0,
+    "oot_exposed_docs": 60.0,
+    "nongold_chars": 22802.0,
+    "collateral_chars": 3658.0,
+    "neg_items": 15.0,
+    "neg_chars": 3245.0,
+    "neg_fp_items": 2.0,
+    "neg_fp_spans": 2.0
+   },
+   "s_esic_monthly_contribution_sheet": {
+    "docs": 75.0,
+    "gold_chars": 8146.0,
+    "leaked_chars": 10.0,
+    "csve_docs": 1.0,
+    "csve_high_docs": 1.0,
+    "pie_docs": 0.0,
+    "oot_docs": 56.0,
+    "oot_exposed_docs": 0.0,
+    "nongold_chars": 17182.0,
+    "collateral_chars": 868.0,
+    "neg_items": 15.0,
+    "neg_chars": 2833.0,
+    "neg_fp_items": 3.0,
+    "neg_fp_spans": 13.0
+   }
+  }
+ }
+}
