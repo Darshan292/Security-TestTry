@@ -1,0 +1,5119 @@
+{
+ "arm": "A",
+ "split": "test3",
+ "clean": {
+  "docs": 1350,
+  "csve": 0.5274074074074074,
+  "csve_high": 0.3118518518518518,
+  "pie": 0.0,
+  "csve_oot": 0.8913857677902621,
+  "char_leak": 0.24101980445264026,
+  "char_leak_family_macro": 0.26987961867228205,
+  "neg_fp_item_rate": 0.3888888888888889,
+  "neg_fp_spans_per_1k_chars": 2.2710923094676314,
+  "collateral_masking": 0.020455284787068415,
+  "positive_docs": 1080,
+  "per_type": {
+   "AADHAAR": {
+    "n_gold": 71,
+    "recall": 0.9577464788732394,
+    "recall_ci95": [
+     0.8829739389031531,
+     0.9855270017501733
+    ],
+    "n_pred": 68,
+    "precision": 1.0
+   },
+   "BANK_ACCOUNT": {
+    "n_gold": 465,
+    "recall": 0.2752688172043011,
+    "recall_ci95": [
+     0.2366377295977835,
+     0.3175827150044019
+    ],
+    "n_pred": 152,
+    "precision": 0.8421052631578947
+   },
+   "CARD": {
+    "n_gold": 0,
+    "recall": null,
+    "recall_ci95": [
+     0.0,
+     1.0
+    ],
+    "n_pred": 52,
+    "precision": 0.0
+   },
+   "COMPENSATION": {
+    "n_gold": 2206,
+    "recall": 0.2157751586582049,
+    "recall_ci95": [
+     0.19911086173772977,
+     0.2334276514299109
+    ],
+    "n_pred": 801,
+    "precision": 0.5942571785268415
+   },
+   "DATE_OF_BIRTH": {
+    "n_gold": 771,
+    "recall": 0.4059662775616083,
+    "recall_ci95": [
+     0.3718513249001578,
+     0.4410136529224062
+    ],
+    "n_pred": 319,
+    "precision": 0.9811912225705329
+   },
+   "EMAIL": {
+    "n_gold": 739,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9948285071810734,
+     1.0
+    ],
+    "n_pred": 739,
+    "precision": 1.0
+   },
+   "EMPLOYEE_ID": {
+    "n_gold": 1267,
+    "recall": 0.941594317284925,
+    "recall_ci95": [
+     0.9272970433651538,
+     0.9532218190957539
+    ],
+    "n_pred": 1240,
+    "precision": 0.9620967741935483
+   },
+   "IFSC": {
+    "n_gold": 345,
+    "recall": 0.808695652173913,
+    "recall_ci95": [
+     0.763880468232359,
+     0.8467118464457069
+    ],
+    "n_pred": 302,
+    "precision": 0.9238410596026491
+   },
+   "PAN": {
+    "n_gold": 294,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9871018689128719,
+     1.0
+    ],
+    "n_pred": 294,
+    "precision": 1.0
+   },
+   "PERSON": {
+    "n_gold": 6231,
+    "recall": 0.7904028245867437,
+    "recall_ci95": [
+     0.7801190767079065,
+     0.8003287088461002
+    ],
+    "n_pred": 9279,
+    "precision": 0.5559866364910012
+   },
+   "PHONE": {
+    "n_gold": 854,
+    "recall": 0.9379391100702577,
+    "recall_ci95": [
+     0.919713846197118,
+     0.9522420020620479
+    ],
+    "n_pred": 902,
+    "precision": 0.8880266075388027
+   },
+   "SECRET": {
+    "n_gold": 348,
+    "recall": 0.8879310344827587,
+    "recall_ci95": [
+     0.8504622705540326,
+     0.9169285098426005
+    ],
+    "n_pred": 485,
+    "precision": 0.6371134020618556
+   },
+   "UPI_ID": {
+    "n_gold": 66,
+    "recall": 0.9545454545454546,
+    "recall_ci95": [
+     0.8746648398478928,
+     0.9844220081051898
+    ],
+    "n_pred": 63,
+    "precision": 1.0
+   }
+  },
+  "key_strata": {
+   "none": {
+    "exposed": 1178,
+    "n": 4304,
+    "rate": 0.2736988847583643
+   },
+   "unseen": {
+    "exposed": 1896,
+    "n": 4669,
+    "rate": 0.40608267294923966
+   },
+   "seen": {
+    "exposed": 970,
+    "n": 4684,
+    "rate": 0.20708795900939367
+   }
+  },
+  "latency_ms": {
+   "p50": 52.44675099996243,
+   "p95": 226.30407935001244,
+   "p99": 591.3275597499995,
+   "max": 11561.668313000042
+  },
+  "per_family": {
+   "c_bilingual_appointment_letter": {
+    "docs": 75.0,
+    "gold_chars": 6054.0,
+    "leaked_chars": 3694.0,
+    "csve_docs": 60.0,
+    "csve_high_docs": 44.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 34359.0,
+    "collateral_chars": 240.0,
+    "oot_docs": 6.0,
+    "oot_exposed_docs": 6.0,
+    "neg_items": 15.0,
+    "neg_chars": 5286.0,
+    "neg_fp_items": 3.0,
+    "neg_fp_spans": 3.0
+   },
+   "c_domestic_enquiry_proceedings": {
+    "docs": 75.0,
+    "gold_chars": 3818.0,
+    "leaked_chars": 564.0,
+    "csve_docs": 24.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "oot_docs": 38.0,
+    "oot_exposed_docs": 38.0,
+    "nongold_chars": 41665.0,
+    "collateral_chars": 1166.0,
+    "neg_items": 15.0,
+    "neg_chars": 4601.0,
+    "neg_fp_items": 9.0,
+    "neg_fp_spans": 15.0
+   },
+   "c_epf_nomination_form_ocr": {
+    "docs": 75.0,
+    "gold_chars": 6969.0,
+    "leaked_chars": 1977.0,
+    "csve_docs": 35.0,
+    "csve_high_docs": 10.0,
+    "pie_docs": 0.0,
+    "oot_docs": 43.0,
+    "oot_exposed_docs": 19.0,
+    "nongold_chars": 68937.0,
+    "collateral_chars": 3873.0,
+    "neg_items": 15.0,
+    "neg_chars": 6449.0,
+    "neg_fp_items": 0.0,
+    "neg_fp_spans": 0.0
+   },
+   "c_helpline_call_asr_codemixed": {
+    "docs": 75.0,
+    "gold_chars": 7126.0,
+    "leaked_chars": 4065.0,
+    "csve_docs": 56.0,
+    "csve_high_docs": 24.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 51613.0,
+    "collateral_chars": 804.0,
+    "oot_docs": 36.0,
+    "oot_exposed_docs": 36.0,
+    "neg_items": 15.0,
+    "neg_chars": 7030.0,
+    "neg_fp_items": 10.0,
+    "neg_fp_spans": 14.0
+   },
+   "c_review_meeting_vtt_transcript": {
+    "docs": 75.0,
+    "gold_chars": 17380.0,
+    "leaked_chars": 919.0,
+    "csve_docs": 28.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 109425.0,
+    "collateral_chars": 16.0,
+    "neg_items": 15.0,
+    "neg_chars": 17166.0,
+    "neg_fp_items": 0.0,
+    "neg_fp_spans": 0.0
+   },
+   "c_voicemail_transcription_notice": {
+    "docs": 75.0,
+    "gold_chars": 6001.0,
+    "leaked_chars": 2648.0,
+    "csve_docs": 48.0,
+    "csve_high_docs": 15.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 25467.0,
+    "collateral_chars": 529.0,
+    "neg_items": 15.0,
+    "neg_chars": 4777.0,
+    "neg_fp_items": 6.0,
+    "neg_fp_spans": 9.0
+   },
+   "i_har_capture_payroll_portal": {
+    "docs": 75.0,
+    "gold_chars": 26379.0,
+    "leaked_chars": 1099.0,
+    "csve_docs": 28.0,
+    "csve_high_docs": 22.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 374601.0,
+    "collateral_chars": 17189.0,
+    "oot_docs": 9.0,
+    "oot_exposed_docs": 9.0,
+    "neg_items": 15.0,
+    "neg_chars": 177792.0,
+    "neg_fp_items": 15.0,
+    "neg_fp_spans": 649.0
+   },
+   "i_jupyter_attrition_notebook": {
+    "docs": 75.0,
+    "gold_chars": 4639.0,
+    "leaked_chars": 1663.0,
+    "csve_docs": 44.0,
+    "csve_high_docs": 36.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 135664.0,
+    "collateral_chars": 2376.0,
+    "neg_items": 15.0,
+    "neg_chars": 38771.0,
+    "neg_fp_items": 13.0,
+    "neg_fp_spans": 64.0
+   },
+   "i_logcat_ess_attendance_app": {
+    "docs": 75.0,
+    "gold_chars": 12322.0,
+    "leaked_chars": 0.0,
+    "csve_docs": 0.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 151880.0,
+    "collateral_chars": 1654.0,
+    "neg_items": 15.0,
+    "neg_chars": 16660.0,
+    "neg_fp_items": 8.0,
+    "neg_fp_spans": 11.0
+   },
+   "i_openapi_spec_with_examples": {
+    "docs": 75.0,
+    "gold_chars": 6424.0,
+    "leaked_chars": 460.0,
+    "csve_docs": 26.0,
+    "csve_high_docs": 26.0,
+    "pie_docs": 0.0,
+    "oot_docs": 34.0,
+    "oot_exposed_docs": 31.0,
+    "nongold_chars": 138472.0,
+    "collateral_chars": 1786.0,
+    "neg_items": 15.0,
+    "neg_chars": 52516.0,
+    "neg_fp_items": 15.0,
+    "neg_fp_spans": 85.0
+   },
+   "i_powershell_offboarding_transcript": {
+    "docs": 75.0,
+    "gold_chars": 8862.0,
+    "leaked_chars": 259.0,
+    "csve_docs": 12.0,
+    "csve_high_docs": 9.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 84401.0,
+    "collateral_chars": 521.0,
+    "neg_items": 15.0,
+    "neg_chars": 14825.0,
+    "neg_fp_items": 2.0,
+    "neg_fp_spans": 4.0
+   },
+   "i_scim_provisioning_exchange": {
+    "docs": 75.0,
+    "gold_chars": 14700.0,
+    "leaked_chars": 295.0,
+    "csve_docs": 12.0,
+    "csve_high_docs": 4.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 86462.0,
+    "collateral_chars": 12.0,
+    "neg_items": 15.0,
+    "neg_chars": 10042.0,
+    "neg_fp_items": 2.0,
+    "neg_fp_spans": 2.0
+   },
+   "s_etds_24q_caret_return": {
+    "docs": 75.0,
+    "gold_chars": 6264.0,
+    "leaked_chars": 2747.0,
+    "csve_docs": 58.0,
+    "csve_high_docs": 47.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 25741.0,
+    "collateral_chars": 245.0,
+    "neg_items": 15.0,
+    "neg_chars": 3505.0,
+    "neg_fp_items": 1.0,
+    "neg_fp_spans": 1.0
+   },
+   "s_ics_hr_calendar_feed": {
+    "docs": 75.0,
+    "gold_chars": 10144.0,
+    "leaked_chars": 2149.0,
+    "csve_docs": 47.0,
+    "csve_high_docs": 31.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 63644.0,
+    "collateral_chars": 446.0,
+    "neg_items": 15.0,
+    "neg_chars": 13046.0,
+    "neg_fp_items": 6.0,
+    "neg_fp_spans": 11.0
+   },
+   "s_jobportal_resume_export_html_xls": {
+    "docs": 75.0,
+    "gold_chars": 23775.0,
+    "leaked_chars": 5855.0,
+    "csve_docs": 59.0,
+    "csve_high_docs": 43.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 105231.0,
+    "collateral_chars": 670.0,
+    "neg_items": 15.0,
+    "neg_chars": 12982.0,
+    "neg_fp_items": 5.0,
+    "neg_fp_spans": 8.0
+   },
+   "s_lineprinter_payroll_register": {
+    "docs": 75.0,
+    "gold_chars": 23763.0,
+    "leaked_chars": 12769.0,
+    "csve_docs": 60.0,
+    "csve_high_docs": 51.0,
+    "pie_docs": 0.0,
+    "oot_docs": 41.0,
+    "oot_exposed_docs": 41.0,
+    "nongold_chars": 93512.0,
+    "collateral_chars": 1019.0,
+    "neg_items": 15.0,
+    "neg_chars": 9395.0,
+    "neg_fp_items": 3.0,
+    "neg_fp_spans": 3.0
+   },
+   "s_mt940_salary_reconciliation": {
+    "docs": 75.0,
+    "gold_chars": 10745.0,
+    "leaked_chars": 6203.0,
+    "csve_docs": 59.0,
+    "csve_high_docs": 47.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 39186.0,
+    "collateral_chars": 36.0,
+    "neg_items": 15.0,
+    "neg_chars": 7359.0,
+    "neg_fp_items": 0.0,
+    "neg_fp_spans": 0.0
+   },
+   "s_tpa_claims_mis_export": {
+    "docs": 75.0,
+    "gold_chars": 12871.0,
+    "leaked_chars": 2823.0,
+    "csve_docs": 56.0,
+    "csve_high_docs": 12.0,
+    "pie_docs": 0.0,
+    "oot_docs": 60.0,
+    "oot_exposed_docs": 58.0,
+    "nongold_chars": 35862.0,
+    "collateral_chars": 1499.0,
+    "neg_items": 15.0,
+    "neg_chars": 5091.0,
+    "neg_fp_items": 7.0,
+    "neg_fp_spans": 46.0
+   }
+  }
+ },
+ "adversarial": {
+  "homoglyph_swap": {
+   "cls": "known",
+   "docs": 1072,
+   "csve": 0.6828358208955224,
+   "csve_high": 0.3871268656716418,
+   "char_leak": 0.24634096957075088,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 6054.0,
+     "leaked_chars": 3694.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 58.0,
+     "gold_chars": 3729.0,
+     "leaked_chars": 472.0,
+     "csve_docs": 22.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0,
+     "nongold_chars": 40210.0,
+     "collateral_chars": 1124.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 54.0,
+     "gold_chars": 6254.0,
+     "leaked_chars": 1535.0,
+     "csve_docs": 35.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "oot_docs": 37.0,
+     "oot_exposed_docs": 13.0,
+     "nongold_chars": 62612.0,
+     "collateral_chars": 3633.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7126.0,
+     "leaked_chars": 4113.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 804.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 17380.0,
+     "leaked_chars": 1586.0,
+     "csve_docs": 43.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6001.0,
+     "leaked_chars": 2810.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 529.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 26379.0,
+     "leaked_chars": 1099.0,
+     "csve_docs": 28.0,
+     "csve_high_docs": 22.0,
+     "pie_docs": 7.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17183.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 60.0,
+     "gold_chars": 4639.0,
+     "leaked_chars": 1796.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 135664.0,
+     "collateral_chars": 2376.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12322.0,
+     "leaked_chars": 0.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6424.0,
+     "leaked_chars": 463.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1786.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8862.0,
+     "leaked_chars": 259.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 14700.0,
+     "leaked_chars": 439.0,
+     "csve_docs": 15.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 6264.0,
+     "leaked_chars": 2747.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 245.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 10144.0,
+     "leaked_chars": 2419.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 446.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 23775.0,
+     "leaked_chars": 5855.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 23763.0,
+     "leaked_chars": 12778.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 1019.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 10745.0,
+     "leaked_chars": 6203.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 36.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 12871.0,
+     "leaked_chars": 2831.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1499.0
+    }
+   }
+  },
+  "zw_insert": {
+   "cls": "known",
+   "docs": 1080,
+   "csve": 0.687962962962963,
+   "csve_high": 0.3888888888888889,
+   "char_leak": 0.25852006231137864,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 7125.0,
+     "leaked_chars": 4364.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 4568.0,
+     "leaked_chars": 671.0,
+     "csve_docs": 24.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 1169.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 8083.0,
+     "leaked_chars": 2478.0,
+     "csve_docs": 41.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3873.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 8019.0,
+     "leaked_chars": 4459.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 23.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 804.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 20450.0,
+     "leaked_chars": 2121.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 40.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6746.0,
+     "leaked_chars": 3068.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 532.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 27204.0,
+     "leaked_chars": 1153.0,
+     "csve_docs": 28.0,
+     "csve_high_docs": 22.0,
+     "pie_docs": 6.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17183.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 60.0,
+     "gold_chars": 5380.0,
+     "leaked_chars": 2141.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 135664.0,
+     "collateral_chars": 2376.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12859.0,
+     "leaked_chars": 0.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 7230.0,
+     "leaked_chars": 537.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1742.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 10171.0,
+     "leaked_chars": 307.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 15988.0,
+     "leaked_chars": 528.0,
+     "csve_docs": 17.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 15.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 7378.0,
+     "leaked_chars": 3303.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 245.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 11498.0,
+     "leaked_chars": 2858.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 446.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 27021.0,
+     "leaked_chars": 6807.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 28476.0,
+     "leaked_chars": 15651.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 1034.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 12404.0,
+     "leaked_chars": 7138.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 36.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 14991.0,
+     "leaked_chars": 3321.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1502.0
+    }
+   }
+  },
+  "pdf_glyph_gaps": {
+   "cls": "known",
+   "docs": 1080,
+   "csve": 0.9685185185185186,
+   "csve_high": 0.575,
+   "char_leak": 0.8035728019146822,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 9008.0,
+     "leaked_chars": 8144.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 266.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 5823.0,
+     "leaked_chars": 4130.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 1003.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 10717.0,
+     "leaked_chars": 8263.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3842.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 10275.0,
+     "leaked_chars": 8701.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 45.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 883.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 26524.0,
+     "leaked_chars": 20519.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 9160.0,
+     "leaked_chars": 7320.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 21.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 470.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 42628.0,
+     "leaked_chars": 37086.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 57.0,
+     "pie_docs": 32.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17097.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 8.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 60.0,
+     "gold_chars": 7166.0,
+     "leaked_chars": 6446.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 1.0,
+     "nongold_chars": 135664.0,
+     "collateral_chars": 2366.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 20003.0,
+     "leaked_chars": 14485.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 6.0,
+     "pie_docs": 39.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 10015.0,
+     "leaked_chars": 5209.0,
+     "csve_docs": 46.0,
+     "csve_high_docs": 34.0,
+     "pie_docs": 6.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 30.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1742.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 13850.0,
+     "leaked_chars": 10906.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 23513.0,
+     "leaked_chars": 17174.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 47.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 9730.0,
+     "leaked_chars": 7714.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 59.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 225.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 15647.0,
+     "leaked_chars": 14011.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 561.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 37053.0,
+     "leaked_chars": 29558.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 58.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 674.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 37134.0,
+     "leaked_chars": 32653.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 1.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 984.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 16874.0,
+     "leaked_chars": 14556.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 4.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 19947.0,
+     "leaked_chars": 14340.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1440.0
+    }
+   }
+  },
+  "scan_glyph_errors": {
+   "cls": "known",
+   "docs": 1078,
+   "csve": 0.9369202226345084,
+   "csve_high": 0.575139146567718,
+   "char_leak": 0.5480306905370844,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 5655.0,
+     "leaked_chars": 5034.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34750.0,
+     "collateral_chars": 273.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 59.0,
+     "gold_chars": 3588.0,
+     "leaked_chars": 1916.0,
+     "csve_docs": 52.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 41397.0,
+     "collateral_chars": 1192.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 6302.0,
+     "leaked_chars": 5268.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 42.0,
+     "oot_exposed_docs": 42.0,
+     "nongold_chars": 69596.0,
+     "collateral_chars": 3891.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 6759.0,
+     "leaked_chars": 5483.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 46.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 52062.0,
+     "collateral_chars": 902.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 34.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 16343.0,
+     "leaked_chars": 8208.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110652.0,
+     "collateral_chars": 380.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 5701.0,
+     "leaked_chars": 4415.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 23.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25824.0,
+     "collateral_chars": 545.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 24822.0,
+     "leaked_chars": 2336.0,
+     "csve_docs": 52.0,
+     "csve_high_docs": 46.0,
+     "pie_docs": 5.0,
+     "nongold_chars": 376421.0,
+     "collateral_chars": 18858.0,
+     "oot_docs": 8.0,
+     "oot_exposed_docs": 8.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 59.0,
+     "gold_chars": 4361.0,
+     "leaked_chars": 3021.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 41.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 133833.0,
+     "collateral_chars": 2381.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 11816.0,
+     "leaked_chars": 1431.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 152488.0,
+     "collateral_chars": 2153.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6043.0,
+     "leaked_chars": 2302.0,
+     "csve_docs": 41.0,
+     "csve_high_docs": 35.0,
+     "pie_docs": 0.0,
+     "oot_docs": 33.0,
+     "oot_exposed_docs": 33.0,
+     "nongold_chars": 138909.0,
+     "collateral_chars": 1952.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8363.0,
+     "leaked_chars": 4496.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84954.0,
+     "collateral_chars": 733.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 13941.0,
+     "leaked_chars": 3362.0,
+     "csve_docs": 53.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 87352.0,
+     "collateral_chars": 571.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 5858.0,
+     "leaked_chars": 5015.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 26152.0,
+     "collateral_chars": 244.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 9256.0,
+     "leaked_chars": 5103.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 30.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 64578.0,
+     "collateral_chars": 867.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 22382.0,
+     "leaked_chars": 14455.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 59.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 106807.0,
+     "collateral_chars": 1207.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 22210.0,
+     "leaked_chars": 19791.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 95125.0,
+     "collateral_chars": 1064.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 9874.0,
+     "leaked_chars": 8215.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 50.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 40028.0,
+     "collateral_chars": 182.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 12226.0,
+     "leaked_chars": 7289.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 60.0,
+     "nongold_chars": 36822.0,
+     "collateral_chars": 1714.0
+    }
+   }
+  },
+  "markup_entities": {
+   "cls": "known",
+   "docs": 1080,
+   "csve": 0.9879629629629629,
+   "csve_high": 0.6675925925925926,
+   "char_leak": 0.9605216234592352,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 24019.0,
+     "leaked_chars": 23922.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 266.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 14730.0,
+     "leaked_chars": 14538.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 1020.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 27091.0,
+     "leaked_chars": 27010.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 52.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 42.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3715.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 25944.0,
+     "leaked_chars": 25840.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 52.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 721.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 68565.0,
+     "leaked_chars": 68012.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 21985.0,
+     "leaked_chars": 21928.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 33.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 515.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 106323.0,
+     "leaked_chars": 92019.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 53.0,
+     "pie_docs": 16.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17244.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 60.0,
+     "gold_chars": 18484.0,
+     "leaked_chars": 18051.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 135664.0,
+     "collateral_chars": 2366.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 46405.0,
+     "leaked_chars": 40402.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 18.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 24439.0,
+     "leaked_chars": 17275.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 40.0,
+     "pie_docs": 6.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 34.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1739.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 35298.0,
+     "leaked_chars": 33769.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 58512.0,
+     "leaked_chars": 57950.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 42.0,
+     "pie_docs": 21.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 90.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 24095.0,
+     "leaked_chars": 24052.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 45.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 39267.0,
+     "leaked_chars": 39132.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 593.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 94287.0,
+     "leaked_chars": 94045.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 90432.0,
+     "leaked_chars": 90175.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 635.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 41020.0,
+     "leaked_chars": 40986.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 50.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 18.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 49497.0,
+     "leaked_chars": 49294.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 60.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1384.0
+    }
+   }
+  },
+  "terminal_wrap": {
+   "cls": "known",
+   "docs": 1032,
+   "csve": 0.7965116279069767,
+   "csve_high": 0.4806201550387597,
+   "char_leak": 0.47424908407038635,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 58.0,
+     "gold_chars": 5838.0,
+     "leaked_chars": 3896.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 33739.0,
+     "collateral_chars": 134.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 3864.0,
+     "leaked_chars": 816.0,
+     "csve_docs": 31.0,
+     "csve_high_docs": 2.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 42260.0,
+     "collateral_chars": 1005.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 7037.0,
+     "leaked_chars": 2344.0,
+     "csve_docs": 40.0,
+     "csve_high_docs": 13.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 21.0,
+     "nongold_chars": 69739.0,
+     "collateral_chars": 3800.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7260.0,
+     "leaked_chars": 4424.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 28.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 52229.0,
+     "collateral_chars": 855.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 59.0,
+     "gold_chars": 17248.0,
+     "leaked_chars": 1439.0,
+     "csve_docs": 41.0,
+     "csve_high_docs": 1.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 108122.0,
+     "collateral_chars": 33.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6068.0,
+     "leaked_chars": 2843.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 16.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25826.0,
+     "collateral_chars": 533.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 26974.0,
+     "leaked_chars": 23372.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 58.0,
+     "pie_docs": 30.0,
+     "nongold_chars": 378573.0,
+     "collateral_chars": 11997.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 59.0,
+     "gold_chars": 4646.0,
+     "leaked_chars": 2303.0,
+     "csve_docs": 47.0,
+     "csve_high_docs": 38.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 135755.0,
+     "collateral_chars": 157.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12591.0,
+     "leaked_chars": 9041.0,
+     "csve_docs": 22.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 29.0,
+     "nongold_chars": 153597.0,
+     "collateral_chars": 1472.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6541.0,
+     "leaked_chars": 1748.0,
+     "csve_docs": 42.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 5.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138948.0,
+     "collateral_chars": 1306.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8990.0,
+     "leaked_chars": 1668.0,
+     "csve_docs": 38.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 85228.0,
+     "collateral_chars": 427.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 59.0,
+     "gold_chars": 14881.0,
+     "leaked_chars": 5397.0,
+     "csve_docs": 33.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 25.0,
+     "nongold_chars": 86705.0,
+     "collateral_chars": 169.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 54.0,
+     "gold_chars": 6008.0,
+     "leaked_chars": 2921.0,
+     "csve_docs": 51.0,
+     "csve_high_docs": 41.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 23426.0,
+     "collateral_chars": 166.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 34.0,
+     "gold_chars": 6891.0,
+     "leaked_chars": 1454.0,
+     "csve_docs": 27.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34211.0,
+     "collateral_chars": 87.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 24010.0,
+     "leaked_chars": 7643.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 46.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 106300.0,
+     "collateral_chars": 723.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 24092.0,
+     "leaked_chars": 14824.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 94902.0,
+     "collateral_chars": 1220.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 49.0,
+     "gold_chars": 8909.0,
+     "leaked_chars": 5388.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 40.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 32708.0,
+     "collateral_chars": 175.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 13135.0,
+     "leaked_chars": 5692.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 30.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 36480.0,
+     "collateral_chars": 1523.0
+    }
+   }
+  },
+  "case_games": {
+   "cls": "known",
+   "docs": 1058,
+   "csve": 0.8525519848771267,
+   "csve_high": 0.39792060491493386,
+   "char_leak": 0.3351861984147351,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 58.0,
+     "gold_chars": 5920.0,
+     "leaked_chars": 3882.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 33435.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 58.0,
+     "gold_chars": 3729.0,
+     "leaked_chars": 1938.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0,
+     "nongold_chars": 40210.0,
+     "collateral_chars": 907.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 51.0,
+     "gold_chars": 5951.0,
+     "leaked_chars": 2225.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 2.0,
+     "pie_docs": 0.0,
+     "oot_docs": 35.0,
+     "oot_exposed_docs": 11.0,
+     "nongold_chars": 59572.0,
+     "collateral_chars": 3519.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7126.0,
+     "leaked_chars": 4594.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 758.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 17380.0,
+     "leaked_chars": 3987.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6001.0,
+     "leaked_chars": 3226.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 520.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 26379.0,
+     "leaked_chars": 1239.0,
+     "csve_docs": 33.0,
+     "csve_high_docs": 22.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17189.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 51.0,
+     "gold_chars": 4171.0,
+     "leaked_chars": 2583.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 35.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110850.0,
+     "collateral_chars": 2006.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12322.0,
+     "leaked_chars": 289.0,
+     "csve_docs": 20.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6424.0,
+     "leaked_chars": 1136.0,
+     "csve_docs": 37.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1786.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8862.0,
+     "leaked_chars": 1566.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 14700.0,
+     "leaked_chars": 315.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 6264.0,
+     "leaked_chars": 3455.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 60.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 10144.0,
+     "leaked_chars": 3115.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 789.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 23775.0,
+     "leaked_chars": 6585.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 23763.0,
+     "leaked_chars": 16556.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 882.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 10745.0,
+     "leaked_chars": 8533.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 95.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 12871.0,
+     "leaked_chars": 4001.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1501.0
+    }
+   }
+  },
+  "digit_script": {
+   "cls": "known",
+   "docs": 945,
+   "csve": 0.671957671957672,
+   "csve_high": 0.4380952380952381,
+   "char_leak": 0.25309749963173717,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 6054.0,
+     "leaked_chars": 3694.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 49.0,
+     "gold_chars": 3371.0,
+     "leaked_chars": 556.0,
+     "csve_docs": 24.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1166.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 6969.0,
+     "leaked_chars": 1977.0,
+     "csve_docs": 35.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3873.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 53.0,
+     "gold_chars": 6026.0,
+     "leaked_chars": 3054.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 23.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 47705.0,
+     "collateral_chars": 786.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 20.0,
+     "gold_chars": 4693.0,
+     "leaked_chars": 155.0,
+     "csve_docs": 5.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 26916.0,
+     "collateral_chars": 0.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 50.0,
+     "gold_chars": 5113.0,
+     "leaked_chars": 2095.0,
+     "csve_docs": 40.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 21759.0,
+     "collateral_chars": 512.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 26379.0,
+     "leaked_chars": 1099.0,
+     "csve_docs": 28.0,
+     "csve_high_docs": 22.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17189.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 51.0,
+     "gold_chars": 4171.0,
+     "leaked_chars": 1623.0,
+     "csve_docs": 43.0,
+     "csve_high_docs": 35.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110850.0,
+     "collateral_chars": 2001.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12322.0,
+     "leaked_chars": 0.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 54.0,
+     "gold_chars": 5435.0,
+     "leaked_chars": 460.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 126056.0,
+     "collateral_chars": 1342.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8862.0,
+     "leaked_chars": 259.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 40.0,
+     "gold_chars": 11349.0,
+     "leaked_chars": 92.0,
+     "csve_docs": 3.0,
+     "csve_high_docs": 3.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 66424.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 47.0,
+     "gold_chars": 4916.0,
+     "leaked_chars": 2262.0,
+     "csve_docs": 47.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 22462.0,
+     "collateral_chars": 245.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 51.0,
+     "gold_chars": 8332.0,
+     "leaked_chars": 1968.0,
+     "csve_docs": 38.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 57516.0,
+     "collateral_chars": 420.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 23775.0,
+     "leaked_chars": 5855.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 23763.0,
+     "leaked_chars": 12769.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 1019.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 50.0,
+     "gold_chars": 8892.0,
+     "leaked_chars": 5650.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 32321.0,
+     "collateral_chars": 0.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 12871.0,
+     "leaked_chars": 2823.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1499.0
+    }
+   }
+  },
+  "unicode_spaces": {
+   "cls": "known",
+   "docs": 1054,
+   "csve": 0.6707779886148008,
+   "csve_high": 0.3946869070208729,
+   "char_leak": 0.2497502148152589,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 6054.0,
+     "leaked_chars": 3704.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 3818.0,
+     "leaked_chars": 564.0,
+     "csve_docs": 24.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 1166.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 6969.0,
+     "leaked_chars": 1977.0,
+     "csve_docs": 35.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3873.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7126.0,
+     "leaked_chars": 4065.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 804.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 17380.0,
+     "leaked_chars": 921.0,
+     "csve_docs": 28.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6001.0,
+     "leaked_chars": 2649.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 529.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 43.0,
+     "gold_chars": 18783.0,
+     "leaked_chars": 923.0,
+     "csve_docs": 24.0,
+     "csve_high_docs": 18.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 288140.0,
+     "collateral_chars": 13207.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 51.0,
+     "gold_chars": 4171.0,
+     "leaked_chars": 1626.0,
+     "csve_docs": 43.0,
+     "csve_high_docs": 35.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110850.0,
+     "collateral_chars": 2001.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12322.0,
+     "leaked_chars": 0.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6424.0,
+     "leaked_chars": 460.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1786.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8862.0,
+     "leaked_chars": 259.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 14700.0,
+     "leaked_chars": 298.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 6264.0,
+     "leaked_chars": 2747.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 245.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 10144.0,
+     "leaked_chars": 2150.0,
+     "csve_docs": 47.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 446.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 23775.0,
+     "leaked_chars": 5855.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 23763.0,
+     "leaked_chars": 12769.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 1019.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 10745.0,
+     "leaked_chars": 6203.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 36.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 12871.0,
+     "leaked_chars": 2823.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1499.0
+    }
+   }
+  },
+  "stt_dictation": {
+   "cls": "known",
+   "docs": 624,
+   "csve": 0.9583333333333334,
+   "csve_high": 0.5272435897435898,
+   "char_leak": 0.6791549933734838,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 20.0,
+     "gold_chars": 3639.0,
+     "leaked_chars": 2972.0,
+     "csve_docs": 20.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 13088.0,
+     "collateral_chars": 174.0,
+     "oot_docs": 2.0,
+     "oot_exposed_docs": 2.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 7.0,
+     "gold_chars": 895.0,
+     "leaked_chars": 379.0,
+     "csve_docs": 7.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 7.0,
+     "oot_exposed_docs": 7.0,
+     "nongold_chars": 4481.0,
+     "collateral_chars": 254.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 24.0,
+     "gold_chars": 4889.0,
+     "leaked_chars": 3005.0,
+     "csve_docs": 24.0,
+     "csve_high_docs": 22.0,
+     "pie_docs": 0.0,
+     "oot_docs": 24.0,
+     "oot_exposed_docs": 12.0,
+     "nongold_chars": 32544.0,
+     "collateral_chars": 2545.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 43.0,
+     "gold_chars": 6012.0,
+     "leaked_chars": 4276.0,
+     "csve_docs": 43.0,
+     "csve_high_docs": 16.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 38738.0,
+     "collateral_chars": 644.0,
+     "oot_docs": 19.0,
+     "oot_exposed_docs": 19.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 8.0,
+     "gold_chars": 2315.0,
+     "leaked_chars": 942.0,
+     "csve_docs": 8.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 9922.0,
+     "collateral_chars": 0.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 56.0,
+     "gold_chars": 8076.0,
+     "leaked_chars": 5696.0,
+     "csve_docs": 55.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 24213.0,
+     "collateral_chars": 474.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 26.0,
+     "gold_chars": 12705.0,
+     "leaked_chars": 2569.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 19.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 172847.0,
+     "collateral_chars": 8328.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 1.0,
+     "gold_chars": 168.0,
+     "leaked_chars": 42.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 1775.0,
+     "collateral_chars": 55.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 49.0,
+     "gold_chars": 14122.0,
+     "leaked_chars": 3948.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 125440.0,
+     "collateral_chars": 1422.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 12555.0,
+     "leaked_chars": 5509.0,
+     "csve_docs": 42.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1786.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 23.0,
+     "gold_chars": 7950.0,
+     "leaked_chars": 4708.0,
+     "csve_docs": 23.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 33248.0,
+     "collateral_chars": 433.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 50.0,
+     "gold_chars": 23875.0,
+     "leaked_chars": 13341.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 79635.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 59.0,
+     "gold_chars": 9958.0,
+     "leaked_chars": 8313.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 59.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25288.0,
+     "collateral_chars": 0.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 29.0,
+     "gold_chars": 12630.0,
+     "leaked_chars": 8752.0,
+     "csve_docs": 29.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 29512.0,
+     "collateral_chars": 26.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 48198.0,
+     "leaked_chars": 35516.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 48.0,
+     "gold_chars": 34601.0,
+     "leaked_chars": 29049.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 34.0,
+     "nongold_chars": 80740.0,
+     "collateral_chars": 561.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 50.0,
+     "gold_chars": 26472.0,
+     "leaked_chars": 25690.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 50.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 32321.0,
+     "collateral_chars": 6.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 11.0,
+     "gold_chars": 9376.0,
+     "leaked_chars": 7228.0,
+     "csve_docs": 11.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 0.0,
+     "oot_docs": 11.0,
+     "oot_exposed_docs": 11.0,
+     "nongold_chars": 7040.0,
+     "collateral_chars": 55.0
+    }
+   }
+  },
+  "mail_qp": {
+   "cls": "heldout",
+   "docs": 1064,
+   "csve": 0.7988721804511278,
+   "csve_high": 0.4906015037593985,
+   "char_leak": 0.5095419522007433,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 22608.0,
+     "leaked_chars": 20793.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 145281.0,
+     "collateral_chars": 364.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 7516.0,
+     "leaked_chars": 4488.0,
+     "csve_docs": 29.0,
+     "csve_high_docs": 1.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 58045.0,
+     "collateral_chars": 1042.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 11319.0,
+     "leaked_chars": 6639.0,
+     "csve_docs": 39.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 130179.0,
+     "collateral_chars": 2166.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7258.0,
+     "leaked_chars": 4388.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 1.0,
+     "nongold_chars": 57247.0,
+     "collateral_chars": 815.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 59.0,
+     "gold_chars": 17300.0,
+     "leaked_chars": 1341.0,
+     "csve_docs": 38.0,
+     "csve_high_docs": 1.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 108221.0,
+     "collateral_chars": 12.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6073.0,
+     "leaked_chars": 2887.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25913.0,
+     "collateral_chars": 509.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 27081.0,
+     "leaked_chars": 22594.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 56.0,
+     "pie_docs": 48.0,
+     "nongold_chars": 379209.0,
+     "collateral_chars": 13910.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 60.0,
+     "gold_chars": 4771.0,
+     "leaked_chars": 2269.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 49.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 137706.0,
+     "collateral_chars": 215.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12618.0,
+     "leaked_chars": 8795.0,
+     "csve_docs": 23.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 32.0,
+     "nongold_chars": 154692.0,
+     "collateral_chars": 1500.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6464.0,
+     "leaked_chars": 1022.0,
+     "csve_docs": 34.0,
+     "csve_high_docs": 29.0,
+     "pie_docs": 5.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138712.0,
+     "collateral_chars": 1393.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 9032.0,
+     "leaked_chars": 1837.0,
+     "csve_docs": 30.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 85987.0,
+     "collateral_chars": 461.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 59.0,
+     "gold_chars": 14918.0,
+     "leaked_chars": 3801.0,
+     "csve_docs": 41.0,
+     "csve_high_docs": 20.0,
+     "pie_docs": 6.0,
+     "nongold_chars": 87188.0,
+     "collateral_chars": 205.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 47.0,
+     "gold_chars": 5612.0,
+     "leaked_chars": 2764.0,
+     "csve_docs": 46.0,
+     "csve_high_docs": 37.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 20321.0,
+     "collateral_chars": 155.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 10189.0,
+     "leaked_chars": 3096.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 66405.0,
+     "collateral_chars": 674.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 24017.0,
+     "leaked_chars": 7569.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 107267.0,
+     "collateral_chars": 546.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 24097.0,
+     "leaked_chars": 13996.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 119830.0,
+     "collateral_chars": 1235.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 10745.0,
+     "leaked_chars": 6203.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39348.0,
+     "collateral_chars": 36.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 59.0,
+     "gold_chars": 13030.0,
+     "leaked_chars": 5081.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 30.0,
+     "pie_docs": 0.0,
+     "oot_docs": 59.0,
+     "oot_exposed_docs": 57.0,
+     "nongold_chars": 36456.0,
+     "collateral_chars": 692.0
+    }
+   }
+  },
+  "utf8_as_cp1252": {
+   "cls": "heldout",
+   "docs": 188,
+   "csve": 0.8723404255319149,
+   "csve_high": 0.5478723404255319,
+   "char_leak": 0.5871226529271413,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 10992.0,
+     "leaked_chars": 8357.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 67646.0,
+     "collateral_chars": 2661.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 19.0,
+     "gold_chars": 2155.0,
+     "leaked_chars": 1651.0,
+     "csve_docs": 19.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 18017.0,
+     "collateral_chars": 128.0,
+     "oot_docs": 8.0,
+     "oot_exposed_docs": 8.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 35.0,
+     "gold_chars": 5794.0,
+     "leaked_chars": 3081.0,
+     "csve_docs": 24.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "oot_docs": 35.0,
+     "oot_exposed_docs": 11.0,
+     "nongold_chars": 67220.0,
+     "collateral_chars": 2619.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 25.0,
+     "gold_chars": 3080.0,
+     "leaked_chars": 1816.0,
+     "csve_docs": 23.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 24209.0,
+     "collateral_chars": 419.0,
+     "oot_docs": 14.0,
+     "oot_exposed_docs": 14.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 4.0,
+     "gold_chars": 1010.0,
+     "leaked_chars": 48.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 5248.0,
+     "collateral_chars": 0.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 8.0,
+     "gold_chars": 526.0,
+     "leaked_chars": 134.0,
+     "csve_docs": 7.0,
+     "csve_high_docs": 6.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 19627.0,
+     "collateral_chars": 372.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 37.0,
+     "gold_chars": 5362.0,
+     "leaked_chars": 1892.0,
+     "csve_docs": 33.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 43843.0,
+     "collateral_chars": 470.0
+    }
+   }
+  },
+  "sheet_coercion": {
+   "cls": "heldout",
+   "docs": 473,
+   "csve": 0.718816067653277,
+   "csve_high": 0.5581395348837209,
+   "char_leak": 0.225908560563502,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 32.0,
+     "gold_chars": 3671.0,
+     "leaked_chars": 2849.0,
+     "csve_docs": 32.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 19463.0,
+     "collateral_chars": 208.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 15.0,
+     "gold_chars": 1181.0,
+     "leaked_chars": 101.0,
+     "csve_docs": 11.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 0.0,
+     "oot_docs": 15.0,
+     "oot_exposed_docs": 15.0,
+     "nongold_chars": 10619.0,
+     "collateral_chars": 372.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 52.0,
+     "gold_chars": 6094.0,
+     "leaked_chars": 2523.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 49.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 64537.0,
+     "collateral_chars": 3939.0,
+     "oot_docs": 11.0,
+     "oot_exposed_docs": 7.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 49.0,
+     "gold_chars": 5661.0,
+     "leaked_chars": 3409.0,
+     "csve_docs": 47.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 43018.0,
+     "collateral_chars": 733.0,
+     "oot_docs": 19.0,
+     "oot_exposed_docs": 19.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 10.0,
+     "gold_chars": 2240.0,
+     "leaked_chars": 83.0,
+     "csve_docs": 5.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 13201.0,
+     "collateral_chars": 0.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 45.0,
+     "gold_chars": 4768.0,
+     "leaked_chars": 2216.0,
+     "csve_docs": 39.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 19623.0,
+     "collateral_chars": 423.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 14.0,
+     "gold_chars": 6279.0,
+     "leaked_chars": 331.0,
+     "csve_docs": 13.0,
+     "csve_high_docs": 13.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 79569.0,
+     "collateral_chars": 3387.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 26.0,
+     "gold_chars": 2103.0,
+     "leaked_chars": 885.0,
+     "csve_docs": 25.0,
+     "csve_high_docs": 25.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 65357.0,
+     "collateral_chars": 805.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 45.0,
+     "gold_chars": 9786.0,
+     "leaked_chars": 28.0,
+     "csve_docs": 2.0,
+     "csve_high_docs": 2.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 120820.0,
+     "collateral_chars": 1419.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 34.0,
+     "gold_chars": 3093.0,
+     "leaked_chars": 289.0,
+     "csve_docs": 20.0,
+     "csve_high_docs": 20.0,
+     "pie_docs": 0.0,
+     "oot_docs": 12.0,
+     "oot_exposed_docs": 11.0,
+     "nongold_chars": 81768.0,
+     "collateral_chars": 989.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 23.0,
+     "gold_chars": 4399.0,
+     "leaked_chars": 33.0,
+     "csve_docs": 2.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 33248.0,
+     "collateral_chars": 433.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 36.0,
+     "gold_chars": 10257.0,
+     "leaked_chars": 185.0,
+     "csve_docs": 10.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 60877.0,
+     "collateral_chars": 12.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 12.0,
+     "gold_chars": 3652.0,
+     "leaked_chars": 247.0,
+     "csve_docs": 5.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 16292.0,
+     "collateral_chars": 0.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 57.0,
+     "gold_chars": 21547.0,
+     "leaked_chars": 5285.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 45.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 100451.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 7.0,
+     "gold_chars": 2290.0,
+     "leaked_chars": 812.0,
+     "csve_docs": 7.0,
+     "csve_high_docs": 3.0,
+     "pie_docs": 0.0,
+     "oot_docs": 2.0,
+     "oot_exposed_docs": 2.0,
+     "nongold_chars": 9487.0,
+     "collateral_chars": 210.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 16.0,
+     "gold_chars": 5543.0,
+     "leaked_chars": 1635.0,
+     "csve_docs": 16.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 16.0,
+     "oot_exposed_docs": 16.0,
+     "nongold_chars": 14028.0,
+     "collateral_chars": 804.0
+    }
+   }
+  },
+  "compat_forms": {
+   "cls": "heldout",
+   "docs": 1080,
+   "csve": 0.6648148148148149,
+   "csve_high": 0.38981481481481484,
+   "char_leak": 0.24384352369426995,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 6054.0,
+     "leaked_chars": 3694.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 3818.0,
+     "leaked_chars": 564.0,
+     "csve_docs": 24.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 1166.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 6969.0,
+     "leaked_chars": 1977.0,
+     "csve_docs": 35.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3873.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7126.0,
+     "leaked_chars": 4075.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 804.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 17380.0,
+     "leaked_chars": 1328.0,
+     "csve_docs": 32.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6001.0,
+     "leaked_chars": 2794.0,
+     "csve_docs": 50.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 529.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 26379.0,
+     "leaked_chars": 1099.0,
+     "csve_docs": 28.0,
+     "csve_high_docs": 22.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17189.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 60.0,
+     "gold_chars": 4639.0,
+     "leaked_chars": 1663.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 135664.0,
+     "collateral_chars": 2376.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12322.0,
+     "leaked_chars": 0.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6424.0,
+     "leaked_chars": 465.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1742.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8862.0,
+     "leaked_chars": 259.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 14700.0,
+     "leaked_chars": 295.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 6264.0,
+     "leaked_chars": 2752.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 245.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 10144.0,
+     "leaked_chars": 2163.0,
+     "csve_docs": 47.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 446.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 23775.0,
+     "leaked_chars": 5855.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 23763.0,
+     "leaked_chars": 12769.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 1019.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 10745.0,
+     "leaked_chars": 6203.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 36.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 12871.0,
+     "leaked_chars": 2822.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1499.0
+    }
+   }
+  },
+  "url_encoding": {
+   "cls": "heldout",
+   "docs": 1070,
+   "csve": 0.9635514018691589,
+   "csve_high": 0.48317757009345796,
+   "char_leak": 0.701992192456689,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 28996.0,
+     "leaked_chars": 28458.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 280.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 8974.0,
+     "leaked_chars": 7311.0,
+     "csve_docs": 53.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 934.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 13721.0,
+     "leaked_chars": 11956.0,
+     "csve_docs": 56.0,
+     "csve_high_docs": 41.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3729.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 9438.0,
+     "leaked_chars": 7319.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 40.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 807.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 34.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 20366.0,
+     "leaked_chars": 12833.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 6.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 7643.0,
+     "leaked_chars": 6573.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 518.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 56.0,
+     "gold_chars": 26147.0,
+     "leaked_chars": 2130.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 25.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 358116.0,
+     "collateral_chars": 16485.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 54.0,
+     "gold_chars": 4935.0,
+     "leaked_chars": 4334.0,
+     "csve_docs": 51.0,
+     "csve_high_docs": 41.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 118703.0,
+     "collateral_chars": 2120.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 13112.0,
+     "leaked_chars": 3797.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 10.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 7442.0,
+     "leaked_chars": 4326.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 6.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1786.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 10066.0,
+     "leaked_chars": 6889.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 16328.0,
+     "leaked_chars": 9586.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 11.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 6870.0,
+     "leaked_chars": 4761.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 225.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 11706.0,
+     "leaked_chars": 10638.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 402.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 28211.0,
+     "leaked_chars": 24239.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 49.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 27257.0,
+     "leaked_chars": 22329.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 54.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 932.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 11659.0,
+     "leaked_chars": 8825.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 0.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 15075.0,
+     "leaked_chars": 11792.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1488.0
+    }
+   }
+  },
+  "json_escapes": {
+   "cls": "heldout",
+   "docs": 238,
+   "csve": 0.8571428571428571,
+   "csve_high": 0.680672268907563,
+   "char_leak": 0.5755254553946754,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 16797.0,
+     "leaked_chars": 14696.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 22.0,
+     "gold_chars": 3603.0,
+     "leaked_chars": 2912.0,
+     "csve_docs": 22.0,
+     "csve_high_docs": 3.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 15086.0,
+     "collateral_chars": 251.0,
+     "oot_docs": 11.0,
+     "oot_exposed_docs": 11.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 39.0,
+     "gold_chars": 7988.0,
+     "leaked_chars": 5018.0,
+     "csve_docs": 39.0,
+     "csve_high_docs": 39.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 17.0,
+     "nongold_chars": 47499.0,
+     "collateral_chars": 2900.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 11.0,
+     "gold_chars": 1316.0,
+     "leaked_chars": 684.0,
+     "csve_docs": 10.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "oot_docs": 11.0,
+     "oot_exposed_docs": 11.0,
+     "nongold_chars": 10704.0,
+     "collateral_chars": 154.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 4.0,
+     "gold_chars": 1024.0,
+     "leaked_chars": 69.0,
+     "csve_docs": 1.0,
+     "csve_high_docs": 1.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 5248.0,
+     "collateral_chars": 0.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 7.0,
+     "gold_chars": 2718.0,
+     "leaked_chars": 198.0,
+     "csve_docs": 6.0,
+     "csve_high_docs": 6.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 28673.0,
+     "collateral_chars": 1214.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 11.0,
+     "gold_chars": 765.0,
+     "leaked_chars": 239.0,
+     "csve_docs": 10.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 26573.0,
+     "collateral_chars": 393.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 16.0,
+     "gold_chars": 2904.0,
+     "leaked_chars": 1374.0,
+     "csve_docs": 6.0,
+     "csve_high_docs": 6.0,
+     "pie_docs": 10.0,
+     "nongold_chars": 43421.0,
+     "collateral_chars": 421.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 21.0,
+     "gold_chars": 2579.0,
+     "leaked_chars": 718.0,
+     "csve_docs": 15.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 6.0,
+     "oot_docs": 12.0,
+     "oot_exposed_docs": 12.0,
+     "nongold_chars": 49817.0,
+     "collateral_chars": 798.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 3.0,
+     "gold_chars": 580.0,
+     "leaked_chars": 0.0,
+     "csve_docs": 0.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 4030.0,
+     "collateral_chars": 72.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 11.0,
+     "gold_chars": 3206.0,
+     "leaked_chars": 1099.0,
+     "csve_docs": 3.0,
+     "csve_high_docs": 2.0,
+     "pie_docs": 11.0,
+     "nongold_chars": 14607.0,
+     "collateral_chars": 12.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 11.0,
+     "gold_chars": 4689.0,
+     "leaked_chars": 1621.0,
+     "csve_docs": 11.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 20128.0,
+     "collateral_chars": 266.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 22.0,
+     "gold_chars": 5356.0,
+     "leaked_chars": 2177.0,
+     "csve_docs": 21.0,
+     "csve_high_docs": 13.0,
+     "pie_docs": 0.0,
+     "oot_docs": 22.0,
+     "oot_exposed_docs": 22.0,
+     "nongold_chars": 17183.0,
+     "collateral_chars": 975.0
+    }
+   }
+  },
+  "pdf_page_break": {
+   "cls": "heldout",
+   "docs": 1054,
+   "csve": 0.7352941176470589,
+   "csve_high": 0.4316888045540797,
+   "char_leak": 0.3895241976397009,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 8353.0,
+     "leaked_chars": 6092.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 6022.0,
+     "leaked_chars": 2788.0,
+     "csve_docs": 29.0,
+     "csve_high_docs": 2.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 1137.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 9134.0,
+     "leaked_chars": 4315.0,
+     "csve_docs": 39.0,
+     "csve_high_docs": 11.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 22.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3865.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 9409.0,
+     "leaked_chars": 6490.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 804.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 19754.0,
+     "leaked_chars": 3376.0,
+     "csve_docs": 29.0,
+     "csve_high_docs": 1.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 8408.0,
+     "leaked_chars": 5225.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 19.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 529.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 43.0,
+     "gold_chars": 20567.0,
+     "leaked_chars": 3013.0,
+     "csve_docs": 30.0,
+     "csve_high_docs": 19.0,
+     "pie_docs": 1.0,
+     "nongold_chars": 288140.0,
+     "collateral_chars": 13075.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 51.0,
+     "gold_chars": 6250.0,
+     "leaked_chars": 3915.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 37.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110850.0,
+     "collateral_chars": 213.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 14726.0,
+     "leaked_chars": 2759.0,
+     "csve_docs": 16.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 8213.0,
+     "leaked_chars": 2560.0,
+     "csve_docs": 35.0,
+     "csve_high_docs": 29.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 32.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1414.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 11170.0,
+     "leaked_chars": 2778.0,
+     "csve_docs": 20.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 16994.0,
+     "leaked_chars": 2806.0,
+     "csve_docs": 22.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 38.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 8765.0,
+     "leaked_chars": 5373.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 120.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 12675.0,
+     "leaked_chars": 4824.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 282.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 26319.0,
+     "leaked_chars": 8672.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 45.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 25605.0,
+     "leaked_chars": 14777.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 54.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 1015.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 13142.0,
+     "leaked_chars": 8675.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 1.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 57.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 14972.0,
+     "leaked_chars": 5234.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 59.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1318.0
+    }
+   }
+  },
+  "pdf_cell_glue": {
+   "cls": "heldout",
+   "docs": 868,
+   "csve": 0.9573732718894009,
+   "csve_high": 0.6175115207373272,
+   "char_leak": 0.5077711144427786,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 6054.0,
+     "leaked_chars": 4554.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 33071.0,
+     "collateral_chars": 253.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 3818.0,
+     "leaked_chars": 2118.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 7.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41244.0,
+     "collateral_chars": 1130.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 6969.0,
+     "leaked_chars": 3611.0,
+     "csve_docs": 55.0,
+     "csve_high_docs": 45.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 24.0,
+     "nongold_chars": 68155.0,
+     "collateral_chars": 3973.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7126.0,
+     "leaked_chars": 5711.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 42.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51096.0,
+     "collateral_chars": 869.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 17380.0,
+     "leaked_chars": 6182.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 108210.0,
+     "collateral_chars": 429.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 59.0,
+     "gold_chars": 5968.0,
+     "leaked_chars": 3924.0,
+     "csve_docs": 55.0,
+     "csve_high_docs": 27.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 24764.0,
+     "collateral_chars": 617.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 37.0,
+     "gold_chars": 18648.0,
+     "leaked_chars": 11602.0,
+     "csve_docs": 36.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 250207.0,
+     "collateral_chars": 11519.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 49.0,
+     "gold_chars": 3964.0,
+     "leaked_chars": 2170.0,
+     "csve_docs": 46.0,
+     "csve_high_docs": 33.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 103657.0,
+     "collateral_chars": 1887.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 39.0,
+     "gold_chars": 9335.0,
+     "leaked_chars": 5289.0,
+     "csve_docs": 33.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 95917.0,
+     "collateral_chars": 904.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 33.0,
+     "gold_chars": 3842.0,
+     "leaked_chars": 932.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 20.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 65237.0,
+     "collateral_chars": 1006.0,
+     "oot_docs": 18.0,
+     "oot_exposed_docs": 16.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8862.0,
+     "leaked_chars": 2820.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 83699.0,
+     "collateral_chars": 899.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 51.0,
+     "gold_chars": 12361.0,
+     "leaked_chars": 3096.0,
+     "csve_docs": 45.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 74291.0,
+     "collateral_chars": 90.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 35.0,
+     "gold_chars": 3027.0,
+     "leaked_chars": 1555.0,
+     "csve_docs": 35.0,
+     "csve_high_docs": 34.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 16468.0,
+     "collateral_chars": 119.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 10144.0,
+     "leaked_chars": 3933.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 62809.0,
+     "collateral_chars": 958.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 9.0,
+     "gold_chars": 3309.0,
+     "leaked_chars": 710.0,
+     "csve_docs": 9.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 15244.0,
+     "collateral_chars": 0.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 23763.0,
+     "leaked_chars": 14999.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 87207.0,
+     "collateral_chars": 1145.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 45.0,
+     "gold_chars": 7967.0,
+     "leaked_chars": 5251.0,
+     "csve_docs": 45.0,
+     "csve_high_docs": 40.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 28091.0,
+     "collateral_chars": 60.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 31.0,
+     "gold_chars": 7543.0,
+     "leaked_chars": 2827.0,
+     "csve_docs": 30.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 31.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 19236.0,
+     "collateral_chars": 312.0
+    }
+   }
+  },
+  "markup_run_split": {
+   "cls": "heldout",
+   "docs": 1080,
+   "csve": 0.9703703703703703,
+   "csve_high": 0.5898148148148148,
+   "char_leak": 0.9186818775465986,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 20501.0,
+     "leaked_chars": 19992.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 267.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 17018.0,
+     "leaked_chars": 15830.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 8.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 1084.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 21428.0,
+     "leaked_chars": 20090.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 34.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3749.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 22073.0,
+     "leaked_chars": 21306.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 827.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 57055.0,
+     "leaked_chars": 51510.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 5.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 18.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 16740.0,
+     "leaked_chars": 15757.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 23.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 509.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 39566.0,
+     "leaked_chars": 28013.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 54.0,
+     "pie_docs": 47.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 16893.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 60.0,
+     "gold_chars": 15926.0,
+     "leaked_chars": 15139.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 49.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 135664.0,
+     "collateral_chars": 1694.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 23473.0,
+     "leaked_chars": 17587.0,
+     "csve_docs": 53.0,
+     "csve_high_docs": 6.0,
+     "pie_docs": 31.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 21470.0,
+     "leaked_chars": 17658.0,
+     "csve_docs": 46.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 5.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 29.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1658.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 27357.0,
+     "leaked_chars": 24734.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 1.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 554.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 36479.0,
+     "leaked_chars": 31827.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 52.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 33656.0,
+     "leaked_chars": 33046.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 21.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 34912.0,
+     "leaked_chars": 32406.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 377.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 76294.0,
+     "leaked_chars": 70539.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 110575.0,
+     "leaked_chars": 108177.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 672.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 46872.0,
+     "leaked_chars": 46035.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 50.0,
+     "pie_docs": 1.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 60.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 43217.0,
+     "leaked_chars": 40921.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 60.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1524.0
+    }
+   }
+  },
+  "amount_date_prose": {
+   "cls": "heldout",
+   "docs": 257,
+   "csve": 0.8754863813229572,
+   "csve_high": 0.8326848249027238,
+   "char_leak": 0.3533635240839852,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 26.0,
+     "gold_chars": 4677.0,
+     "leaked_chars": 3657.0,
+     "csve_docs": 26.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 16937.0,
+     "collateral_chars": 207.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 11.0,
+     "gold_chars": 1013.0,
+     "leaked_chars": 103.0,
+     "csve_docs": 4.0,
+     "csve_high_docs": 3.0,
+     "pie_docs": 0.0,
+     "oot_docs": 11.0,
+     "oot_exposed_docs": 11.0,
+     "nongold_chars": 8048.0,
+     "collateral_chars": 198.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 52.0,
+     "gold_chars": 8533.0,
+     "leaked_chars": 4279.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 48.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 63953.0,
+     "collateral_chars": 3851.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 22.0,
+     "gold_chars": 2110.0,
+     "leaked_chars": 952.0,
+     "csve_docs": 22.0,
+     "csve_high_docs": 14.0,
+     "pie_docs": 0.0,
+     "oot_docs": 22.0,
+     "oot_exposed_docs": 22.0,
+     "nongold_chars": 18015.0,
+     "collateral_chars": 367.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 4.0,
+     "gold_chars": 1122.0,
+     "leaked_chars": 132.0,
+     "csve_docs": 3.0,
+     "csve_high_docs": 3.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 5315.0,
+     "collateral_chars": 0.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 4.0,
+     "gold_chars": 358.0,
+     "leaked_chars": 51.0,
+     "csve_docs": 2.0,
+     "csve_high_docs": 1.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 1751.0,
+     "collateral_chars": 20.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 16.0,
+     "gold_chars": 7540.0,
+     "leaked_chars": 569.0,
+     "csve_docs": 13.0,
+     "csve_high_docs": 13.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 91972.0,
+     "collateral_chars": 4115.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 27.0,
+     "gold_chars": 3074.0,
+     "leaked_chars": 1846.0,
+     "csve_docs": 25.0,
+     "csve_high_docs": 25.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 66240.0,
+     "collateral_chars": 844.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 7.0,
+     "gold_chars": 2961.0,
+     "leaked_chars": 116.0,
+     "csve_docs": 4.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 15920.0,
+     "collateral_chars": 106.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 26.0,
+     "gold_chars": 2871.0,
+     "leaked_chars": 476.0,
+     "csve_docs": 18.0,
+     "csve_high_docs": 18.0,
+     "pie_docs": 0.0,
+     "oot_docs": 21.0,
+     "oot_exposed_docs": 20.0,
+     "nongold_chars": 69669.0,
+     "collateral_chars": 708.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 9.0,
+     "gold_chars": 3589.0,
+     "leaked_chars": 269.0,
+     "csve_docs": 6.0,
+     "csve_high_docs": 6.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 14052.0,
+     "collateral_chars": 0.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 41.0,
+     "gold_chars": 18156.0,
+     "leaked_chars": 6799.0,
+     "csve_docs": 41.0,
+     "csve_high_docs": 41.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 72124.0,
+     "collateral_chars": 670.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 12.0,
+     "gold_chars": 4721.0,
+     "leaked_chars": 2209.0,
+     "csve_docs": 12.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 12.0,
+     "oot_exposed_docs": 12.0,
+     "nongold_chars": 11786.0,
+     "collateral_chars": 600.0
+    }
+   }
+  },
+  "bidi_controls": {
+   "cls": "heldout",
+   "docs": 1063,
+   "csve": 0.9887111947318908,
+   "csve_high": 0.41862652869238004,
+   "char_leak": 0.7917121265871927,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 7086.0,
+     "leaked_chars": 5730.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 58.0,
+     "gold_chars": 5817.0,
+     "leaked_chars": 5541.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0,
+     "nongold_chars": 40210.0,
+     "collateral_chars": 927.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 54.0,
+     "gold_chars": 9162.0,
+     "leaked_chars": 7498.0,
+     "csve_docs": 54.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "oot_docs": 37.0,
+     "oot_exposed_docs": 13.0,
+     "nongold_chars": 62612.0,
+     "collateral_chars": 3489.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 10346.0,
+     "leaked_chars": 9605.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 25.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 795.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 29088.0,
+     "leaked_chars": 28758.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 8239.0,
+     "leaked_chars": 7242.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 475.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 27802.0,
+     "leaked_chars": 3611.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 28.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17401.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 51.0,
+     "gold_chars": 6053.0,
+     "leaked_chars": 5817.0,
+     "csve_docs": 51.0,
+     "csve_high_docs": 35.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110850.0,
+     "collateral_chars": 1991.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 13642.0,
+     "leaked_chars": 2840.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 9396.0,
+     "leaked_chars": 4420.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1786.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 15330.0,
+     "leaked_chars": 14573.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 22830.0,
+     "leaked_chars": 17229.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 10216.0,
+     "leaked_chars": 9963.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 225.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 16485.0,
+     "leaked_chars": 15865.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 503.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 36950.0,
+     "leaked_chars": 31815.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 32352.0,
+     "leaked_chars": 31859.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 957.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 17325.0,
+     "leaked_chars": 17123.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 49.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 30.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 20679.0,
+     "leaked_chars": 17073.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1420.0
+    }
+   }
+  },
+  "combining_marks": {
+   "cls": "heldout",
+   "docs": 1063,
+   "csve": 0.9811853245531514,
+   "csve_high": 0.41768579492003766,
+   "char_leak": 0.7361410112972215,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 6391.0,
+     "leaked_chars": 5013.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 58.0,
+     "gold_chars": 4863.0,
+     "leaked_chars": 4146.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0,
+     "nongold_chars": 40210.0,
+     "collateral_chars": 916.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 54.0,
+     "gold_chars": 7808.0,
+     "leaked_chars": 5966.0,
+     "csve_docs": 53.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "oot_docs": 37.0,
+     "oot_exposed_docs": 13.0,
+     "nongold_chars": 62612.0,
+     "collateral_chars": 3491.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 8511.0,
+     "leaked_chars": 7478.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 832.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 23827.0,
+     "leaked_chars": 22773.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 7250.0,
+     "leaked_chars": 6189.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 502.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 26835.0,
+     "leaked_chars": 2424.0,
+     "csve_docs": 54.0,
+     "csve_high_docs": 28.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17189.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 51.0,
+     "gold_chars": 5054.0,
+     "leaked_chars": 4776.0,
+     "csve_docs": 51.0,
+     "csve_high_docs": 35.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110850.0,
+     "collateral_chars": 1991.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12931.0,
+     "leaked_chars": 1998.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 7811.0,
+     "leaked_chars": 3361.0,
+     "csve_docs": 48.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1789.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 11456.0,
+     "leaked_chars": 10406.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 17908.0,
+     "leaked_chars": 12100.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 7828.0,
+     "leaked_chars": 7432.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 225.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 13125.0,
+     "leaked_chars": 12246.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 453.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 29375.0,
+     "leaked_chars": 24015.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 27250.0,
+     "leaked_chars": 26520.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 60.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 929.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 13006.0,
+     "leaked_chars": 12348.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 49.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 6.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 16354.0,
+     "leaked_chars": 13065.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1429.0
+    }
+   }
+  },
+  "reversed_value": {
+   "cls": "heldout",
+   "docs": 1071,
+   "csve": 0.9178338001867413,
+   "csve_high": 0.39215686274509803,
+   "char_leak": 0.5310346155327096,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 6054.0,
+     "leaked_chars": 4698.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 60.0,
+     "gold_chars": 3818.0,
+     "leaked_chars": 3536.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 38.0,
+     "oot_exposed_docs": 38.0,
+     "nongold_chars": 41665.0,
+     "collateral_chars": 989.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 60.0,
+     "gold_chars": 6969.0,
+     "leaked_chars": 3653.0,
+     "csve_docs": 52.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "oot_docs": 43.0,
+     "oot_exposed_docs": 19.0,
+     "nongold_chars": 68937.0,
+     "collateral_chars": 3850.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 60.0,
+     "gold_chars": 7126.0,
+     "leaked_chars": 6027.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 24.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 51613.0,
+     "collateral_chars": 821.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 17380.0,
+     "leaked_chars": 16726.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 60.0,
+     "gold_chars": 6001.0,
+     "leaked_chars": 4934.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 15.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25467.0,
+     "collateral_chars": 529.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 60.0,
+     "gold_chars": 26379.0,
+     "leaked_chars": 1338.0,
+     "csve_docs": 41.0,
+     "csve_high_docs": 22.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 374601.0,
+     "collateral_chars": 17189.0,
+     "oot_docs": 9.0,
+     "oot_exposed_docs": 9.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 51.0,
+     "gold_chars": 4171.0,
+     "leaked_chars": 3907.0,
+     "csve_docs": 51.0,
+     "csve_high_docs": 35.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 110850.0,
+     "collateral_chars": 1991.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 60.0,
+     "gold_chars": 12322.0,
+     "leaked_chars": 1046.0,
+     "csve_docs": 52.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 151880.0,
+     "collateral_chars": 1654.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 60.0,
+     "gold_chars": 6424.0,
+     "leaked_chars": 1966.0,
+     "csve_docs": 41.0,
+     "csve_high_docs": 26.0,
+     "pie_docs": 0.0,
+     "oot_docs": 34.0,
+     "oot_exposed_docs": 31.0,
+     "nongold_chars": 138472.0,
+     "collateral_chars": 1786.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 60.0,
+     "gold_chars": 8862.0,
+     "leaked_chars": 5600.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 84401.0,
+     "collateral_chars": 521.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 60.0,
+     "gold_chars": 14700.0,
+     "leaked_chars": 1613.0,
+     "csve_docs": 27.0,
+     "csve_high_docs": 4.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 86462.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 60.0,
+     "gold_chars": 6264.0,
+     "leaked_chars": 3862.0,
+     "csve_docs": 59.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 25741.0,
+     "collateral_chars": 225.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 60.0,
+     "gold_chars": 10144.0,
+     "leaked_chars": 7179.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 31.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 63644.0,
+     "collateral_chars": 542.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 23775.0,
+     "leaked_chars": 14486.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 23763.0,
+     "leaked_chars": 16893.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 1158.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 60.0,
+     "gold_chars": 10745.0,
+     "leaked_chars": 7940.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 47.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 39186.0,
+     "collateral_chars": 13.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 60.0,
+     "gold_chars": 12871.0,
+     "leaked_chars": 4928.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 60.0,
+     "oot_exposed_docs": 58.0,
+     "nongold_chars": 35862.0,
+     "collateral_chars": 1483.0
+    }
+   }
+  },
+  "mime_encoded_word": {
+   "cls": "heldout",
+   "docs": 945,
+   "csve": 0.9862433862433863,
+   "csve_high": 0.39894179894179893,
+   "char_leak": 0.5791706072851288,
+   "per_family": {
+    "c_bilingual_appointment_letter": {
+     "docs": 60.0,
+     "gold_chars": 16965.0,
+     "leaked_chars": 14933.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 44.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 34359.0,
+     "collateral_chars": 240.0,
+     "oot_docs": 6.0,
+     "oot_exposed_docs": 6.0
+    },
+    "c_domestic_enquiry_proceedings": {
+     "docs": 57.0,
+     "gold_chars": 8172.0,
+     "leaked_chars": 6278.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "oot_docs": 36.0,
+     "oot_exposed_docs": 36.0,
+     "nongold_chars": 39893.0,
+     "collateral_chars": 1001.0
+    },
+    "c_epf_nomination_form_ocr": {
+     "docs": 58.0,
+     "gold_chars": 12130.0,
+     "leaked_chars": 8823.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 10.0,
+     "pie_docs": 0.0,
+     "oot_docs": 42.0,
+     "oot_exposed_docs": 18.0,
+     "nongold_chars": 68055.0,
+     "collateral_chars": 3814.0
+    },
+    "c_helpline_call_asr_codemixed": {
+     "docs": 55.0,
+     "gold_chars": 8397.0,
+     "leaked_chars": 6601.0,
+     "csve_docs": 55.0,
+     "csve_high_docs": 23.0,
+     "pie_docs": 0.0,
+     "oot_docs": 33.0,
+     "oot_exposed_docs": 33.0,
+     "nongold_chars": 48231.0,
+     "collateral_chars": 737.0
+    },
+    "c_review_meeting_vtt_transcript": {
+     "docs": 60.0,
+     "gold_chars": 28692.0,
+     "leaked_chars": 19620.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 109425.0,
+     "collateral_chars": 16.0
+    },
+    "c_voicemail_transcription_notice": {
+     "docs": 58.0,
+     "gold_chars": 7593.0,
+     "leaked_chars": 5404.0,
+     "csve_docs": 58.0,
+     "csve_high_docs": 14.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 24496.0,
+     "collateral_chars": 486.0
+    },
+    "i_har_capture_payroll_portal": {
+     "docs": 20.0,
+     "gold_chars": 8961.0,
+     "leaked_chars": 1077.0,
+     "csve_docs": 20.0,
+     "csve_high_docs": 9.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 116529.0,
+     "collateral_chars": 5864.0,
+     "oot_docs": 2.0,
+     "oot_exposed_docs": 2.0
+    },
+    "i_jupyter_attrition_notebook": {
+     "docs": 44.0,
+     "gold_chars": 4937.0,
+     "leaked_chars": 3654.0,
+     "csve_docs": 44.0,
+     "csve_high_docs": 30.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 95124.0,
+     "collateral_chars": 1743.0
+    },
+    "i_logcat_ess_attendance_app": {
+     "docs": 36.0,
+     "gold_chars": 9287.0,
+     "leaked_chars": 1340.0,
+     "csve_docs": 36.0,
+     "csve_high_docs": 0.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 83856.0,
+     "collateral_chars": 1121.0
+    },
+    "i_openapi_spec_with_examples": {
+     "docs": 52.0,
+     "gold_chars": 7075.0,
+     "leaked_chars": 2565.0,
+     "csve_docs": 39.0,
+     "csve_high_docs": 23.0,
+     "pie_docs": 0.0,
+     "oot_docs": 31.0,
+     "oot_exposed_docs": 29.0,
+     "nongold_chars": 117154.0,
+     "collateral_chars": 1422.0
+    },
+    "i_powershell_offboarding_transcript": {
+     "docs": 55.0,
+     "gold_chars": 10863.0,
+     "leaked_chars": 4913.0,
+     "csve_docs": 55.0,
+     "csve_high_docs": 5.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 77689.0,
+     "collateral_chars": 497.0
+    },
+    "i_scim_provisioning_exchange": {
+     "docs": 52.0,
+     "gold_chars": 15755.0,
+     "leaked_chars": 4014.0,
+     "csve_docs": 52.0,
+     "csve_high_docs": 3.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 77988.0,
+     "collateral_chars": 12.0
+    },
+    "s_etds_24q_caret_return": {
+     "docs": 49.0,
+     "gold_chars": 7243.0,
+     "leaked_chars": 4898.0,
+     "csve_docs": 49.0,
+     "csve_high_docs": 36.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 20779.0,
+     "collateral_chars": 230.0
+    },
+    "s_ics_hr_calendar_feed": {
+     "docs": 55.0,
+     "gold_chars": 12896.0,
+     "leaked_chars": 7310.0,
+     "csve_docs": 55.0,
+     "csve_high_docs": 28.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 61012.0,
+     "collateral_chars": 580.0
+    },
+    "s_jobportal_resume_export_html_xls": {
+     "docs": 60.0,
+     "gold_chars": 27994.0,
+     "leaked_chars": 12261.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 43.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 105231.0,
+     "collateral_chars": 670.0
+    },
+    "s_lineprinter_payroll_register": {
+     "docs": 60.0,
+     "gold_chars": 27981.0,
+     "leaked_chars": 19913.0,
+     "csve_docs": 60.0,
+     "csve_high_docs": 51.0,
+     "pie_docs": 0.0,
+     "oot_docs": 41.0,
+     "oot_exposed_docs": 41.0,
+     "nongold_chars": 93512.0,
+     "collateral_chars": 971.0
+    },
+    "s_mt940_salary_reconciliation": {
+     "docs": 57.0,
+     "gold_chars": 12733.0,
+     "leaked_chars": 8720.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 46.0,
+     "pie_docs": 0.0,
+     "nongold_chars": 38000.0,
+     "collateral_chars": 36.0
+    },
+    "s_tpa_claims_mis_export": {
+     "docs": 57.0,
+     "gold_chars": 16577.0,
+     "leaked_chars": 9139.0,
+     "csve_docs": 57.0,
+     "csve_high_docs": 12.0,
+     "pie_docs": 0.0,
+     "oot_docs": 57.0,
+     "oot_exposed_docs": 57.0,
+     "nongold_chars": 35018.0,
+     "collateral_chars": 1466.0
+    }
+   }
+  },
+  "script_rendering": {
+   "cls": "heldout",
+   "docs": 0,
+   "csve": null,
+   "csve_high": null,
+   "char_leak": null,
+   "per_family": {}
+  }
+ },
+ "status": "complete"
+}
