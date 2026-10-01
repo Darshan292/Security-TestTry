@@ -28,3 +28,6 @@ eval/data2/*.jsonl
 eval/results/det_*.json
 graph/cache/
 graphify-out/
+# Release-3 corpus (v3): dev splits reproducible from the sealed generators; test3 sealed
+eval/data3/*.jsonl
+eval/data3/v12_keys.json
