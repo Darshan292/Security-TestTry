@@ -49,6 +49,11 @@ R2 relied on instructions alone for T-B: test2 templates sat in the repo next to
   - Fix, harness only (`eval/run_v3.py`, `eval/v3_gates.py`; `pgw/` untouched): empty kinds report `docs: 0` and G4 lists them as not applicable; the clean result is persisted before the adversarial passes.
   - The aborted locks are kept as `LOCK_v3_{A,B}_all_test3.aborted-44d973e.json`. All three arms are rerun once from a single new commit.
 
+- **D-4 (2026-10-01, container restarts).** Two container restarts killed the registered runs mid-way: arm A at 19:17 UTC and arm B at 20:40 UTC.
+  - Each partial output was set aside **unopened** with its hash, and its lock was renamed `*.interrupted-restart-ff30928.json`. The arm was rerun from the identical commit `ff30928`.
+  - After the freeze, both partial clean results were compared with the reruns programmatically: **identical**, latency excepted.
+  - An uncommitted harness change made by an unknown party at 19:03 UTC (resume, checkpoints, parallel adversarial workers) was **not used**, by owner decision. It is saved at `/home/user/run_v3_uncommitted_1903.patch`; its only run touched dev3build with known kinds.
+
 ### Audit results at freeze
 See `eval/v3/FREEZE.md`:
 - 0 forbidden-path reads by any author (one author's scratchpad was moved unread into the sealed directory);

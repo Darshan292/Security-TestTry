@@ -46,6 +46,12 @@ Code `a51c22d`; corpus seed 1337 (MANIFEST hashes). "Repro" = the command that r
 | M-33 | Component ablation, marginal leak pp (dev2 / test2 / ner_test2) | D1 +16.6 / +8.0 / +0.1; D2 +15.2 / +23.7 / +32.0; D4 +0.1 / +2.1 / +38.6; D3 +1.7 / +3.4 / 0; D0 ≈ 0 clean, spaced 5.8 → 37.3 % | `eval.run_ablation` → `ablation_r2.md` | D1 overfits; validators and NER generalise (PD-13) |
 | M-34 | Minimal configurations, test2 | ENTITY_ONLY 56.9 % leak / 74.3 % docs; RULES_ONLY 16.3 % / 44.8 %; D4_ONLY 88.7 % | same | Entity-centric alone cannot replace rules |
 | M-35 | Context-free shape ceiling and cost | 61.9 % of leaked chars shape-flaggable (82.8 % schema, 83.3 % structure, 80.9 % prose, 0 % PERSON, 0 % COMPENSATION); dev2 cost: DATE hits 210/420 negatives, entropy 84, Verhoeff 24 | `eval.root_cause` (`shape_ceiling`, `shape_cost_dev`) | Context needed for precision, not recall (PD-13); refutes "mask every date" as-is (PD-10) |
+| M-36 | R3 test3 (18 unseen families) CSVE, A / B / C | 0.527 / **0.361** / 0.382; CSVE-HIGH 0.312 / 0.110 / 0.114; char leak 0.241 / 0.107 / 0.113 | `eval/results/v3_?_test3_adv-all.json` (frozen `717521d`) | PD-13 better than A (bootstrap CI of B − A −0.26 to −0.08) but G1 fails (0.68× vs ≤ 0.5×) |
+| M-37 | R3 precision cost, A / B | negative-FP items 0.389 / 0.559; collateral masking 2.0 % / 6.6 %; precision SECRET 0.64 → 0.13, BANK 0.84 → 0.32, DOB 0.98 → 0.44 | same | G2 fails; Q-27 risk materialised |
+| M-38 | R3 key-novelty strata (per-value exposure), A / B | seen keys 20.7 % / 4.3 %; **unseen keys 40.6 % / 6.7 %**; no key 27.4 % / 19.4 % | same | A is vocabulary-dependent; inverting the default removes most of that dependence |
+| M-39 | R3 L3 verdict (G6) | test3 C − B CSVE +2.15 pp; ΔFP test −2.2 pp vs dev +5.0 pp; standard dictionary typings 81 % non-gold on test3 (15 % on dev3build) | `v3_gates.json`, `v3_l3_provenance_test3.json` | L3 = vocabulary overfitting; G6 fails |
+| M-40 | R3 generalisation gap (dev3build → test3 CSVE) | A 1.32×, **B 4.23×** (0.084 → 0.361), C 1.71×; dev3val B 0.233 | `v3_*_dev3build/dev3val/test3` | G3 fails; PD-13 implementation overfit its dev split |
+| M-41 | R3 residual composition and latency | 61 % of B's exposed docs are name-only; PERSON 13 % of values exposed; B p95 259 ms (G5 fails), max 93 s on one document | `v3_posthoc_test3.json`, test3 results | Next bottleneck is PERSON in unstructured/spoken/bilingual text; parser DoS risk |
 
 
 ## Part B — External claims (C-NN)

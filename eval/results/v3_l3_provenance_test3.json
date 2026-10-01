@@ -1,0 +1,10 @@
+{
+ "dev3 | release | WRONG_overlaps_gold": 9,
+ "dev3 | release | correct": 478,
+ "dev3 | type | no_gold": 277,
+ "dev3 | type | other_gold": 122,
+ "dev3 | type | same_type_gold": 896,
+ "standard | release | correct": 325,
+ "standard | type | no_gold": 2684,
+ "standard | type | same_type_gold": 611
+}

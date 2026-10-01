@@ -1,7 +1,7 @@
 # ESU Privacy Gateway — design package
 
 A policy-driven privacy gateway between ESU applications (HRIS/ERP) and LLM
-providers. **Status: Release 2 evaluated on a fresh held-out corpus. It is not secure enough for real HR data.**
+providers. **Status: Release 3 evaluated on 18 unseen document families ([SECURITY_EVALUATION_R3.md](SECURITY_EVALUATION_R3.md)). PD-13 not adopted (fails 5 of 6 gates). Not secure enough for real HR data.**
 Held-out character leak is 6.10 % (best config; gate ≤ 1 %), and 20 % of documents still send at least one raw value.
 Read [SECURITY_EVALUATION_R2.md](SECURITY_EVALUATION_R2.md) first (R1: [SECURITY_EVALUATION.md](SECURITY_EVALUATION.md)).
 

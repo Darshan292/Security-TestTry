@@ -1,0 +1,239 @@
+{
+ "A": {
+  "exposed_docs": 712,
+  "values_exposed_by_type": {
+   "AADHAAR": [
+    3,
+    71,
+    0.042
+   ],
+   "BANK_ACCOUNT": [
+    301,
+    465,
+    0.647
+   ],
+   "COMPENSATION": [
+    1721,
+    2206,
+    0.78
+   ],
+   "DATE_OF_BIRTH": [
+    458,
+    771,
+    0.594
+   ],
+   "EMAIL": [
+    0,
+    739,
+    0.0
+   ],
+   "EMPLOYEE_ID": [
+    73,
+    1267,
+    0.058
+   ],
+   "IFSC": [
+    66,
+    345,
+    0.191
+   ],
+   "PAN": [
+    0,
+    294,
+    0.0
+   ],
+   "PERSON": [
+    1306,
+    6231,
+    0.21
+   ],
+   "PHONE": [
+    53,
+    854,
+    0.062
+   ],
+   "SECRET": [
+    61,
+    348,
+    0.175
+   ],
+   "UPI_ID": [
+    2,
+    66,
+    0.03
+   ]
+  },
+  "exposed_doc_type_combos": {
+   "PERSON": 245,
+   "3+ types": 109,
+   "COMPENSATION+PERSON": 83,
+   "DATE_OF_BIRTH+PERSON": 64,
+   "DATE_OF_BIRTH": 43,
+   "COMPENSATION": 38,
+   "SECRET": 29,
+   "BANK_ACCOUNT+PERSON": 23,
+   "EMPLOYEE_ID+PERSON": 17,
+   "PERSON+PHONE": 9,
+   "COMPENSATION+DATE_OF_BIRTH": 9,
+   "BANK_ACCOUNT+COMPENSATION": 9
+  }
+ },
+ "B": {
+  "exposed_docs": 487,
+  "values_exposed_by_type": {
+   "AADHAAR": [
+    0,
+    71,
+    0.0
+   ],
+   "BANK_ACCOUNT": [
+    82,
+    465,
+    0.176
+   ],
+   "COMPENSATION": [
+    163,
+    2206,
+    0.074
+   ],
+   "DATE_OF_BIRTH": [
+    122,
+    771,
+    0.158
+   ],
+   "EMAIL": [
+    0,
+    739,
+    0.0
+   ],
+   "EMPLOYEE_ID": [
+    34,
+    1267,
+    0.027
+   ],
+   "IFSC": [
+    66,
+    345,
+    0.191
+   ],
+   "PAN": [
+    0,
+    294,
+    0.0
+   ],
+   "PERSON": [
+    807,
+    6231,
+    0.13
+   ],
+   "PHONE": [
+    51,
+    854,
+    0.06
+   ],
+   "SECRET": [
+    21,
+    348,
+    0.06
+   ],
+   "UPI_ID": [
+    2,
+    66,
+    0.03
+   ]
+  },
+  "exposed_doc_type_combos": {
+   "PERSON": 296,
+   "3+ types": 34,
+   "COMPENSATION+PERSON": 31,
+   "DATE_OF_BIRTH": 20,
+   "BANK_ACCOUNT+PERSON": 19,
+   "DATE_OF_BIRTH+PERSON": 13,
+   "IFSC": 13,
+   "COMPENSATION": 11,
+   "SECRET": 10,
+   "PERSON+PHONE": 7,
+   "COMPENSATION+PHONE": 6,
+   "BANK_ACCOUNT+IFSC": 6
+  }
+ },
+ "C": {
+  "exposed_docs": 516,
+  "values_exposed_by_type": {
+   "AADHAAR": [
+    0,
+    71,
+    0.0
+   ],
+   "BANK_ACCOUNT": [
+    82,
+    465,
+    0.176
+   ],
+   "COMPENSATION": [
+    187,
+    2206,
+    0.085
+   ],
+   "DATE_OF_BIRTH": [
+    100,
+    771,
+    0.13
+   ],
+   "EMAIL": [
+    0,
+    739,
+    0.0
+   ],
+   "EMPLOYEE_ID": [
+    34,
+    1267,
+    0.027
+   ],
+   "IFSC": [
+    66,
+    345,
+    0.191
+   ],
+   "PAN": [
+    0,
+    294,
+    0.0
+   ],
+   "PERSON": [
+    884,
+    6231,
+    0.142
+   ],
+   "PHONE": [
+    51,
+    854,
+    0.06
+   ],
+   "SECRET": [
+    21,
+    348,
+    0.06
+   ],
+   "UPI_ID": [
+    2,
+    66,
+    0.03
+   ]
+  },
+  "exposed_doc_type_combos": {
+   "PERSON": 319,
+   "3+ types": 36,
+   "COMPENSATION+PERSON": 33,
+   "BANK_ACCOUNT+PERSON": 19,
+   "DATE_OF_BIRTH+PERSON": 17,
+   "COMPENSATION": 15,
+   "DATE_OF_BIRTH": 14,
+   "IFSC": 13,
+   "SECRET": 10,
+   "PERSON+PHONE": 7,
+   "COMPENSATION+PHONE": 6,
+   "BANK_ACCOUNT+IFSC": 6
+  }
+ }
+}

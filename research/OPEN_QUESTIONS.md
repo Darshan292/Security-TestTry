@@ -37,6 +37,8 @@ Priority: **P0** blocks any real-data use Â· **P1** blocks the next phase gate Â
 | Q-26 | May huggingface.co be allowed in the build environment (for GLiNER)? | Only spaCy could be benchmarked; best deployable external-name recall is 0.794 | PD-12 | environment policy (FACT-M: host refused) | Environment owner decision | Owner | P1 |
 | Q-27 | Can person-record anchoring decide date/number sensitivity accurately enough that release-by-context keeps precision? | PD-13 recall depends on it not at all; precision depends on it entirely | PD-13 | None | Third-corpus L3 ablation (precision vs recall shift) | Architect | **P0** |
 | Q-28 | Who authors corpus v3, with what generator design, so it is independent of the fixers and of this analysis? | test2 now informs the design and cannot validate it | PD-14 | M-32 | Owner decision before any PD-13 code | Owner | **P0** |
+| Q-29 | How should PERSON exposure in unstructured, spoken, code-mixed and non-Latin text be cut, given it is 61 % of B's residual? | Blocks CSVE gates for any architecture | PD-12, PD-13 | M-41 | Owner review of R3 before any new experiment | Owner | **P0** |
+| Q-30 | What causes B's 93-second document (parser DoS)? | Availability and T-18 | PD-13 | M-41 | Investigate only after owner review | Architect | P1 |
 
 ## Closed in this iteration
 
