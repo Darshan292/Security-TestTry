@@ -1,0 +1,1352 @@
+[
+ {
+  "key": "givenName",
+  "concept": "PERSON",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "familyName",
+  "concept": "PERSON",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "additionalName",
+  "concept": "PERSON",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "name",
+  "concept": "PERSON",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)",
+  "needs_evidence": true,
+  "suffix": true
+ },
+ {
+  "key": "email",
+  "concept": "EMAIL",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "telephone",
+  "concept": "PHONE",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "faxNumber",
+  "concept": "PHONE",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "birthDate",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "taxID",
+  "concept": "PAN",
+  "provenance": "standard:schema.org Person / JobPosting / Thing (https://schema.org/Person, https://schema.org/JobPosting)"
+ },
+ {
+  "key": "baseSalary",
+  "concept": "COMPENSATION",
+  "provenance": "standard:schema.org JobPosting baseSalary / estimatedSalary (https://schema.org/JobPosting)"
+ },
+ {
+  "key": "estimatedSalary",
+  "concept": "COMPENSATION",
+  "provenance": "standard:schema.org JobPosting baseSalary / estimatedSalary (https://schema.org/JobPosting)"
+ },
+ {
+  "key": "dateCreated",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:schema.org Thing / CreativeWork date properties (https://schema.org/CreativeWork)"
+ },
+ {
+  "key": "dateModified",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:schema.org Thing / CreativeWork date properties (https://schema.org/CreativeWork)"
+ },
+ {
+  "key": "datePublished",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:schema.org Thing / CreativeWork date properties (https://schema.org/CreativeWork)"
+ },
+ {
+  "key": "datePosted",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:schema.org Thing / CreativeWork date properties (https://schema.org/CreativeWork)"
+ },
+ {
+  "key": "validThrough",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:schema.org Thing / CreativeWork date properties (https://schema.org/CreativeWork)"
+ },
+ {
+  "key": "currency",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:schema.org MonetaryAmount currency (https://schema.org/MonetaryAmount)"
+ },
+ {
+  "key": "FN",
+  "concept": "PERSON",
+  "provenance": "standard:vCard RFC 6350 section 6.2 identification properties (FN, N, NICKNAME, BDAY, ANNIVERSARY)"
+ },
+ {
+  "key": "N",
+  "concept": "PERSON",
+  "provenance": "standard:vCard RFC 6350 section 6.2 identification properties (FN, N, NICKNAME, BDAY, ANNIVERSARY)"
+ },
+ {
+  "key": "NICKNAME",
+  "concept": "PERSON",
+  "provenance": "standard:vCard RFC 6350 section 6.2 identification properties (FN, N, NICKNAME, BDAY, ANNIVERSARY)"
+ },
+ {
+  "key": "BDAY",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "standard:vCard RFC 6350 section 6.2.5 BDAY"
+ },
+ {
+  "key": "ANNIVERSARY",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:vCard RFC 6350 section 6.2.6 ANNIVERSARY"
+ },
+ {
+  "key": "TEL",
+  "concept": "PHONE",
+  "provenance": "standard:vCard RFC 6350 section 6.4 communications (TEL, EMAIL)"
+ },
+ {
+  "key": "EMAIL",
+  "concept": "EMAIL",
+  "provenance": "standard:vCard RFC 6350 section 6.4.2 EMAIL"
+ },
+ {
+  "key": "UID",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:vCard RFC 6350 section 6.7 explanatory properties (UID, REV, PRODID)"
+ },
+ {
+  "key": "REV",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:vCard RFC 6350 section 6.7.4 REV"
+ },
+ {
+  "key": "PERNR",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 Organizational Assignment / PA0002 Personal Data"
+ },
+ {
+  "key": "personnel number",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 Organizational Assignment / PA0002 Personal Data"
+ },
+ {
+  "key": "ENAME",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "NACHN",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "VORNA",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "MIDNM",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "NAME2",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "RUFNM",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "last name",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "first name",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "middle name",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "formatted name of employee",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 ENAME / PA0002 NACHN VORNA MIDNM NAME2 RUFNM"
+ },
+ {
+  "key": "GBDAT",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0002 GBDAT (Date of Birth)"
+ },
+ {
+  "key": "birth date",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0002 GBDAT (Date of Birth)"
+ },
+ {
+  "key": "ANSAL",
+  "concept": "COMPENSATION",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 Basic Pay ANSAL (Annual salary), BET01-BET03 (wage type amount)"
+ },
+ {
+  "key": "annual salary",
+  "concept": "COMPENSATION",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 Basic Pay ANSAL (Annual salary), BET01-BET03 (wage type amount)"
+ },
+ {
+  "key": "BET01",
+  "concept": "COMPENSATION",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 Basic Pay ANSAL (Annual salary), BET01-BET03 (wage type amount)"
+ },
+ {
+  "key": "BET02",
+  "concept": "COMPENSATION",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 Basic Pay ANSAL (Annual salary), BET01-BET03 (wage type amount)"
+ },
+ {
+  "key": "BET03",
+  "concept": "COMPENSATION",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 Basic Pay ANSAL (Annual salary), BET01-BET03 (wage type amount)"
+ },
+ {
+  "key": "BANKN",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0009 Bank Details BANKN (Bank account number)"
+ },
+ {
+  "key": "bank account number",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0009 Bank Details BANKN (Bank account number)"
+ },
+ {
+  "key": "BANKL",
+  "concept": "IFSC",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0009 Bank Details BANKL (Bank key)"
+ },
+ {
+  "key": "bank key",
+  "concept": "IFSC",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0009 Bank Details BANKL (Bank key)"
+ },
+ {
+  "key": "TELNR",
+  "concept": "PHONE",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0006 Addresses TELNR (Telephone number)"
+ },
+ {
+  "key": "telephone number",
+  "concept": "PHONE",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0006 Addresses TELNR (Telephone number)"
+ },
+ {
+  "key": "EMFTX",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0009 EMFTX (Payee)",
+  "needs_evidence": true
+ },
+ {
+  "key": "payee",
+  "concept": "PERSON",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0009 EMFTX (Payee)",
+  "needs_evidence": true
+ },
+ {
+  "key": "BEGDA",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP HCM PA infotype field names, validity fields BEGDA / ENDDA (Start Date / End Date)"
+ },
+ {
+  "key": "ENDDA",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP HCM PA infotype field names, validity fields BEGDA / ENDDA (Start Date / End Date)"
+ },
+ {
+  "key": "KOSTL",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "WERKS",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "BTRTL",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "PLANS",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "ORGEH",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "PERSG",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "PERSK",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "ABKRS",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "cost center",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "personnel area",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "personnel subarea",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "payroll area",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0001 organisational keys KOSTL WERKS BTRTL PLANS ORGEH PERSG PERSK ABKRS"
+ },
+ {
+  "key": "TRFGR",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 TRFGR WAERS"
+ },
+ {
+  "key": "WAERS",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 TRFGR WAERS"
+ },
+ {
+  "key": "pay scale group",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0008 TRFGR WAERS"
+ },
+ {
+  "key": "WOSTD",
+  "concept": "RELEASE_AMOUNT",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0007 WOSTD BSGRD (working hours, capacity utilization)"
+ },
+ {
+  "key": "BSGRD",
+  "concept": "RELEASE_AMOUNT",
+  "provenance": "standard:SAP HCM PA infotype field names, PA0007 WOSTD BSGRD (working hours, capacity utilization)"
+ },
+ {
+  "key": "Employee_ID",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Employee_ID / Worker_ID"
+ },
+ {
+  "key": "Worker_ID",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Employee_ID / Worker_ID"
+ },
+ {
+  "key": "Formatted_Name",
+  "concept": "PERSON",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Legal_Name / Name_Detail_Data"
+ },
+ {
+  "key": "Reporting_Name",
+  "concept": "PERSON",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Legal_Name / Name_Detail_Data"
+ },
+ {
+  "key": "First_Name",
+  "concept": "PERSON",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Legal_Name / Name_Detail_Data"
+ },
+ {
+  "key": "Last_Name",
+  "concept": "PERSON",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Legal_Name / Name_Detail_Data"
+ },
+ {
+  "key": "Middle_Name",
+  "concept": "PERSON",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Legal_Name / Name_Detail_Data"
+ },
+ {
+  "key": "Legal_Name",
+  "concept": "PERSON",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Legal_Name / Name_Detail_Data"
+ },
+ {
+  "key": "Date_of_Birth",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Date_of_Birth"
+ },
+ {
+  "key": "Email_Address",
+  "concept": "EMAIL",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Email_Address"
+ },
+ {
+  "key": "Formatted_Phone",
+  "concept": "PHONE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Formatted_Phone / Phone_Number"
+ },
+ {
+  "key": "Phone_Number",
+  "concept": "PHONE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Formatted_Phone / Phone_Number"
+ },
+ {
+  "key": "Account_Number",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Account_Number / IBAN (Payment_Election bank account)"
+ },
+ {
+  "key": "IBAN",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Account_Number / IBAN (Payment_Election bank account)"
+ },
+ {
+  "key": "Bank_ID_Number",
+  "concept": "IFSC",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Bank_ID_Number"
+ },
+ {
+  "key": "Total_Base_Pay",
+  "concept": "COMPENSATION",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Total_Base_Pay / Compensation_Summary"
+ },
+ {
+  "key": "Total_Salary_And_Allowances",
+  "concept": "COMPENSATION",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Total_Base_Pay / Compensation_Summary"
+ },
+ {
+  "key": "Hire_Date",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Hire_Date Original_Hire_Date Continuous_Service_Date Termination_Date Last_Day_of_Work Effective_Date (Employment_Data)"
+ },
+ {
+  "key": "Original_Hire_Date",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Hire_Date Original_Hire_Date Continuous_Service_Date Termination_Date Last_Day_of_Work Effective_Date (Employment_Data)"
+ },
+ {
+  "key": "Continuous_Service_Date",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Hire_Date Original_Hire_Date Continuous_Service_Date Termination_Date Last_Day_of_Work Effective_Date (Employment_Data)"
+ },
+ {
+  "key": "Termination_Date",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Hire_Date Original_Hire_Date Continuous_Service_Date Termination_Date Last_Day_of_Work Effective_Date (Employment_Data)"
+ },
+ {
+  "key": "Last_Day_of_Work",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Hire_Date Original_Hire_Date Continuous_Service_Date Termination_Date Last_Day_of_Work Effective_Date (Employment_Data)"
+ },
+ {
+  "key": "Effective_Date",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element Hire_Date Original_Hire_Date Continuous_Service_Date Termination_Date Last_Day_of_Work Effective_Date (Employment_Data)"
+ },
+ {
+  "key": "WID",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element WID / Universal_ID / Position_ID / Job_Profile_ID / Cost_Center_ID"
+ },
+ {
+  "key": "Universal_ID",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element WID / Universal_ID / Position_ID / Job_Profile_ID / Cost_Center_ID"
+ },
+ {
+  "key": "Position_ID",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element WID / Universal_ID / Position_ID / Job_Profile_ID / Cost_Center_ID"
+ },
+ {
+  "key": "Job_Profile_ID",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element WID / Universal_ID / Position_ID / Job_Profile_ID / Cost_Center_ID"
+ },
+ {
+  "key": "Cost_Center_ID",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Workday Get_Workers public WSDL (Human_Resources, Worker_Data) element WID / Universal_ID / Position_ID / Job_Profile_ID / Cost_Center_ID"
+ },
+ {
+  "key": "personIdExternal",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPerson.personIdExternal / EmpJob.userId"
+ },
+ {
+  "key": "userId",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPerson.personIdExternal / EmpJob.userId"
+ },
+ {
+  "key": "firstName",
+  "concept": "PERSON",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPersonal firstName lastName middleName displayName preferredName"
+ },
+ {
+  "key": "lastName",
+  "concept": "PERSON",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPersonal firstName lastName middleName displayName preferredName"
+ },
+ {
+  "key": "middleName",
+  "concept": "PERSON",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPersonal firstName lastName middleName displayName preferredName"
+ },
+ {
+  "key": "displayName",
+  "concept": "PERSON",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPersonal firstName lastName middleName displayName preferredName"
+ },
+ {
+  "key": "preferredName",
+  "concept": "PERSON",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPersonal firstName lastName middleName displayName preferredName"
+ },
+ {
+  "key": "dateOfBirth",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPerson.dateOfBirth"
+ },
+ {
+  "key": "emailAddress",
+  "concept": "EMAIL",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerEmail.emailAddress"
+ },
+ {
+  "key": "phoneNumber",
+  "concept": "PHONE",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerPhone.phoneNumber"
+ },
+ {
+  "key": "accountNumber",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerBankAccount-style accountNumber / iban"
+ },
+ {
+  "key": "iban",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:SAP SuccessFactors OData API entity PerBankAccount-style accountNumber / iban"
+ },
+ {
+  "key": "paycompvalue",
+  "concept": "COMPENSATION",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpPayCompRecurring.paycompvalue"
+ },
+ {
+  "key": "startDate",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpEmployment startDate endDate originalStartDate lastDateWorked; EmpJob lastModifiedDateTime"
+ },
+ {
+  "key": "endDate",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpEmployment startDate endDate originalStartDate lastDateWorked; EmpJob lastModifiedDateTime"
+ },
+ {
+  "key": "originalStartDate",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpEmployment startDate endDate originalStartDate lastDateWorked; EmpJob lastModifiedDateTime"
+ },
+ {
+  "key": "lastDateWorked",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpEmployment startDate endDate originalStartDate lastDateWorked; EmpJob lastModifiedDateTime"
+ },
+ {
+  "key": "lastModifiedDateTime",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpEmployment startDate endDate originalStartDate lastDateWorked; EmpJob lastModifiedDateTime"
+ },
+ {
+  "key": "createdDateTime",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpEmployment startDate endDate originalStartDate lastDateWorked; EmpJob lastModifiedDateTime"
+ },
+ {
+  "key": "payGrade",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpJob payGrade payGroup jobCode department division location"
+ },
+ {
+  "key": "payGroup",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpJob payGrade payGroup jobCode department division location"
+ },
+ {
+  "key": "jobCode",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpJob payGrade payGroup jobCode department division location"
+ },
+ {
+  "key": "department",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpJob payGrade payGroup jobCode department division location"
+ },
+ {
+  "key": "division",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpJob payGrade payGroup jobCode department division location"
+ },
+ {
+  "key": "location",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:SAP SuccessFactors OData API entity EmpJob payGrade payGroup jobCode department division location"
+ },
+ {
+  "key": "GivenName",
+  "concept": "PERSON",
+  "provenance": "standard:HR Open Standards (HR-XML) PersonName / ContactMethod PersonName GivenName FamilyName FormattedName MiddleName"
+ },
+ {
+  "key": "FamilyName",
+  "concept": "PERSON",
+  "provenance": "standard:HR Open Standards (HR-XML) PersonName / ContactMethod PersonName GivenName FamilyName FormattedName MiddleName"
+ },
+ {
+  "key": "FormattedName",
+  "concept": "PERSON",
+  "provenance": "standard:HR Open Standards (HR-XML) PersonName / ContactMethod PersonName GivenName FamilyName FormattedName MiddleName"
+ },
+ {
+  "key": "MiddleName",
+  "concept": "PERSON",
+  "provenance": "standard:HR Open Standards (HR-XML) PersonName / ContactMethod PersonName GivenName FamilyName FormattedName MiddleName"
+ },
+ {
+  "key": "InternetEmailAddress",
+  "concept": "EMAIL",
+  "provenance": "standard:HR Open Standards (HR-XML) PersonName / ContactMethod ContactMethod InternetEmailAddress"
+ },
+ {
+  "key": "FormattedNumber",
+  "concept": "PHONE",
+  "provenance": "standard:HR Open Standards (HR-XML) PersonName / ContactMethod Telephone FormattedNumber"
+ },
+ {
+  "key": "HireDate",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:HR Open Standards (HR-XML) PersonName / ContactMethod EmploymentHistory StartDate EndDate / HireDate"
+ },
+ {
+  "key": "Cdtr/Nm",
+  "concept": "PERSON",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Cdtr/Nm UltmtCdtr/Nm (party name)"
+ },
+ {
+  "key": "UltmtCdtr/Nm",
+  "concept": "PERSON",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Cdtr/Nm UltmtCdtr/Nm (party name)"
+ },
+ {
+  "key": "Dbtr/Nm",
+  "concept": "PERSON",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Dbtr/Nm UltmtDbtr/Nm InitgPty/Nm (party name; org or person)",
+  "needs_evidence": true
+ },
+ {
+  "key": "UltmtDbtr/Nm",
+  "concept": "PERSON",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Dbtr/Nm UltmtDbtr/Nm InitgPty/Nm (party name; org or person)",
+  "needs_evidence": true
+ },
+ {
+  "key": "InitgPty/Nm",
+  "concept": "PERSON",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Dbtr/Nm UltmtDbtr/Nm InitgPty/Nm (party name; org or person)",
+  "needs_evidence": true
+ },
+ {
+  "key": "CdtrAcct/Id/IBAN",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CdtrAcct/Id/IBAN, CdtrAcct/Id/Othr/Id, DbtrAcct/Id/IBAN, DbtrAcct/Id/Othr/Id (account identification)"
+ },
+ {
+  "key": "CdtrAcct/Id/Othr/Id",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CdtrAcct/Id/IBAN, CdtrAcct/Id/Othr/Id, DbtrAcct/Id/IBAN, DbtrAcct/Id/Othr/Id (account identification)"
+ },
+ {
+  "key": "DbtrAcct/Id/IBAN",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CdtrAcct/Id/IBAN, CdtrAcct/Id/Othr/Id, DbtrAcct/Id/IBAN, DbtrAcct/Id/Othr/Id (account identification)"
+ },
+ {
+  "key": "DbtrAcct/Id/Othr/Id",
+  "concept": "BANK_ACCOUNT",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CdtrAcct/Id/IBAN, CdtrAcct/Id/Othr/Id, DbtrAcct/Id/IBAN, DbtrAcct/Id/Othr/Id (account identification)"
+ },
+ {
+  "key": "CdtrAgt/FinInstnId/ClrSysMmbId/MmbId",
+  "concept": "IFSC",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element ClrSysMmbId/MmbId (clearing system member id)"
+ },
+ {
+  "key": "InstdAmt",
+  "concept": "COMPENSATION",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element InstdAmt / EqvtAmt (instructed amount)"
+ },
+ {
+  "key": "EqvtAmt",
+  "concept": "COMPENSATION",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element InstdAmt / EqvtAmt (instructed amount)"
+ },
+ {
+  "key": "CtrlSum",
+  "concept": "RELEASE_AMOUNT",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CtrlSum / NbOfTxs (group header control values)"
+ },
+ {
+  "key": "NbOfTxs",
+  "concept": "RELEASE_AMOUNT",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CtrlSum / NbOfTxs (group header control values)"
+ },
+ {
+  "key": "MsgId",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "PmtInfId",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "InstrId",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "EndToEndId",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "TxId",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "UETR",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "BICFI",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "BIC",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element MsgId PmtInfId InstrId EndToEndId TxId UETR (references)"
+ },
+ {
+  "key": "CreDtTm",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CreDtTm ReqdExctnDt ReqdColltnDt IntrBkSttlmDt ValDt BookgDt"
+ },
+ {
+  "key": "ReqdExctnDt",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CreDtTm ReqdExctnDt ReqdColltnDt IntrBkSttlmDt ValDt BookgDt"
+ },
+ {
+  "key": "ReqdColltnDt",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CreDtTm ReqdExctnDt ReqdColltnDt IntrBkSttlmDt ValDt BookgDt"
+ },
+ {
+  "key": "IntrBkSttlmDt",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CreDtTm ReqdExctnDt ReqdColltnDt IntrBkSttlmDt ValDt BookgDt"
+ },
+ {
+  "key": "ValDt",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CreDtTm ReqdExctnDt ReqdColltnDt IntrBkSttlmDt ValDt BookgDt"
+ },
+ {
+  "key": "BookgDt",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element CreDtTm ReqdExctnDt ReqdColltnDt IntrBkSttlmDt ValDt BookgDt"
+ },
+ {
+  "key": "BirthDt",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element DtAndPlcOfBirth/BirthDt"
+ },
+ {
+  "key": "Ustrd",
+  "concept": "RELEASE_TEXT",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element RmtInf/Ustrd (unstructured remittance)"
+ },
+ {
+  "key": "PhneNb",
+  "concept": "PHONE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Ctct PhneNb MobNb EmailAdr"
+ },
+ {
+  "key": "MobNb",
+  "concept": "PHONE",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Ctct PhneNb MobNb EmailAdr"
+ },
+ {
+  "key": "EmailAdr",
+  "concept": "EMAIL",
+  "provenance": "standard:ISO 20022 pain.001 / camt.053 message element Ctct EmailAdr"
+ },
+ {
+  "key": "MEMBER_NAME",
+  "concept": "PERSON",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column MEMBER_NAME"
+ },
+ {
+  "key": "GROSS_WAGES",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "EPF_WAGES",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "EPS_WAGES",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "EDLI_WAGES",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "EPF_CONTRI_REMITTED",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "EPS_CONTRI_REMITTED",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "EPF_EPS_DIFF_REMITTED",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "REFUND_OF_ADVANCES",
+  "concept": "COMPENSATION",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column GROSS_WAGES EPF_WAGES EPS_WAGES EDLI_WAGES EPF_CONTRI_REMITTED EPS_CONTRI_REMITTED EPF_EPS_DIFF_REMITTED REFUND_OF_ADVANCES"
+ },
+ {
+  "key": "NCP_DAYS",
+  "concept": "RELEASE_AMOUNT",
+  "provenance": "standard:EPFO ECR text file v2 (Electronic Challan cum Return) column NCP_DAYS"
+ },
+ {
+  "key": "Date of Joining EPF",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:EPFO UAN member KYC / ECR labels (Date of Joining EPF, Date of Exit)"
+ },
+ {
+  "key": "Date of Exit",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:EPFO UAN member KYC / ECR labels (Date of Joining EPF, Date of Exit)"
+ },
+ {
+  "key": "Father/Husband Name",
+  "concept": "PERSON",
+  "provenance": "standard:EPFO UAN member KYC labels (Father/Husband Name)"
+ },
+ {
+  "key": "Father Husband Name",
+  "concept": "PERSON",
+  "provenance": "standard:EPFO UAN member KYC labels (Father/Husband Name)"
+ },
+ {
+  "key": "Establishment ID",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:EPFO establishment labels (Establishment ID / PF Code)"
+ },
+ {
+  "key": "Establishment Code",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:EPFO establishment labels (Establishment ID / PF Code)"
+ },
+ {
+  "key": "IP Name",
+  "concept": "PERSON",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column IP Name"
+ },
+ {
+  "key": "Name of Father/Husband",
+  "concept": "PERSON",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column IP Name"
+ },
+ {
+  "key": "Total Monthly Wages",
+  "concept": "COMPENSATION",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column Total Monthly Wages"
+ },
+ {
+  "key": "No of Days for which wages paid payable during the month",
+  "concept": "RELEASE_AMOUNT",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column No of Days for which wages paid/payable during the month"
+ },
+ {
+  "key": "No of Days",
+  "concept": "RELEASE_AMOUNT",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column No of Days for which wages paid/payable during the month"
+ },
+ {
+  "key": "Last Working Day",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column Last Working Day / Date of Appointment"
+ },
+ {
+  "key": "Date of Appointment",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column Last Working Day / Date of Appointment"
+ },
+ {
+  "key": "Employer Code No",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column Employer Code No"
+ },
+ {
+  "key": "Employer Code",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:ESIC monthly contribution template (Form 5 / MC upload) column Employer Code No"
+ },
+ {
+  "key": "Name of the employee",
+  "concept": "PERSON",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Name and address of the Employee / Name of the employee"
+ },
+ {
+  "key": "Name of employee",
+  "concept": "PERSON",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Name and address of the Employee / Name of the employee"
+ },
+ {
+  "key": "Name of the deductee",
+  "concept": "PERSON",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Name and address of the Employee / Name of the employee"
+ },
+ {
+  "key": "PAN of the employee",
+  "concept": "PAN",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label PAN of the Employee"
+ },
+ {
+  "key": "PAN of employee",
+  "concept": "PAN",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label PAN of the Employee"
+ },
+ {
+  "key": "PAN of the deductee",
+  "concept": "PAN",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label PAN of the Employee"
+ },
+ {
+  "key": "Employee Reference No provided by the Employer",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Employee Reference No. provided by the Employer"
+ },
+ {
+  "key": "Employee Reference Number",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Employee Reference No. provided by the Employer"
+ },
+ {
+  "key": "Gross salary",
+  "concept": "COMPENSATION",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Gross salary (section 17(1)) / Gross total income / Amount paid or credited"
+ },
+ {
+  "key": "Gross total income",
+  "concept": "COMPENSATION",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Gross salary (section 17(1)) / Gross total income / Amount paid or credited"
+ },
+ {
+  "key": "Total income",
+  "concept": "COMPENSATION",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Gross salary (section 17(1)) / Gross total income / Amount paid or credited"
+ },
+ {
+  "key": "Amount paid credited",
+  "concept": "COMPENSATION",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Gross salary (section 17(1)) / Gross total income / Amount paid or credited"
+ },
+ {
+  "key": "Salary as per provisions contained in section 17 1",
+  "concept": "COMPENSATION",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Gross salary (section 17(1)) / Gross total income / Amount paid or credited"
+ },
+ {
+  "key": "Date of payment credit",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Date of payment or credit / deduction / deposit"
+ },
+ {
+  "key": "Date of deduction",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Date of payment or credit / deduction / deposit"
+ },
+ {
+  "key": "Date of deposit",
+  "concept": "RELEASE_DATE",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label Date of payment or credit / deduction / deposit"
+ },
+ {
+  "key": "TAN of the Deductor",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label TAN / PAN of the Deductor, Challan serial number, BSR code, Certificate number"
+ },
+ {
+  "key": "PAN of the Deductor",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label TAN / PAN of the Deductor, Challan serial number, BSR code, Certificate number"
+ },
+ {
+  "key": "Challan serial number",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label TAN / PAN of the Deductor, Challan serial number, BSR code, Certificate number"
+ },
+ {
+  "key": "BSR code",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label TAN / PAN of the Deductor, Challan serial number, BSR code, Certificate number"
+ },
+ {
+  "key": "Certificate number",
+  "concept": "RELEASE_ID",
+  "provenance": "standard:Income Tax Form 16 / Form 24Q label TAN / PAN of the Deductor, Challan serial number, BSR code, Certificate number"
+ },
+ {
+  "key": "SALARY",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-000"
+ },
+ {
+  "key": "Salary (Basic+DA)",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-003"
+ },
+ {
+  "key": "BASIC+DA",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-001"
+ },
+ {
+  "key": "Monthly Gross",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-026"
+ },
+ {
+  "key": "Last Drawn Salary",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-002"
+ },
+ {
+  "key": "units",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-002"
+ },
+ {
+  "key": "ARREAR_EPF_WAGES",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_epfo_employer_upload_txt-005"
+ },
+ {
+  "key": "ARREAR_EPS_WAGES",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_epfo_employer_upload_txt-005"
+ },
+ {
+  "key": "ARREAR_EDLI_WAGES",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_epfo_employer_upload_txt-005"
+ },
+ {
+  "key": "ARREAR_EPF_EE_SHARE",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_epfo_employer_upload_txt-005"
+ },
+ {
+  "key": "ARREAR_EPS_SHARE",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_epfo_employer_upload_txt-005"
+ },
+ {
+  "key": "salary",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-000",
+  "suffix": true
+ },
+ {
+  "key": "gross",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-026",
+  "suffix": true
+ },
+ {
+  "key": "wages",
+  "concept": "COMPENSATION",
+  "provenance": "dev3:dev3build-i_psql_result_grid_ticket-019",
+  "suffix": true
+ },
+ {
+  "key": "DOB",
+  "concept": "DATE_OF_BIRTH",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-000"
+ },
+ {
+  "key": "Employee",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-002"
+ },
+ {
+  "key": "emp_id",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-001"
+ },
+ {
+  "key": "Emp. Code",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-004"
+ },
+ {
+  "key": "EMPCODE",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-000"
+ },
+ {
+  "key": "emp_code",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "dev3:dev3build-i_psql_result_grid_ticket-000"
+ },
+ {
+  "key": "employeeCode",
+  "concept": "EMPLOYEE_ID",
+  "provenance": "dev3:dev3build-i_mongosh_benefits_shell-000"
+ },
+ {
+  "key": "Name",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_campus_drive_deck_text-000",
+  "needs_evidence": true
+ },
+ {
+  "key": "name",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_campus_drive_deck_text-000",
+  "suffix": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "officer",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_campus_drive_deck_text-005",
+  "suffix": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "nominee",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-006",
+  "suffix": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "claimant",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-002",
+  "suffix": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "Nominee/Claimant",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-s_gratuity_actuarial_census-002",
+  "needs_evidence": true
+ },
+ {
+  "key": "LEDGERNAME",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-s_tally_xml_voucher_export-002",
+  "needs_evidence": true
+ },
+ {
+  "key": "_id",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_mongosh_benefits_shell-000"
+ },
+ {
+  "key": "$oid",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_mongosh_benefits_shell-005"
+ },
+ {
+  "key": "GUID",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-s_tally_xml_voucher_export-002"
+ },
+ {
+  "key": "REMOTEID",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-s_tally_xml_voucher_export-002"
+ },
+ {
+  "key": "trace",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-001"
+ },
+ {
+  "key": "idempotency_key",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-002"
+ },
+ {
+  "key": "payout_id",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-000"
+ },
+ {
+  "key": "payoutId",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-010"
+ },
+ {
+  "key": "traceId",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-007"
+ },
+ {
+  "key": "trace_id",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-004"
+ },
+ {
+  "key": "idempotencyKey",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-008"
+ },
+ {
+  "key": "Message-ID",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-c_raw_mime_training_sponsorship-000"
+ },
+ {
+  "key": "boundary",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-c_raw_mime_training_sponsorship-001"
+ },
+ {
+  "key": "policyNo",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_mongosh_benefits_shell-004"
+ },
+ {
+  "key": "Transaction ID",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-c_raw_mime_training_sponsorship-006"
+ },
+ {
+  "key": "payment_ref",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-000"
+ },
+ {
+  "key": "paymentRef",
+  "concept": "RELEASE_ID",
+  "provenance": "dev3:dev3build-i_grpc_textproto_payout_debug-007"
+ },
+ {
+  "key": "nominee",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-002",
+  "anyword": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "officer",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_campus_drive_deck_text-005",
+  "anyword": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "father",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_security_guard_police_verification_ocr-000",
+  "anyword": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "contact",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-000",
+  "anyword": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "technician",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-003",
+  "anyword": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "manager",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-001",
+  "anyword": true,
+  "needs_evidence": true
+ },
+ {
+  "key": "holder",
+  "concept": "PERSON",
+  "provenance": "dev3:dev3build-c_exit_clearance_form_pdf-004",
+  "anyword": true,
+  "needs_evidence": true
+ }
+]

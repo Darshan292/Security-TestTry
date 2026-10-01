@@ -1,0 +1,352 @@
+{
+ "arm": "B",
+ "split": "dev3build",
+ "clean": {
+  "docs": 900,
+  "csve": 0.08444444444444445,
+  "csve_high": 0.01,
+  "pie": 0.0,
+  "csve_oot": 0.4587628865979381,
+  "char_leak": 0.026488676996424314,
+  "char_leak_family_macro": 0.031269761780104564,
+  "neg_fp_item_rate": 0.45555555555555555,
+  "neg_fp_spans_per_1k_chars": 3.206035957449219,
+  "collateral_masking": 0.054958054811771365,
+  "positive_docs": 720,
+  "per_type": {
+   "AADHAAR": {
+    "n_gold": 115,
+    "recall": 0.7391304347826086,
+    "recall_ci95": [
+     0.6520743921782445,
+     0.8107265125554514
+    ],
+    "n_pred": 85,
+    "precision": 1.0
+   },
+   "BANK_ACCOUNT": {
+    "n_gold": 349,
+    "recall": 0.9770773638968482,
+    "recall_ci95": [
+     0.9554261666826876,
+     0.9883401012403691
+    ],
+    "n_pred": 519,
+    "precision": 0.6570327552986512
+   },
+   "CARD": {
+    "n_gold": 4,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.5100999795960008,
+     1.0
+    ],
+    "n_pred": 5,
+    "precision": 0.8
+   },
+   "COMPENSATION": {
+    "n_gold": 1832,
+    "recall": 0.9443231441048034,
+    "recall_ci95": [
+     0.9328631960879936,
+     0.9539235506552983
+    ],
+    "n_pred": 2308,
+    "precision": 0.7495667244367418
+   },
+   "DATE_OF_BIRTH": {
+    "n_gold": 757,
+    "recall": 0.9749009247027741,
+    "recall_ci95": [
+     0.9611321633952612,
+     0.9838739982026325
+    ],
+    "n_pred": 1354,
+    "precision": 0.5450516986706057
+   },
+   "EMAIL": {
+    "n_gold": 384,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9900949253509681,
+     1.0
+    ],
+    "n_pred": 384,
+    "precision": 1.0
+   },
+   "EMPLOYEE_ID": {
+    "n_gold": 1172,
+    "recall": 0.9991467576791809,
+    "recall_ci95": [
+     0.9951826141275906,
+     0.9998493697722819
+    ],
+    "n_pred": 1399,
+    "precision": 0.8370264474624732
+   },
+   "IFSC": {
+    "n_gold": 336,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.988695910094585,
+     0.9999999999999998
+    ],
+    "n_pred": 366,
+    "precision": 0.9180327868852459
+   },
+   "PAN": {
+    "n_gold": 211,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9821189192409663,
+     1.0
+    ],
+    "n_pred": 211,
+    "precision": 1.0
+   },
+   "PERSON": {
+    "n_gold": 3374,
+    "recall": 0.9626556016597511,
+    "recall_ci95": [
+     0.9557136364294255,
+     0.9685452157322626
+    ],
+    "n_pred": 4456,
+    "precision": 0.7194793536804309
+   },
+   "PHONE": {
+    "n_gold": 360,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.9894415591839966,
+     1.0000000000000002
+    ],
+    "n_pred": 732,
+    "precision": 0.4918032786885246
+   },
+   "SECRET": {
+    "n_gold": 31,
+    "recall": 0.9354838709677419,
+    "recall_ci95": [
+     0.7928101168125355,
+     0.9821255922249368
+    ],
+    "n_pred": 264,
+    "precision": 0.10984848484848485
+   },
+   "UPI_ID": {
+    "n_gold": 29,
+    "recall": 1.0,
+    "recall_ci95": [
+     0.8830264055344442,
+     1.0000000000000002
+    ],
+    "n_pred": 29,
+    "precision": 1.0
+   }
+  },
+  "key_strata": {
+   "none": {
+    "exposed": 92,
+    "n": 2639,
+    "rate": 0.034861690034103825
+   },
+   "seen": {
+    "exposed": 7,
+    "n": 3621,
+    "rate": 0.0019331676332504833
+   },
+   "unseen": {
+    "exposed": 39,
+    "n": 2694,
+    "rate": 0.014476614699331848
+   }
+  },
+  "latency_ms": {
+   "p50": 43.09677349965568,
+   "p95": 122.86830115021985,
+   "p99": 172.9149707799752,
+   "max": 5088.974114999473
+  },
+  "per_family": {
+   "c_campus_drive_deck_text": {
+    "docs": 75.0,
+    "gold_chars": 10748.0,
+    "leaked_chars": 492.0,
+    "csve_docs": 15.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 45452.0,
+    "collateral_chars": 9190.0,
+    "neg_items": 15.0,
+    "neg_chars": 8687.0,
+    "neg_fp_items": 15.0,
+    "neg_fp_spans": 83.0
+   },
+   "c_exit_clearance_form_pdf": {
+    "docs": 75.0,
+    "gold_chars": 6456.0,
+    "leaked_chars": 196.0,
+    "csve_docs": 7.0,
+    "csve_high_docs": 3.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 55320.0,
+    "collateral_chars": 1526.0,
+    "oot_docs": 7.0,
+    "oot_exposed_docs": 0.0,
+    "neg_items": 15.0,
+    "neg_chars": 6616.0,
+    "neg_fp_items": 4.0,
+    "neg_fp_spans": 4.0
+   },
+   "c_raw_mime_training_sponsorship": {
+    "docs": 75.0,
+    "gold_chars": 12357.0,
+    "leaked_chars": 50.0,
+    "csve_docs": 1.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 71941.0,
+    "collateral_chars": 8251.0,
+    "neg_items": 15.0,
+    "neg_chars": 13498.0,
+    "neg_fp_items": 9.0,
+    "neg_fp_spans": 28.0
+   },
+   "c_security_guard_police_verification_ocr": {
+    "docs": 75.0,
+    "gold_chars": 7248.0,
+    "leaked_chars": 718.0,
+    "csve_docs": 30.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "oot_docs": 38.0,
+    "oot_exposed_docs": 38.0,
+    "nongold_chars": 35972.0,
+    "collateral_chars": 1274.0,
+    "neg_items": 15.0,
+    "neg_chars": 3811.0,
+    "neg_fp_items": 8.0,
+    "neg_fp_spans": 15.0
+   },
+   "i_grpc_textproto_payout_debug": {
+    "docs": 75.0,
+    "gold_chars": 3865.0,
+    "leaked_chars": 30.0,
+    "csve_docs": 1.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 29863.0,
+    "collateral_chars": 1123.0,
+    "neg_items": 15.0,
+    "neg_chars": 4337.0,
+    "neg_fp_items": 5.0,
+    "neg_fp_spans": 14.0
+   },
+   "i_mongosh_benefits_shell": {
+    "docs": 75.0,
+    "gold_chars": 5245.0,
+    "leaked_chars": 568.0,
+    "csve_docs": 0.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "oot_docs": 50.0,
+    "oot_exposed_docs": 47.0,
+    "nongold_chars": 37135.0,
+    "collateral_chars": 850.0,
+    "neg_items": 15.0,
+    "neg_chars": 4562.0,
+    "neg_fp_items": 6.0,
+    "neg_fp_spans": 15.0
+   },
+   "i_psql_result_grid_ticket": {
+    "docs": 75.0,
+    "gold_chars": 9035.0,
+    "leaked_chars": 75.0,
+    "csve_docs": 5.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "oot_docs": 47.0,
+    "oot_exposed_docs": 4.0,
+    "nongold_chars": 29345.0,
+    "collateral_chars": 930.0,
+    "neg_items": 15.0,
+    "neg_chars": 5315.0,
+    "neg_fp_items": 1.0,
+    "neg_fp_spans": 1.0
+   },
+   "i_vba_payroll_macro_module": {
+    "docs": 75.0,
+    "gold_chars": 5773.0,
+    "leaked_chars": 184.0,
+    "csve_docs": 12.0,
+    "csve_high_docs": 2.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 49902.0,
+    "collateral_chars": 1487.0,
+    "neg_items": 15.0,
+    "neg_chars": 9560.0,
+    "neg_fp_items": 8.0,
+    "neg_fp_spans": 19.0
+   },
+   "s_epfo_employer_upload_txt": {
+    "docs": 75.0,
+    "gold_chars": 11239.0,
+    "leaked_chars": 377.0,
+    "csve_docs": 4.0,
+    "csve_high_docs": 3.0,
+    "pie_docs": 0.0,
+    "oot_docs": 52.0,
+    "oot_exposed_docs": 0.0,
+    "nongold_chars": 12011.0,
+    "collateral_chars": 386.0,
+    "neg_items": 15.0,
+    "neg_chars": 3362.0,
+    "neg_fp_items": 8.0,
+    "neg_fp_spans": 24.0
+   },
+   "s_gratuity_actuarial_census": {
+    "docs": 75.0,
+    "gold_chars": 18312.0,
+    "leaked_chars": 76.0,
+    "csve_docs": 1.0,
+    "csve_high_docs": 1.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 34504.0,
+    "collateral_chars": 5436.0,
+    "neg_items": 15.0,
+    "neg_chars": 5590.0,
+    "neg_fp_items": 15.0,
+    "neg_fp_spans": 69.0
+   },
+   "s_iso20022_pain001_salary_batch": {
+    "docs": 75.0,
+    "gold_chars": 8801.0,
+    "leaked_chars": 0.0,
+    "csve_docs": 0.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 152417.0,
+    "collateral_chars": 1039.0,
+    "neg_items": 15.0,
+    "neg_chars": 8618.0,
+    "neg_fp_items": 1.0,
+    "neg_fp_spans": 1.0
+   },
+   "s_tally_xml_voucher_export": {
+    "docs": 75.0,
+    "gold_chars": 5796.0,
+    "leaked_chars": 12.0,
+    "csve_docs": 0.0,
+    "csve_high_docs": 0.0,
+    "pie_docs": 0.0,
+    "nongold_chars": 75054.0,
+    "collateral_chars": 3072.0,
+    "neg_items": 15.0,
+    "neg_chars": 14315.0,
+    "neg_fp_items": 2.0,
+    "neg_fp_spans": 10.0
+   }
+  }
+ }
+}

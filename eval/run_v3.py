@@ -37,8 +37,10 @@ DEVVAL_MAX_RUNS = 5
 def make_protector(arm: str, data: Path):
     if arm == "A":
         return build_protector(data, True, ner=NER)
+    import datetime
     from pgw.pd13 import build_protector as pd13_build      # implemented after the corpus freeze
-    return pd13_build(data, ner=NER, l3=(arm == "B"))
+    # L3's DOB-window reference date is pinned so results do not drift with the wall clock (review fix).
+    return pd13_build(data, ner=NER, l3=(arm == "B"), today=datetime.date(2026, 10, 1))
 
 
 # ----------------------------------------------------------------------------- exposure definitions
