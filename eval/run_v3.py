@@ -153,6 +153,8 @@ def summarise(fam, tp_r, n_gold, tp_p, n_pred, strata, lat) -> dict:
             tot[k] += v
     pos_docs = tot["docs"] - tot["neg_items"]
     r = lambda a, b: a / b if b else None
+    if not lat:                       # e.g. an adversarial kind that applies to no item
+        return {"docs": 0, "csve": None, "csve_high": None, "char_leak": None, "per_family": {}}
     q = statistics.quantiles(lat, n=100) if len(lat) >= 100 else [max(lat)] * 99
     return {
         "docs": int(tot["docs"]),
@@ -234,17 +236,18 @@ def main() -> None:
     seen_keys = set(json.loads((DATA3 / "v12_keys.json").read_text())) if (DATA3 / "v12_keys.json").exists() else None
     prot = make_protector(a.arm, DATA3)
     res = {"arm": a.arm, "split": a.split, "clean": evaluate(items, prot, seen_keys)}
-    if adv:
+    RESULTS.mkdir(exist_ok=True)
+    out = RESULTS / f"v3_{a.arm}_{a.split}{'_adv-' + adv if adv else ''}.json"
+    if adv:                           # persist the clean result before the long adversarial passes
+        out.write_text(json.dumps({**res, "status": "clean_only_adversarial_running"}, indent=1, default=float))
         kinds = {k: v for k, v in load_adv(Path(a.adv_module)).items() if adv == "all" or v["cls"] == adv}
         res["adversarial"] = {}
         for k, spec in kinds.items():
             rng = random.Random(f"v3-adv|{k}")
             tx = [y for y in (spec["fn"](it, rng) for it in items if it.get("slice") != "negative") if y is not None]
             r = evaluate(tx, prot, None)
-            res["adversarial"][k] = {"cls": spec["cls"], **{key: r[key] for key in ("docs", "csve", "csve_high", "char_leak", "per_family")}}
-    RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"v3_{a.arm}_{a.split}{'_adv-' + adv if adv else ''}.json"
-    out.write_text(json.dumps(res, indent=1, default=float))
+            res["adversarial"][k] = {"cls": spec["cls"], **{key: r.get(key) for key in ("docs", "csve", "csve_high", "char_leak", "per_family")}}
+    out.write_text(json.dumps({**res, "status": "complete"}, indent=1, default=float))
     c = res["clean"]
     print(f"arm {a.arm} {a.split}: docs {c['docs']} CSVE {c['csve']:.4f} CSVE-HIGH {c['csve_high']:.4f} "
           f"char leak {c['char_leak']:.4f} negFP {c['neg_fp_item_rate']} collateral {c['collateral_masking']} "

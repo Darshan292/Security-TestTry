@@ -41,6 +41,14 @@ R2 relied on instructions alone for T-B: test2 templates sat in the repo next to
 
 - **D-1 widened at freeze.** The assembler publishes the dev family ids by design. Combined with D-1, the orchestrator can infer **the names of 14 of the 18 test families** by elimination. It has still not read any test family's catalogue entry, code or items. The mitigations in D-1 apply unchanged, and the implementer's prompt contains no family names other than the published dev ids.
 
+- **D-3 (2026-10-01, aborted first test3 attempt; no result observed).** The first one-shot attempt at commit `44d973e` wrote locks for arms A and B, then failed before producing any metric.
+  - Arm A crashed after its clean pass in a harness bug: `summarise()` called `max()` on an empty latency list for an adversarial kind that applies to no test3 item. The result file is written only at the end, so none was written.
+  - Arm B's process was killed by a session interruption before it printed anything.
+  - Arm C never started.
+  - The logs contain only a traceback and warnings. **No test3 metric was produced or seen by anyone.**
+  - Fix, harness only (`eval/run_v3.py`, `eval/v3_gates.py`; `pgw/` untouched): empty kinds report `docs: 0` and G4 lists them as not applicable; the clean result is persisted before the adversarial passes.
+  - The aborted locks are kept as `LOCK_v3_{A,B}_all_test3.aborted-44d973e.json`. All three arms are rerun once from a single new commit.
+
 ### Audit results at freeze
 See `eval/v3/FREEZE.md`:
 - 0 forbidden-path reads by any author (one author's scratchpad was moved unread into the sealed directory);

@@ -29,3 +29,10 @@ def test_partial_identifying():
 def test_norm_key():
     assert norm_key("Date_of-Birth ") == norm_key("dateofbirth")
     assert norm_key("जन्म तिथि") == "जन्मतिथि"
+
+
+def test_summarise_empty_kind_does_not_crash():
+    from collections import defaultdict
+    from eval.run_v3 import summarise
+    r = summarise({}, defaultdict(int), defaultdict(int), defaultdict(int), defaultdict(int), {}, [])
+    assert r["docs"] == 0 and r["csve"] is None

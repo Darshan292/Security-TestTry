@@ -50,8 +50,9 @@ def main():
     gaps = {a: smoothed(t[a]["clean"]) / smoothed(d[a]["clean"]) for a in "ABC"}
     g["G3"] = {"pass": gaps["B"] <= 2.0, "gap": gaps}
     adv = {k: (t["A"]["adversarial"][k]["csve"], t["B"]["adversarial"][k]["csve"])
-           for k, v in t["B"].get("adversarial", {}).items() if v["cls"] == "heldout"}
-    g["G4"] = {"pass": bool(adv) and all(b <= a + 0.02 for a, b in adv.values()), "heldout_csve_A_B": adv}
+           for k, v in t["B"].get("adversarial", {}).items() if v["cls"] == "heldout" and v.get("docs")}
+    na = sorted(k for k, v in t["B"].get("adversarial", {}).items() if v["cls"] == "heldout" and not v.get("docs"))
+    g["G4"] = {"pass": bool(adv) and all(b <= a + 0.02 for a, b in adv.values()), "heldout_csve_A_B": adv, "not_applicable_on_test3": na}
     g["G5"] = {"pass": B["latency_ms"]["p95"] <= 250, "p95_B": B["latency_ms"]["p95"]}
     d_fp_test = C["neg_fp_item_rate"] - B["neg_fp_item_rate"]
     d_fp_dev = d["C"]["clean"]["neg_fp_item_rate"] - d["B"]["clean"]["neg_fp_item_rate"]

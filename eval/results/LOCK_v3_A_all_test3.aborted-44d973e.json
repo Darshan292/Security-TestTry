@@ -1,0 +1,8 @@
+{
+ "split": "test3",
+ "arm": "A",
+ "adv": "all",
+ "code_commit": "44d973e2b665ac0d5a7ae0285ee223909c185d73",
+ "split_sha256": "9c73fee114d08d65300267a0e2d0af2388deaf3c73e4ff54b679afc286f32391",
+ "time": "2026-10-01T10:38:10Z"
+}
