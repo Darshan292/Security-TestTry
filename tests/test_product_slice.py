@@ -68,9 +68,17 @@ def make(tmp, behaviour="summarise", tasks=None):
     return TestClient(create_app(s)), mock
 
 
-def call(client, purpose, content, key=KEY):
+# Path A contracts require the app to declare the requester; only the requester is declared here, so the other
+# values in these tests are still protected by detection.
+REQUESTER = {"requester": {"name": "Imran Ansari"}}
+
+
+def call(client, purpose, content, key=KEY, subjects=None):
+    body = {"model": "mock-1", "messages": [{"role": "user", "content": content}]}
+    if purpose == "ticket_summary":
+        body["pgw_subjects"] = subjects or REQUESTER
     return client.post("/v1/chat/completions", headers={"Authorization": f"Bearer {key}", "X-PGW-Purpose": purpose},
-                       json={"model": "mock-1", "messages": [{"role": "user", "content": content}]})
+                       json=body)
 
 
 def sent(mock) -> str:
@@ -249,7 +257,7 @@ def test_ledger_records_route_and_contract_without_content(tmp_path):
     call(client, "salary_comparison", json.dumps(PAYLOAD))
     rows = [json.loads(line) for line in (tmp_path / "egress.jsonl").read_text().splitlines()]
     assert [(r["route"], r["contract"], r["decision"]) for r in rows] == [
-        ("EXT_PSEUDO", "ticket_summary@2", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@2", "SENT")]
+        ("EXT_PSEUDO", "ticket_summary@3", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@2", "SENT")]
     text = (tmp_path / "egress.jsonl").read_text()
     for v in TICKET_RAW + SALARY_FORMS + ["Amit Trivedi"]:
         assert v not in text

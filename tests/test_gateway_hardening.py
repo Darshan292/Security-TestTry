@@ -58,8 +58,10 @@ def call(client, content, purpose="ticket_summary", stream=False, headers=None, 
     h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **(headers or {})}
     if raw is not None:
         return client.post("/v1/chat/completions", headers={**h, "content-type": "application/json"}, content=raw)
-    return client.post("/v1/chat/completions", headers=h,
-                       json={"model": "mock-1", "stream": stream, "messages": [{"role": "user", "content": content}]})
+    body = {"model": "mock-1", "stream": stream, "messages": [{"role": "user", "content": content}]}
+    if purpose == "ticket_summary":   # only the requester is declared; everything else relies on detection
+        body["pgw_subjects"] = {"requester": {"name": "Imran Ansari"}}
+    return client.post("/v1/chat/completions", headers=h, json=body)
 
 
 # --- integrity: the repo's sealed manifest is used by default; any drift stops startup -------------------------

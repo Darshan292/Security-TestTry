@@ -30,7 +30,7 @@ from ..egress import check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
 from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer
-from ..product import integrity, local_compute
+from ..product import integrity, local_compute, subjects
 from ..product.content import unreliable_script
 from ..product.contracts import Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
@@ -40,7 +40,8 @@ from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, 
 log = logging.getLogger("pgw.gateway")
 
 ALLOWED_TOP = {"model", "messages", "stream", "temperature", "max_tokens", "max_completion_tokens", "top_p",
-               "stop", "tools", "tool_choice", "n", "stream_options"}
+               "stop", "tools", "tool_choice", "n", "stream_options",
+               "pgw_subjects"}   # gateway-only fields (pgw_*) are never forwarded
 LOG_FIELDS = ("event", "request_id", "tenant", "app", "purpose", "model", "status", "decision", "error_type",
               "latency_ms", "gate_events", "stream", "integrity", "ner")
 
@@ -254,9 +255,12 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(401, "unauthorized", "missing or invalid credentials")
         return found
 
-    def ledger_line(rid, app, purpose, model, body_hash, counts, decision, ms, reason=None, contract=None):
+    def ledger_line(rid, app, purpose, model, body_hash, counts, decision, ms, reason=None, contract=None,
+                    n_subjects=None):
         try:
             extra = {"contract": contract.ref, "route": contract.route} if contract is not None else {}
+            if n_subjects is not None:
+                extra["declared_subjects"] = n_subjects
             egress_ledger.write(request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose, model=model,
                                 provider=upstream.name, body_sha256=body_hash, entity_counts=counts,
                                 policy=policy.ref, integrity=integrity_ref, decision=decision,
@@ -329,10 +333,22 @@ def create_app(settings: Settings) -> Starlette:
             if purpose not in dict(app.tasks):
                 raise _Reject(403, "no_data_contract", "purpose has no data contract for this app")
             contract = contracts[purpose]
-        messages, declared, withheld = body["messages"], None, []
+        messages, declared, withheld, subj = body["messages"], None, [], []
         if contract is not None:
-            texts = [m.get("content") for m in messages if isinstance(m, dict) and isinstance(m.get("content"), str)]
-            if sum(len(t) for t in texts) > contract.max_chars:
+            ctx = dataclasses.replace(ctx, alias_ns=contract.ref)
+        if "pgw_subjects" in body and (contract is None or contract.subjects is None):
+            raise _Reject(400, "declared_subjects_not_supported", "this purpose's data contract takes no subjects")
+        if contract is not None and contract.subjects is not None:
+            try:
+                subj = subjects.parse(body.get("pgw_subjects") or {}, contract.subjects)
+            except subjects.SubjectsError as e:
+                raise _Reject(400, "invalid_declared_subjects", str(e)) from None
+            declared = subjects.matchers(subj)
+            if subjects.found_in(aux, declared):
+                raise _Reject(400, "sensitive_data_in_parameters", "tools/stop contain data that must not be sent")
+        if contract is not None:
+            texts = subjects.request_texts(messages)    # every string, incl. list-form content parts and tool args
+            if _text_size(messages) > contract.max_chars:
                 raise _Reject(413, "content_too_large", "request exceeds the data contract's size limit")
             if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
@@ -351,6 +367,11 @@ def create_app(settings: Settings) -> Starlette:
                     raise _Reject(503, "compute_unavailable", "local computation failed; request not sent") from None
                 messages = [{"role": "user", "content": cr.prompt}]
                 declared, withheld = cr.declared, cr.withheld
+
+        if subj:   # after all size checks, off the event loop, under the deadline
+            n = await bounded(subjects.count_occurrences, subjects.request_texts(messages), declared)
+            if n > subjects.MAX_OCCURRENCES:
+                raise _Reject(413, "content_too_large", "too many occurrences of declared subjects")
 
         # --- protect + egress (fail closed) ---
         prot_impl = contract_protector if contract is not None else protector
@@ -379,7 +400,9 @@ def create_app(settings: Settings) -> Starlette:
                         contract)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
 
-        up_body = {k: v for k, v in body.items() if k != "messages"}
+        if subj:
+            subjects.prefer_declared_spelling(prot, subj)
+        up_body = {k: v for k, v in body.items() if k != "messages" and not k.startswith("pgw_")}
         up_body["messages"] = prot.messages
         if contract is not None:   # tell the model how to treat placeholders (added after detection)
             up_body["messages"] = [{"role": "system", "content": PLACEHOLDER_NOTE}] + list(prot.messages)
@@ -387,6 +410,7 @@ def create_app(settings: Settings) -> Starlette:
         body_hash = hashlib.sha256(wire).hexdigest()
         try:
             egress_check(wire, prot.sensitive_values + withheld)
+            subjects.check_outbound(wire, declared if subj else [], (PLACEHOLDER_NOTE, model))
         except EgressViolation:
             ms = (time.perf_counter() - t0) * 1000
             ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "VIOLATION", ms, "egress", contract)
@@ -396,7 +420,8 @@ def create_app(settings: Settings) -> Starlette:
             _log(logging.ERROR, event="egress_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
         ms = (time.perf_counter() - t0) * 1000
-        ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "SENT", ms, None, contract)
+        ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "SENT", ms, None, contract,
+                    len(subj) if contract is not None and contract.subjects is not None else None)
         _log(logging.INFO, event="sent", request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose,
              model=model, decision="SENT", latency_ms=round(ms, 2), stream=stream)
 

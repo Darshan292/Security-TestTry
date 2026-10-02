@@ -73,6 +73,15 @@ class Output:
 
 
 @dataclass(frozen=True)
+class SubjectSpec:
+    """PATH A declared subjects: people the app already knows are involved (requester, assignee, ...).
+    roles: role -> max count; fields: field name -> C1 entity type."""
+    roles: dict[str, int]
+    required: tuple[str, ...]
+    fields: dict[str, T]
+
+
+@dataclass(frozen=True)
 class Contract:
     name: str
     version: int
@@ -86,6 +95,7 @@ class Contract:
     outputs: dict[str, Output] = field(default_factory=dict)
     prompt_template: str | None = None
     max_chars: int = 20000
+    subjects: SubjectSpec | None = None
 
     @property
     def ref(self) -> str:
@@ -124,6 +134,21 @@ def _parse_schema(schema: dict, path: str = "input_schema") -> None:
             raise ContractError(f"{path}.{name}: C1-C3 fields must name their entity type")
         if "entity" in spec:
             T(spec["entity"])
+
+
+def _parse_subjects(raw) -> SubjectSpec | None:
+    if raw is None:
+        return None
+    roles = {str(k): int(v) for k, v in (raw.get("roles") or {}).items()}
+    if not roles or any(not 1 <= n <= 50 for n in roles.values()):
+        raise ContractError("declared_subjects: roles must map each role to a maximum count between 1 and 50")
+    required = tuple(str(r) for r in raw.get("required") or ())
+    if set(required) - set(roles):
+        raise ContractError("declared_subjects: required roles must be declared roles")
+    fields = {str(k): T(v) for k, v in (raw.get("fields") or {}).items()}
+    if not fields or any(CLASS_OF.get(t) is not DataClass.C1 for t in fields.values()):
+        raise ContractError("declared_subjects: every field must be a C1 identity type")
+    return SubjectSpec(roles, required, fields)
 
 
 def load_contract(path: str | Path) -> Contract:
@@ -165,11 +190,14 @@ def load_contract(path: str | Path) -> Contract:
         c = Contract(name=raw["contract"], version=int(raw["version"]), task_type=raw["task_type"], route=route,
                      classes=classes, restore=restore, purpose_dependent=pdep, compute=raw.get("compute"),
                      input_schema=schema, outputs=outputs, prompt_template=raw.get("prompt_template"),
-                     max_chars=int(raw.get("max_chars", 20000)))
+                     max_chars=int(raw.get("max_chars", 20000)),
+                     subjects=_parse_subjects(raw.get("declared_subjects")))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:
         raise ContractError(f"malformed contract: {type(e).__name__} {e}") from None
+    if c.subjects is not None and (c.route != "EXT_PSEUDO" or c.classes[DataClass.C1] == "REFUSE"):
+        raise ContractError("declared_subjects need an EXT_PSEUDO route whose C1 action replaces identities")
     if c.route == "LOCAL_COMPUTE":
         if not c.compute or not c.input_schema or not c.prompt_template or not c.outputs:
             raise ContractError("LOCAL_COMPUTE contracts need compute, input_schema, outputs and prompt_template")

@@ -1,8 +1,10 @@
 # Product slice: HR helpdesk pilot (two paths, end to end)
 
+Status updated 2026-10-02 after the hardening pass; see PILOT_READINESS.md for the current verdict.
+
 - **Date:** 2026-10-02 · **Scope:** the thin vertical slice of PRODUCT_ARCHITECTURE.md. Synthetic data only; mock external LLM (no provider key in this environment).
 - **Not a readiness claim:** the slice proves the **product flow**. The detection weaknesses in §C still make Path A unsafe for real HR data.
-- **Run it:** `python -m demo.demo_slice` · tests: `pytest tests/test_product_slice.py` (23 tests; full suite 1,422 passed, 1 xfailed).
+- **Run it:** `python -m demo.demo_slice` · tests: `pytest tests/test_product_slice.py` (full suite at the 2026-10-02 hardening pass: 1509 passed, 1 xfailed, 1 warning; the original slice had 23 tests in that file and a 1,422-test suite).
 
 ## What was built (product code)
 
@@ -17,6 +19,14 @@
 | LOCAL_COMPUTE with one real function (`salary_difference`, exact decimal arithmetic) | `pgw/product/local_compute.py` |
 | External LLM adapter | Existing OpenAI/Anthropic/mock adapters (`pgw/gateway/upstream.py`); the slice runs on the mock |
 | Content-free audit row with route and contract version | Egress ledger |
+| **Added in the hardening pass:** two more Path A contracts (`hr_case_explanation`, `hr_email_draft`) and a second LOCAL_COMPUTE contract (`esi_letter`); a second local function, `esi_eligibility` | `contracts/*.yaml`, `pgw/product/local_compute.py` |
+| **Added:** linear-time fixes for 3 regex DoS paths (`_DIGIT_CHAIN`, `_PGPASS`, person-cue `_PT`) | `pgw/normalize.py`, `pgw/detect/recognizers.py`, `tests/test_dos_bounds.py` |
+| **Added:** input limits (body bytes, content chars, message count, per-request deadline, worker slots); silent `except: pass` in the stream path replaced by a CRITICAL `restore_ledger_record_failed` log | `pgw/gateway/settings.py`, `pgw/gateway/app.py`, `tests/test_gateway_hardening.py` |
+| **Added:** existing local NER (`en_core_web_lg`) wired for contracted purposes; a model that fails to load stops startup (it is a secondary net, not full coverage; it can be switched off by env, which logs a warning); contracted purposes forced to buffered output | `pgw/gateway/app.py`, `pgw/detect/ner.py`, `tests/test_gateway_hardening.py` |
+| **Added:** hash-locked requirements | `requirements/`, `INSTALL.md`, `tests/test_requirements_lock.py` |
+| **Added:** egress destination allowlist in code (https, exact host, checked at startup) and in deploy configs (compose internal network, k8s default-deny). The network configs are written but **not exercised** | `pgw/gateway/settings.py`, `deploy/`, `tests/test_egress_allowlist.py` |
+| **Added:** sealed, versioned policy and contracts; the manifest digest is in each ledger row | `policies/MANIFEST.json`, `pgw/product/integrity.py` |
+| **Added:** real-provider validation harness. Run so far against the real endpoint without a valid key: outbound bytes and fail-closed behaviour checked; no real model answer seen yet | `scripts/pilot_validation.py`, `eval/results/pilot_validation_*.md` |
 
 ## Proven by tests (`tests/test_product_slice.py`), each reading the exact bytes the upstream received
 
@@ -44,31 +54,38 @@
 4. **Every failure tested fails closed with no content in the response.** Each request leaves a content-free audit row with its route and contract version.
 
 ### B. What is still missing
-- **No real external provider run.** There is no API key here; adapters exist but only the mock was exercised.
+- **No real model answer seen.** The harness exists and ran against the real endpoint only without a valid key (outbound bytes and fail-closed behaviour validated). Alias survival and restoration of a real answer are not validated.
 - **No private/local LLM route.** C4 content is refused, not served.
-- **Untested on the contract paths:** streaming and multi-turn (restore ledger).
-- **Only one local-compute function.** There is no catalogue derived from real ESU tasks.
-- **NER is still not wired into the gateway.**
-- **Contracts and policy are unsigned;** there is no contract-change governance.
-- **Deployment basics are absent:** no dependency manifest or pinning, no egress NetworkPolicy, SQLite ledger, single shared roster key.
+- **Untested on the contract paths:** multi-turn (restore ledger). Contracted purposes are forced to buffered output, so incremental streaming is not used there.
+- **Local-compute catalogue is two functions** (`salary_difference`, `esi_eligibility`), not derived from real ESU tasks.
+- **NER is a secondary net, not complete coverage** (done: wired, see D). Names it misses still leave raw.
+- **Network egress configs are not exercised** (the code allowlist is tested).
+- **Still absent:** SQLite ledger (no PostgreSQL), single shared roster key (no per-tenant keys), no contract-change governance process beyond the sealed manifest (signature is optional).
 - **No evaluation on real ESU tasks inside the boundary,** and no owner review of the E-UTIL cases yet.
+- **Declared subjects for Path A: implemented** (`pgw/product/subjects.py`, `tests/test_declared_subjects.py`). Undeclared people still depend on detection.
+
+Done since the original slice (pointer in brackets):
+- ~~Contracts and policy unsigned/unversioned~~ sealed and versioned [`policies/MANIFEST.json`, `pgw/product/integrity.py`].
+- ~~No dependency manifest or pinning~~ hash-locked [`requirements/`, `tests/test_requirements_lock.py`].
+- ~~No egress NetworkPolicy~~ written, not exercised [`deploy/`].
+- ~~NER not wired~~ wired for contracted purposes [`pgw/gateway/app.py`].
 
 ### C. Detection weaknesses that actually prevent this slice from being safe
 - **Path A depends on detection; Path B mostly does not.**
   - Path B's sensitive values arrive as declared, structured fields and are never put into the prompt.
   - Only its free-text `instruction` field (≤ 500 characters) depends on detection.
-- **Names of people outside the roster leave raw** (vendors, candidates, dependants, managers not in the roster). There is no NER in the gateway. This is the biggest gap for ticket text.
+- **Names of people outside the roster leave raw** (vendors, candidates, dependants, managers not in the roster). The local NER is now wired for contracted purposes but is only a secondary net: it misses names (and non-Latin or unusual forms). This is still the biggest gap for ticket text, and Path A still depends on detection for undeclared values.
 - **Identifiers in unusual forms leave raw:** spoken or spelled digits, encodings, unseen layouts. R3 measured complete high-risk exposure in 31 % of documents for the current detectors, on unseen formats.
 - **Salaries or DOBs written in unseen formats are not detected,** so the contract's `C2: GENERALIZE` never applies to them.
 - **Over-masking, a utility cost rather than a leak:** non-personal amounts are typed as compensation. In the demo the TDS refund "Rs 4,500" was generalised, losing a fact the summary needed.
-- **Availability risk:** the quadratic-time paths in D0/D2 let any caller stall the gateway.
+- **Availability risk (reduced):** the three known quadratic paths are fixed and input size/time/slot limits exist (`tests/test_dos_bounds.py`, `tests/test_gateway_hardening.py`). Other unknown slow paths cannot be ruled out.
 
 ### D. What should be solved next (in order)
-1. **Declared subjects in the Path A contract.** The helpdesk app knows who a ticket is about and who is involved. Send them as declared fields so their names and IDs are protected without detection, and wire the existing local NER (prose only, size-capped) for the rest.
-2. **Remove the two quadratic paths, add input size caps, and fix the silent `except: pass` in the stream path.**
-3. **Run both paths against the real provider** (API key), have a human review the outputs, and exercise streaming and multi-turn on contract paths.
-4. **A private/local route endpoint for C4,** and a short LOCAL-COMPUTE function catalogue taken from real ESU tasks (eligibility, arrears, band position).
-5. **Deployment basics:** pinned dependency manifest, egress NetworkPolicy, signed contracts and policy, per-tenant keys.
+1. **Declared subjects in the Path A contract: done.** The app sends requester, assignee, mentioned and other subjects as `pgw_subjects`; every written variant is aliased without detection, and a separate egress sweep with the same variant patterns fails closed (`pgw/product/subjects.py`, `tests/test_declared_subjects.py`). *Done:* the existing local NER is wired for the rest (`pgw/gateway/app.py`, `tests/test_gateway_hardening.py`); it does not give complete coverage.
+2. ~~Remove the quadratic paths, add input size caps, fix the silent `except: pass`.~~ **Done** for the 3 known paths, the limits and the stream-path log (`tests/test_dos_bounds.py`, `tests/test_gateway_hardening.py`).
+3. **Run both paths against the real provider with a valid key,** have a human review the outputs, and exercise multi-turn on contract paths. *Partly done:* harness exists; real endpoint run without a valid key only (`scripts/pilot_validation.py`).
+4. **A private/local route endpoint for C4,** and a LOCAL-COMPUTE function catalogue taken from real ESU tasks (eligibility, arrears, band position). *Partly done:* `salary_difference` and `esi_eligibility` exist.
+5. **Deployment basics.** *Done:* hash-locked requirements (`requirements/`); egress allowlist in code (`tests/test_egress_allowlist.py`); sealed, versioned contracts and policy (`policies/MANIFEST.json`). *Written, not exercised:* compose/k8s egress network configs (`deploy/`). *Remaining:* per-tenant keys, durable ledger, exercising the network configs.
 
 ### E. What should explicitly NOT be solved yet
 - New detector families, corpora, benchmark cycles or PD-13 adoption.

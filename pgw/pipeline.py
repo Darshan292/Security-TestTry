@@ -241,7 +241,7 @@ class Protector:
         return out
 
     def protect(self, messages: list[dict], ctx: Context,
-                declared: list[tuple[EntityType, str]] | None = None) -> Protected:
+                declared: list[tuple] | None = None) -> Protected:
         """declared: values a data contract states explicitly (e.g. names and IDs from a structured payload).
         They are protected wherever they occur, independent of detection; they can only add protection."""
         messages = copy.deepcopy(messages)
@@ -258,13 +258,20 @@ class Protector:
         return self._detect_segments(_segments(copy.deepcopy(messages)), ctx)
 
     def _detect_segments(self, segs: list[Segment], ctx: Context,
-                         declared: list[tuple[EntityType, str]] | None = None) -> list[list[Detection]]:
+                         declared: list[tuple] | None = None) -> list[list[Detection]]:
         # 1. Detect per segment (plus contract-declared values, which need no detection).
         per_seg: list[list[Detection]] = [self.detect_text(s.text) for s in segs]
-        for t, v in declared or ():
-            if v and v.strip():
+        for item in declared or ():
+            if hasattr(item, "spans"):   # a declared-subject matcher (pgw.product.subjects): spans, any variant
                 for i, seg in enumerate(segs):
-                    per_seg[i] += [Detection(s, e, t, 1.0, "C:declared") for s, e in _occurrences(seg.text, t, v)]
+                    per_seg[i] += [Detection(s, e, item.t, item.score, "C:declared-subject")
+                                   for s, e in item.spans(seg.text)]
+                continue
+            t, v, *score = item               # (type, surface) or (type, surface, score)
+            if v and v.strip():
+                sc = score[0] if score else 1.0
+                for i, seg in enumerate(segs):
+                    per_seg[i] += [Detection(s, e, t, sc, "C:declared") for s, e in _occurrences(seg.text, t, v)]
         if self.ledger is not None and ctx.conversation_id:
             normed = [normalize(s.text) for s in segs]
             for i, dets in enumerate(self.ledger.detect(ctx, [n for n, _ in normed])):
@@ -279,6 +286,8 @@ class Protector:
         known: dict[tuple[EntityType, str], float] = {}
         for seg, dets in zip(segs, per_seg):
             for d in _resolve(dets):
+                if d.source == "C:declared-subject":   # matchers already cover every variant; propagating each
+                    continue                          # surface again would multiply work (DoS) for nothing
                 known[(d.type, seg.text[d.start:d.end])] = max(d.score, known.get((d.type, seg.text[d.start:d.end]), 0))
             for t, v in (_field_values(seg.text) if _abl.get().D1 else []):
                 known[(t, v)] = max(0.95, known.get((t, v), 0))
@@ -313,7 +322,9 @@ class Protector:
 
         # 5. Transform.
         scope_id = ctx.conversation_id or secrets.token_hex(16)
-        alloc = AliasAllocator(scope_key(self.keys.derive(ctx.tenant, "alias"), scope_id))
+        # Contracted purposes get their own alias key: the same person is unlinkable across purposes.
+        label = f"alias/{ctx.alias_ns}" if ctx.alias_ns else "alias"
+        alloc = AliasAllocator(scope_key(self.keys.derive(ctx.tenant, label), scope_id))
         prot = Protected(messages, scope_id, entities)
         for key, ent in entities.items():
             if ent.action is Action.TOKENIZE:

@@ -3,6 +3,7 @@
 - **Status:** Proposed (2026-10-02). Supersedes DESIGN.md §1, §4 and §5 as the product description. ADR-0001…0010 remain the decision record; departures are marked.
 - **Evidence base:** R1–R3 security evaluations, R4 architecture analysis, R4 E-UTIL (`eval/eutil/E_UTIL_REPORT.md`).
 - **Nothing in this document is implemented yet unless the "Exists" column says so.** Since 2026-10-02, a thin vertical slice exists: app contracts, C0–C4 routing, redact-not-block, LOCAL_COMPUTE with one function, and fail-closed tests (PRODUCT_SLICE.md).
+- Updated 2026-10-02: after the hardening pass (see PILOT_READINESS.md), items that this document lists as missing are marked inline where done: NER wired for contracted purposes, 3 DoS paths fixed, input limits, hash-locked requirements, sealed/versioned contracts and policy, egress allowlist in code. "Declared subjects for Path A" is implemented (`pgw/product/subjects.py`): declared identities are protected without detection and verified at egress.
 - **This is not a readiness claim.** The system has failed every held-out leakage gate so far (R1–R3) and must not see real HR data.
 
 ## 1. What the product is
@@ -97,15 +98,15 @@ Contracts and the policy pack are versioned and sealed in `policies/MANIFEST.jso
 
 | # | Layer | Does | Det./ML · location | Main failure and attack modes | Latency | Evidence | Exists today |
 |---|---|---|---|---|---|---|---|
-| A | **Canonicalisation** | One linear-time pass: Unicode (NFKC, confusables, bidi/zero-width removal, native digits); bounded decoders over the whole document (HTML, URL, QP, MIME words, JSON strings, base64 depth ≤ 2, mojibake repair); reversal and unwrap views. Offset maps throughout; size and time budgets **fail closed** | Deterministic · local | Decode bombs, nesting (caps); offset-map bugs (property tests); quadratic paths (forbidden by design) | ms/KB, linear | R4 §5: canonicalisation ceilings of 96–100 % on 9 evasion kinds; R4 §4 quadratic DoS in today's D0 | Partly (`normalize.py`, with quadratic `_join_digits`) |
+| A | **Canonicalisation** | One linear-time pass: Unicode (NFKC, confusables, bidi/zero-width removal, native digits); bounded decoders over the whole document (HTML, URL, QP, MIME words, JSON strings, base64 depth ≤ 2, mojibake repair); reversal and unwrap views. Offset maps throughout; size and time budgets **fail closed** | Deterministic · local | Decode bombs, nesting (caps); offset-map bugs (property tests); quadratic paths (forbidden by design) | ms/KB, linear | R4 §5: canonicalisation ceilings of 96–100 % on 9 evasion kinds; R4 §4 quadratic DoS in today's D0 | Partly (`normalize.py`). Updated 2026-10-02: the quadratic digit-chain path is fixed to linear time (`tests/test_dos_bounds.py`); size and time limits exist at the gateway (`tests/test_gateway_hardening.py`) |
 | B | **Structure reconstruction** | Standard parsers into a record graph (JSON, XML, delimited, kv, YAML-like, fixed-width, markup to text). Keep every parse on ambiguity. **No corpus-tuned heuristics** | Deterministic · local | Ambiguous layouts; mis-segmentation (C must not depend on boundaries) | ~1.5 ms/KB | R3 structured-family gains; PD-13 heuristic overfit (gap 4.2×) | Experimental only (`pgw/pd13/records.py`) |
-| C | **Candidate detection** | Value-like candidates independent of field names: checksums/validators; value shapes (dates in all standard encodings, amounts, long digits, entropy); spoken, spelled and worded numerals; roster exact match; **local NER once, on prose only** | Deterministic + local ML (NER) | Unknown encodings (go to C4 routing); NER misses in non-Latin script or speech (C4 routing, not more NER) | Validators ~2 ms/KB; NER ~17 ms/KB, prose only | Validators generalise (M-33); unseen-key exposure 40.6 % → 6.7 % with shapes (M-38); 290 unshaped values (M-43) | D2 validators, roster EDM, NER module (**NER not wired into the gateway**) |
+| C | **Candidate detection** | Value-like candidates independent of field names: checksums/validators; value shapes (dates in all standard encodings, amounts, long digits, entropy); spoken, spelled and worded numerals; roster exact match; **local NER once, on prose only** | Deterministic + local ML (NER) | Unknown encodings (go to C4 routing); NER misses in non-Latin script or speech (C4 routing, not more NER) | Validators ~2 ms/KB; NER ~17 ms/KB, prose only | Validators generalise (M-33); unseen-key exposure 40.6 % → 6.7 % with shapes (M-38); 290 unshaped values (M-43) | D2 validators, roster EDM, NER module. Updated 2026-10-02: NER is wired for contracted purposes (startup fails if the model cannot load); it is a secondary net, not complete coverage |
 | D | **Entity/value resolution** | Merge candidates across views and occurrences; type and confidence; link values to persons and records (graded anchoring); classify each value into C0–C4; propagation; restore-ledger matching | Deterministic · local | Wrong anchoring (over- or under-masking); type confusion (C2 vs C0 numbers) | ms | R3 precision collapse (M-37); E-UTIL policy threshold mis-typed | Propagation + restore ledger exist |
-| E | **Policy and routing** | Signed decision tables over (tenant, app, purpose, task type, data class, confidence, content class). **Data contracts**: apps declare fields and task type; undeclared value-like content defaults to transform. Chooses the route (§2) and the per-value action (ALLOW / ALIAS / GENERALISE / REDACT / LOCAL / REFUSE) | Deterministic · local | Misconfiguration (simulator + policy tests, ADR-0006); contract drift (validate payloads) | < 1 ms | E-UTIL routing classes; blocking-by-presence cost | Policy tables exist (unsigned); no routing, no contracts |
+| E | **Policy and routing** | Signed decision tables over (tenant, app, purpose, task type, data class, confidence, content class). **Data contracts**: apps declare fields and task type; undeclared value-like content defaults to transform. Chooses the route (§2) and the per-value action (ALLOW / ALIAS / GENERALISE / REDACT / LOCAL / REFUSE) | Deterministic · local | Misconfiguration (simulator + policy tests, ADR-0006); contract drift (validate payloads) | < 1 ms | E-UTIL routing classes; blocking-by-presence cost | Policy tables and contracts exist, sealed and versioned (`policies/MANIFEST.json`, updated 2026-10-02); routing by purpose/contract exists in the slice. Declared subjects for Path A: implemented (`pgw/product/subjects.py`) |
 | F | **Transformation** | Scoped HMAC aliases (ADR-0002), generalisation, redaction; per-request restore map; `never_restore` | Deterministic · local | Alias collisions (amended grammar); the model mangling aliases | ms | E-UTIL: 0 unrestored, 0 fabricated | **Exists** |
-| G | **Egress enforcement** | Canonical serialisation; invariant sweep **on layer-A-canonicalised bytes**; content-free ledger; network egress only via the gateway | Deterministic · local | A bug-catcher only, not recall (M-09); availability (false alarms) | Linear, ms | M-09, M-26, M-27 | Exists (sweep not canonicalised; NetworkPolicy not built) |
+| G | **Egress enforcement** | Canonical serialisation; invariant sweep **on layer-A-canonicalised bytes**; content-free ledger; network egress only via the gateway | Deterministic · local | A bug-catcher only, not recall (M-09); availability (false alarms) | Linear, ms | M-09, M-26, M-27 | Exists (sweep not canonicalised). Updated 2026-10-02: egress host allowlist in code and compose/k8s configs in `deploy/`, written but not exercised |
 | H | **Response gate and restoration** | Output gate on aliased text (fabricated aliases, raw values, roster hits); buffered for RESTRICTED; restore for authorised apps; record restored values in the restore ledger (ADR-0010) | Deterministic · local | Incremental streaming leaks (M-25, so RESTRICTED stays buffered); the model inferring sensitive facts (DESIGN §9.4) | ms | E-UTIL restore 100 %; R2 streaming FAIL | **Exists** (buffered); ledger is SQLite |
-| I | **Local computation and private routing** | (i) Local compute service: deterministic functions over exact values (differences, eligibility, aggregates, format conversion) whose results feed the external prompt or the final answer. (ii) Private LLM endpoint inside the boundary (DENY_ROUTE_LOCAL target) for PRIVATE-LLM tasks | Deterministic (i) · local ML (ii) · local | (i) Wrong function or contract; (ii) capacity and quality of the local model | (i) ms; (ii) model-dependent | E-UTIL: 9 LOCAL-COMPUTE, 4 PRIVATE-LLM tasks | **Does not exist** |
+| I | **Local computation and private routing** | (i) Local compute service: deterministic functions over exact values (differences, eligibility, aggregates, format conversion) whose results feed the external prompt or the final answer. (ii) Private LLM endpoint inside the boundary (DENY_ROUTE_LOCAL target) for PRIVATE-LLM tasks | Deterministic (i) · local ML (ii) · local | (i) Wrong function or contract; (ii) capacity and quality of the local model | (i) ms; (ii) model-dependent | E-UTIL: 9 LOCAL-COMPUTE, 4 PRIVATE-LLM tasks | Updated 2026-10-02: (i) exists for two functions (`salary_difference`, `esi_eligibility`); (ii) private LLM does not exist |
 
 ## 4. Component decisions
 
@@ -124,15 +125,15 @@ Contracts and the policy pack are versioned and sealed in `policies/MANIFEST.jso
 
 | Component | Where | Change needed |
 |---|---|---|
-| App registry, purpose declaration, authentication | `pgw/gateway/app.py`, `registry/apps.yaml` | Extend with task type, data contract and route |
+| App registry, purpose declaration, authentication | `pgw/gateway/app.py`, `registry/apps.yaml` | Done in the slice (task type, data contract, route) |
 | Validators (Verhoeff, Luhn, PAN, IFSC, UPI, email, phone, secrets catalogue) | `pgw/detect/recognizers.py` (D2 part) | Extract from the D1 code; ensure linear time |
-| Roster exact match (keyed hash) and restore ledger | `pgw/detect/edm.py` | Per-tenant keys (T-19); PostgreSQL ledger |
+| Roster exact match (keyed hash) and restore ledger | `pgw/detect/edm.py` | Per-tenant keys (T-19); PostgreSQL ledger (still open) |
 | Scoped aliases | `pgw/alias.py` | None (E-FMT still unmeasured with a real provider) |
-| Policy tables | `pgw/policy.py`, `policies/` | Add classes C0–C4, routes, signing (ADR-0006) |
+| Policy tables | `pgw/policy.py`, `policies/` | Classes C0–C4 and routes done in contracts; sealed with a version and optional HMAC signature (updated 2026-10-02) |
 | Propagation, protect/restore pipeline | `pgw/pipeline.py` | Restructure around layers A–I |
 | Egress invariant, ledger, fail-closed matrix | `pgw/egress.py` | Sweep canonicalised bytes |
 | Response gate and buffered restorer | `pgw/stream.py` | Incremental mode stays off for RESTRICTED |
-| Local NER | `pgw/detect/ner.py` | **Wire it into the gateway** (it is not today), prose only, size-capped |
+| Local NER | `pgw/detect/ner.py` | Updated 2026-10-02: wired for contracted purposes (secondary net, not full coverage). Prose-only and size-capped scoping: size caps are gateway-wide; prose-only not verified |
 | Upstream adapters, mock LLM, demo | `pgw/gateway/upstream.py`, `demo/` | None |
 | Evaluation method (pre-registration, sealing, one-shot locks) | `eval/`, `EVALUATION_PLAN.md` | Reuse for the product-level tests below |
 
@@ -141,8 +142,8 @@ Contracts and the policy pack are versioned and sealed in `policies/MANIFEST.jso
 | Capability | Phase | Precondition |
 |---|---|---|
 | Layer A decoders and reconstruction (spoken and worded numerals, document-level decoding) | Next build | Owner approval of this architecture |
-| Data contracts plus task router (layer E) | Next build | Contract format agreed with app owners |
-| Local compute service (layer I-i) | Next build | Function catalogue from real ESU tasks |
+| Data contracts plus task router (layer E) | Slice built (updated 2026-10-02); extend | Contract format agreed with app owners |
+| Local compute service (layer I-i) | Two functions built (updated 2026-10-02); catalogue from real tasks still needed | Function catalogue from real ESU tasks |
 | Private LLM endpoint (layer I-ii) | After infra decision | In-boundary GPU or CPU model; quality measured with E-UTIL |
 | "Compute on placeholders": the external model writes the computation over aliases and the gateway evaluates it locally | Research spike | Must be shown safe (no value disclosure through results) before use |
 | Durable mapping, KMS, re-identification API | Phase 3 (ROADMAP) | Unchanged |
@@ -158,14 +159,14 @@ The aim is product validation, not more leakage benchmarks.
 | Nothing exact leaves for C2/C3 | Canary values plus the egress sweep on every route; E-EGRESS-FUZZ | Not run |
 | Routing is correct | Policy simulator tests per app contract | Not built |
 | Restoration is faithful and authorised | E-FMT with the real provider; restore-ledger multi-turn (E-STREAM-T21) | Not run |
-| Bounded latency and no DoS | E-PERF end to end through the gateway; pathological-input suite (long digit runs, long tokens, nested encodings) | Not run (quadratic paths known) |
+| Bounded latency and no DoS | E-PERF end to end through the gateway; pathological-input suite (long digit runs, long tokens, nested encodings) | Updated 2026-10-02: the 3 known quadratic paths are fixed and a pathological-input suite exists (`tests/test_dos_bounds.py`); end-to-end E-PERF not run |
 
 ## 6. Known gaps in what exists today (not to be hidden)
 
-1. **The shipped gateway has no NER.** Names outside the roster leave raw (`demo/demo_gateway.py`, scene 2).
+1. **NER is only a secondary net.** Updated 2026-10-02: wired for contracted purposes only; the legacy gateway path and any purpose without a contract still have none, and names NER misses leave raw (`demo/demo_gateway.py`, scene 2).
 2. **HIGH-identifier presence blocks whole requests** (30 % of E-UTIL tasks).
 3. **Non-personal numbers can be typed as COMPENSATION and masked or generalised** (policy threshold case).
-4. **Quadratic-time paths in D0/D2** let any caller stall the gateway (M-42).
+4. **Quadratic-time paths:** updated 2026-10-02: the three known ones (M-42 and two more) are fixed and input limits exist; unknown slow paths cannot be excluded.
 5. **Incremental streaming leaks;** RESTRICTED is buffered (M-25).
-6. **No local compute, no private route, no data contracts, no policy signing, no network egress policy, single shared roster key.**
+6. **Updated 2026-10-02:** data contracts, local compute (two functions), sealed/versioned policy and contracts, and an egress allowlist in code now exist. Still open: no private route, network egress configs not exercised, single shared roster key, SQLite ledger.
 7. **Detection leakage on unseen families:** CSVE 0.53 (current) and 0.36 (PD-13). Readiness gates are unmet.

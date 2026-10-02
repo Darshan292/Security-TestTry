@@ -72,6 +72,11 @@ EMAIL = (
 SALARY = {"instruction": "Who earns more among these two, and by how much? Write a two-line note for the HR manager.",
           "employees": [{"name": "Amit Trivedi", "employee_id": "KD-10989", "annual_ctc": 2450000},
                         {"name": "Hetal Shah", "employee_id": "KD-11063", "annual_ctc": 2180000}]}
+# Names the existing detectors (roster, cues, en_core_web_lg) miss in this text: only the declaration protects them.
+NER_MISS = ("Ticket PAY-90412 | Raised by: Imran Ansari (KD-11914)\n"
+            "Imran Ansari: my arrears for August 2026 are missing from the September payslip.\n"
+            "Payroll Ops: please loop in tejaswini kulkarni from payroll before closing.\n"
+            "Reply from Nandini: the arrears file was re-run on 30 Sep 2026; the amount will be paid in October.\n")
 ESI = {"instruction": "Explain to the employee whether ESI applies to them, in two lines.",
        "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063", "monthly_gross": 19800}]}
 
@@ -85,6 +90,8 @@ class Scenario:
     must_cross: list[str] = field(default_factory=list)     # contract says RAW: must be in the payload
     expect_restored: list[str] = field(default_factory=list)  # authorised values the app should get back
     never_returned: list[str] = field(default_factory=list)   # C3: never in the restored response
+    subjects: dict | None = None         # PATH A declared subjects (pgw_subjects)
+    ner_misses: list[str] = field(default_factory=list)       # declared names to check NER alone would miss
 
 
 def _forms(*vals):
@@ -99,16 +106,30 @@ SCENARIOS = [
              "review.\n---\n" + TICKET,
              raw=["Imran Ansari", "KD-11914", "ZXWPA3889P", "644748074748", "imran.ansari@kestrel-dyn.in",
                   "Suresh Menon"],
-             expect_restored=["Imran Ansari"], never_returned=["ZXWPA3889P", "644748074748"]),
+             expect_restored=["Imran Ansari"], never_returned=["ZXWPA3889P", "644748074748"],
+             # Suresh Menon is deliberately NOT declared: NER is the safety net for undeclared people.
+             subjects={"requester": {"name": "Imran Ansari", "employee_id": "KD-11914",
+                                     "email": "imran.ansari@kestrel-dyn.in"}}),
     Scenario("A2 HR case explanation", "hr_case_explanation", "Explain the status of this case and the next "
              "step for HR operations.\n---\n" + CASE,
              raw=["Hetal Shah", "KD-11063", "2341 2341 2346", "234123412346", "Kavita Rao"],
              must_cross=["12 days"],    # leave_balance: PSEUDONYMISED_RAW in this contract
-             expect_restored=["Hetal Shah"], never_returned=["2341 2341 2346"]),
+             expect_restored=["Hetal Shah"], never_returned=["2341 2341 2346"],
+             subjects={"requester": {"name": "Hetal Shah", "employee_id": "KD-11063"},
+                       "mentioned": [{"name": "Kavita Rao"}]}),
     Scenario("A3 email drafting", "hr_email_draft", EMAIL,
              raw=["Amit Trivedi", "KD-10989", "amit.trivedi@kestrel-dyn.in", "97400 11223", "9740011223",
                   "50100234567891", "amit@okhdfc"],
-             expect_restored=["Amit"], never_returned=["50100234567891", "amit@okhdfc"]),
+             expect_restored=["Amit"], never_returned=["50100234567891", "amit@okhdfc"],
+             subjects={"recipient": {"name": "Amit Trivedi", "employee_id": "KD-10989",
+                                     "email": "amit.trivedi@kestrel-dyn.in", "phone": "+91 97400 11223"}}),
+    Scenario("A4 ticket with names NER misses", "ticket_summary", "Summarise this ticket in two lines for the "
+             "payroll lead.\n---\n" + NER_MISS,
+             raw=["Imran Ansari", "KD-11914", "tejaswini", "Tejaswini", "kulkarni", "Kulkarni", "Nandini"],
+             expect_restored=["Imran Ansari", "Nandini"],
+             subjects={"requester": {"name": "Imran Ansari", "employee_id": "KD-11914"},
+                       "assignee": {"name": "Tejaswini Kulkarni"}, "mentioned": [{"name": "Nandini"}]},
+             ner_misses=["tejaswini kulkarni", "Nandini"]),
     Scenario("B1 salary comparison", "salary_comparison", json.dumps(SALARY),
              raw=["Amit Trivedi", "KD-10989", "Hetal Shah", "KD-11063"] + _forms(2450000, 2180000, 270000)
              + ["12.4%"],                # TRANSFORMED: only as an alias
@@ -199,10 +220,23 @@ def make_settings(out: Path, upstream, **kw) -> Settings:
                     master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream, **kw)
 
 
-def post(client, purpose, content, model=MODEL):
+def post(client, purpose, content, model=MODEL, subjects=None):
+    body = {"model": model, "max_tokens": 4096, "messages": [{"role": "user", "content": content}]}
+    if subjects is not None:
+        body["pgw_subjects"] = subjects
     return client.post("/v1/chat/completions",
-                       headers={"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose},
-                       json={"model": model, "max_tokens": 4096, "messages": [{"role": "user", "content": content}]})
+                       headers={"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose}, json=body)
+
+
+def ner_alone_finds(text: str, names: list[str]) -> list[str]:
+    """Which of `names` the existing detectors (incl. NER) find without any declaration (local, no LLM call)."""
+    from pgw.detect.ner import NerDetector
+    from pgw.pipeline import Keys, Protector
+    from pgw.policy import PolicyPack
+    p = Protector(PolicyPack.load(str(ROOT / "policies/hris-default.yaml")), Keys(bytes(32)),
+                  ner=NerDetector("en_core_web_lg"))
+    found = " | ".join(text[d.start:d.end] for d in p.detect_text(text)).lower()
+    return [n for n in names if n.lower() in found]
 
 
 def ledger_row(out: Path, rid: str) -> dict | None:
@@ -249,7 +283,8 @@ def main() -> int:
             for sc in SCENARIOS:
                 n0 = len(cap.exchanges)
                 t0 = time.perf_counter()
-                r = post(client, sc.purpose, sc.content, model="mock-1" if args.provider == "mock" else MODEL)
+                r = post(client, sc.purpose, sc.content, model="mock-1" if args.provider == "mock" else MODEL,
+                         subjects=sc.subjects)
                 total = (time.perf_counter() - t0) * 1000
                 ex = cap.exchanges[n0:]
                 rid = r.headers.get("X-PGW-Request-Id", "")
@@ -274,7 +309,9 @@ def main() -> int:
                 sent_text = outbound + "\n" + payload_strings(outbound)
                 leaked = [v for v in sc.raw if v in sent_text]
                 check(f"{sc.name}: request reached the provider", bool(ex), f"{len(ex)} exchange(s)")
-                check(f"{sc.name}: no raw protected value in outbound bytes", bool(ex) and not leaked,
+                what = ("local-compute inputs and INTERNAL outputs" if sc.purpose in ("salary_comparison", "esi_letter")
+                        else "raw protected value")
+                check(f"{sc.name}: no {what} in outbound bytes", bool(ex) and not leaked,
                       f"{len(sc.raw)} values checked, {len(leaked)} found")
                 if sc.must_cross:
                     missing = [v for v in sc.must_cross if v not in sent_text]
@@ -283,7 +320,15 @@ def main() -> int:
                 aliases_out = sorted(set(ALIAS.findall(payload_strings(outbound))))
                 check(f"{sc.name}: aliases in outbound", bool(aliases_out), f"{len(aliases_out)} distinct")
                 check(f"{sc.name}: ledger row with contract, route, integrity", bool(row and row.get("contract")
-                      and row.get("integrity") not in (None, "unchecked")), (row or {}).get("decision", "none"))
+                      and row.get("integrity") not in (None, "unchecked")),
+                      f"{(row or {}).get('decision', 'none')} {(row or {}).get('contract')} "
+                      f"subjects={(row or {}).get('declared_subjects')}")
+                if sc.ner_misses:
+                    found = ner_alone_finds(sc.content, sc.ner_misses)
+                    check(f"{sc.name}: detectors alone (incl. NER) miss declared names", len(found) < len(sc.ner_misses),
+                          f"detectors alone find {len(found)}/{len(sc.ner_misses)}")
+                    check(f"{sc.name}: declared subjects protected where NER misses them", bool(ex) and not leaked,
+                          f"{len(leaked)} leaked after declaration")
                 if not have_answers or r.status_code != 200:
                     for c in ("aliases survive provider formatting", "restoration", "C3 never returned"):
                         check(f"{sc.name}: {c}", None if not have_answers else False,
@@ -308,7 +353,7 @@ def main() -> int:
                     fcap = Capture()
                     fapp = create_app(make_settings(out, anthropic_upstream(fcap, upk["key"], upk.get("timeout", 60))))
                     with TestClient(fapp) as fc:
-                        fr = post(fc, "ticket_summary", SCENARIOS[0].content)
+                        fr = post(fc, "ticket_summary", SCENARIOS[0].content, subjects=SCENARIOS[0].subjects)
                     error_bodies.append(fr.text)
                     check(f"provider failure ({label}) fails closed", fr.status_code == 502
                           and not any(v in fr.text for v in ALL_RAW) and "choices" not in fr.json(),
@@ -342,12 +387,25 @@ def main() -> int:
                 try:
                     gapp = create_app(make_settings(out, gup, **extra))
                     with TestClient(gapp) as gc:
-                        gr = post(gc, "ticket_summary", SCENARIOS[0].content, model="mock-1")
+                        gr = post(gc, "ticket_summary", SCENARIOS[0].content, model="mock-1", subjects=SCENARIOS[0].subjects)
                 finally:
                     P.Protector.protect = orig
                 error_bodies.append(gr.text)
                 check(f"gateway failure ({label}) fails closed", gr.status_code == want and not gup.received
                       and not any(v in gr.text for v in ALL_RAW), f"status {gr.status_code}, sent {len(gup.received)}")
+            # declared-subject egress check: simulate the pipeline not applying declarations
+            orig_protect = P.Protector.protect   # simulate a pipeline bug: declarations ignored by the protector
+            P.Protector.protect = lambda self, messages, ctx, declared=None: orig_protect(self, messages, ctx)
+            try:
+                gup = MockCapture(Capture())
+                with TestClient(create_app(make_settings(out, gup))) as gc:
+                    a4 = next(x for x in SCENARIOS if x.ner_misses)
+                    gr = post(gc, a4.purpose, a4.content, model="mock-1", subjects=a4.subjects)
+            finally:
+                P.Protector.protect = orig_protect
+            error_bodies.append(gr.text)
+            check("declared-subject egress violation fails closed", gr.status_code == 500 and not gup.received
+                  and not any(v in gr.text for v in ALL_RAW), f"status {gr.status_code}, sent {len(gup.received)}")
             time.sleep(1.5)   # let the timed-out worker finish before scanning logs
 
     root.removeHandler(handler)
@@ -361,7 +419,7 @@ def main() -> int:
     (out / "stderr.txt").write_text(stderr.getvalue())
 
     lat = [r["latency_ms"] for r in records]
-    lines = [f"# Pilot validation: {mode}", "",
+    lines = [f"# Pilot validation (Path A declared subjects + Path B local compute): {mode}", "",
              f"- Model: `{MODEL}` · data: synthetic only · captures: outside the repo",
              f"- Gateway latency (ms, excl. provider), per scenario: {[x['gateway'] for x in lat]}",
              f"- Provider latency (ms): {[x['provider'] for x in lat]}", "",

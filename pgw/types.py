@@ -51,6 +51,7 @@ class Context:
     purpose: str
     conversation_id: str | None = None
     restore_output: bool = True
+    alias_ns: str = ""      # alias key namespace (the data contract ref for contracted purposes)
 
 
 @dataclass

@@ -1,7 +1,7 @@
 # Data contract: draft an email from HR to an employee (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. The draft is restored for a human to review and send; it is never auto-sent.
 contract: hr_email_draft
-version: 1
+version: 2
 task_type: hr_email_draft
 route: EXT_PSEUDO
 data_classes:
@@ -19,3 +19,7 @@ purpose_dependent:
   eligibility_result: PSEUDONYMISED_RAW
   derived_compensation: NOT_EXPECTED
 max_chars: 8000
+declared_subjects:          # people the app knows are involved; protected without relying on detection
+  required: [recipient]
+  roles: {recipient: 1, mentioned: 10, other: 5}
+  fields: {name: PERSON, employee_id: EMPLOYEE_ID, email: EMAIL, phone: PHONE}
