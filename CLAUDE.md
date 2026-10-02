@@ -37,3 +37,13 @@ Gates are pre-registered in [EVALUATION_PLAN.md](EVALUATION_PLAN.md). They may o
 
 - `eval/data3/*.jsonl.gz` hold dev3build/dev3val/roster (gunzip before use; plain `.jsonl` stays gitignored). test3 lives only in `eval/v3/sealed_v3.tar.enc`.
 - **Never decrypt, list or read the sealed archive or `/home/user/v3-sealed/`** unless running the one-shot test3 evaluation of `EVALUATION_PLAN` amendment 2026-10-01. dev3val is read through `eval.run_v3` only (max 5 logged runs).
+
+## Tooling (added 2026-10-02)
+
+- `scripts/check.sh`: pytest, ruff (bug/security rules only, `ruff.toml`), bandit, pip-audit. Run it before every commit that touches `pgw/`.
+- Project agents in `.claude/agents/`:
+  - `privacy-gateway-reviewer`: reviews changes against this gateway's invariants;
+  - `silent-failure-hunter` (adapted from ECC): swallowed errors, which here mean fail-open;
+  - `pr-test-analyzer` (ECC).
+- `.claude/skills/contract-first` (ECC) is reference material for the future data-contract layer.
+- Third-party hooks, MCP servers and memory-persistence plugins are **not** installed in this repo, by design (THIRD_PARTY_NOTICES.md).

@@ -1,0 +1,10 @@
+# Lint for real bugs and security smells, not style (see scripts/check.sh).
+target-version = "py311"
+[lint]
+select = ["E9", "F", "B", "S", "BLE"]
+ignore = ["S101"]   # assert in tests and invariants is intentional
+[lint.per-file-ignores]
+# Documented fail-closed handlers: each rejects without content (ADR-0007); reviewed 2026-10-02.
+"pgw/gateway/*.py" = ["BLE001"]
+"pgw/pd13/*.py" = ["BLE001", "B007", "B905", "F841"]   # experiment package, slated for deletion (PRODUCT_ARCHITECTURE §4)
+"tests/*.py" = ["S"]
