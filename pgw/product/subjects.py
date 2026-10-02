@@ -267,3 +267,14 @@ def prefer_declared_spelling(prot, declared: Declared) -> None:
     for key, ent in prot.entities.items():
         if key in want:
             ent.value = want[key]
+
+
+def ledger_items(declared: Declared) -> list[tuple[T, str]]:
+    """What a conversation remembers (as keyed hashes in the restore ledger, never as values) so that later turns
+    re-protect a declared identity even if the app does not declare it again: each value, plus name parts."""
+    out = [(t, v) for _, t, v in declared]
+    for _, t, v in declared:
+        if t is T.PERSON:
+            out += [(T.PERSON, w) for w in re.findall(r"[^\W\d_]+", fold(v)[0])
+                    if len(w) >= 3 and w.lower() not in _HONORIFICS and w.lower() not in _COMMON]
+    return out

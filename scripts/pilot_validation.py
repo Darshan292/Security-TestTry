@@ -37,11 +37,13 @@ sys.path.insert(0, str(ROOT))
 
 from pgw.gateway.app import build_upstream, create_app  # noqa: E402
 from pgw.gateway.settings import Settings, check_destination  # noqa: E402
-from pgw.gateway.upstream import AnthropicUpstream, MockLLMUpstream  # noqa: E402
+from pgw.gateway.upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream  # noqa: E402
 from pgw.alias import ALIAS_RE as ALIAS_BODY  # noqa: E402
 from pgw.product.local_compute import surface_forms  # noqa: E402
 
 MODEL = "claude-opus-5-5"
+MODELS = {"anthropic": MODEL, "groq": "openai/gpt-oss-120b", "mock": "mock-1"}
+GROQ_URL = "https://api.groq.com/openai/v1"
 APP_KEY = "pilot-hr-helpdesk-key-change-me"      # registry/apps.yaml demo key for hr-helpdesk-pilot
 BASE_URL = "https://api.anthropic.com"
 # Exact alias tokens as the gateway mints them ([TYPE_<digit><5 or 7 base32>]); redaction markers such as
@@ -77,6 +79,9 @@ NER_MISS = ("Ticket PAY-90412 | Raised by: Imran Ansari (KD-11914)\n"
             "Imran Ansari: my arrears for August 2026 are missing from the September payslip.\n"
             "Payroll Ops: please loop in tejaswini kulkarni from payroll before closing.\n"
             "Reply from Nandini: the arrears file was re-run on 30 Sep 2026; the amount will be paid in October.\n")
+BAND = {"instruction": "Explain to the HR manager where this employee sits in their pay band, in two lines.",
+        "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063", "annual_ctc": 2180000}],
+        "band": [{"name": "P3", "min_ctc": 1800000, "max_ctc": 2600000}]}
 ESI = {"instruction": "Explain to the employee whether ESI applies to them, in two lines.",
        "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063", "monthly_gross": 19800}]}
 
@@ -139,6 +144,10 @@ SCENARIOS = [
              must_cross=["covered by ESI", "₹21,000"],   # RAW by contract (justified) / C0
              expect_restored=["Hetal Shah"]),
 ]
+SCENARIOS.append(
+    Scenario("B3 pay band position", "band_position", json.dumps(BAND),
+             raw=["Hetal Shah", "KD-11063"] + _forms(2180000, 420000) + ["48%"],
+             must_cross=["P3", "middle third"], expect_restored=["Hetal Shah"]))
 ALL_RAW = sorted({v for s in SCENARIOS for v in s.raw})
 
 
@@ -156,6 +165,18 @@ class Capture:
         await resp.aread()
         self.exchanges[-1].update(t_resp=time.perf_counter(), status=resp.status_code,
                                   inbound=resp.content.decode("utf-8", "replace"))
+
+
+def groq_upstream(cap: Capture, key: str, timeout: float = 120.0) -> OpenAICompatUpstream:
+    import httpx
+    check_destination(GROQ_URL, ("api.groq.com",))     # the deployment's allowlist for this provider
+    client = httpx.AsyncClient(timeout=timeout, event_hooks={"request": [cap.on_request],
+                                                             "response": [cap.on_response]})
+    return OpenAICompatUpstream(GROQ_URL, key, timeout=timeout, client=client)
+
+
+def real_upstream(provider: str, cap: Capture, key: str, timeout: float = 120.0):
+    return (groq_upstream if provider == "groq" else anthropic_upstream)(cap, key, timeout)
 
 
 def anthropic_upstream(cap: Capture, key: str, timeout: float = 120.0) -> AnthropicUpstream:
@@ -220,12 +241,15 @@ def make_settings(out: Path, upstream, **kw) -> Settings:
                     master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream, **kw)
 
 
-def post(client, purpose, content, model=MODEL, subjects=None):
-    body = {"model": model, "max_tokens": 4096, "messages": [{"role": "user", "content": content}]}
+def post(client, purpose, content, model=MODEL, subjects=None, messages=None, conv=None):
+    body = {"model": model, "max_tokens": 4096,
+            "messages": messages or [{"role": "user", "content": content}]}
     if subjects is not None:
         body["pgw_subjects"] = subjects
-    return client.post("/v1/chat/completions",
-                       headers={"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose}, json=body)
+    h = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose}
+    if conv:
+        h["X-PGW-Conversation-Id"] = conv
+    return client.post("/v1/chat/completions", headers=h, json=body)
 
 
 def ner_alone_finds(text: str, names: list[str]) -> list[str]:
@@ -249,17 +273,24 @@ def ledger_row(out: Path, rid: str) -> dict | None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--provider", choices=["anthropic", "mock"], default="anthropic")
+    ap.add_argument("--provider", choices=["anthropic", "groq", "mock"], default="groq")
     ap.add_argument("--out", default=f"/home/user/pilot_captures/{time.strftime('%Y%m%d-%H%M%S')}")
     args = ap.parse_args()
     out = Path(args.out).resolve()
     if out == ROOT or ROOT in out.parents:
         raise SystemExit("captures contain synthetic raw values: write them outside the repository")
     out.mkdir(parents=True, exist_ok=True)
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if args.provider == "groq":
+        key = os.environ.get("GROQ_API_KEY", "")
+        kf = Path(os.environ.get("PGW_GROQ_KEY_FILE", "/root/.groq_key"))
+        if not key and kf.exists():
+            key = kf.read_text().strip()
+    else:
+        key = os.environ.get("ANTHROPIC_API_KEY", "")
+    model = MODELS[args.provider]
     have_answers = args.provider == "mock" or bool(key)
     mode = "mock self-test (NOT provider validation)" if args.provider == "mock" else (
-        "real provider" if key else "real endpoint, invalid key (answers BLOCKED: no ANTHROPIC_API_KEY)")
+        f"real provider ({args.provider}, {model})" if key else "real endpoint, invalid key (answers BLOCKED)")
 
     logbuf = io.StringIO()
     handler = logging.StreamHandler(logbuf)
@@ -276,14 +307,14 @@ def main() -> int:
         checks.append((name, "BLOCKED" if ok is None else ("PASS" if ok else "FAIL"), note))
 
     cap = Capture()
-    up = MockCapture(cap) if args.provider == "mock" else anthropic_upstream(cap, key or "sk-ant-invalid-pilot-check")
+    up = MockCapture(cap) if args.provider == "mock" else real_upstream(args.provider, cap, key or "invalid-pilot-check")
     with contextlib.redirect_stderr(stderr):
         app = create_app(make_settings(out, up))
         with TestClient(app) as client:
             for sc in SCENARIOS:
                 n0 = len(cap.exchanges)
                 t0 = time.perf_counter()
-                r = post(client, sc.purpose, sc.content, model="mock-1" if args.provider == "mock" else MODEL,
+                r = post(client, sc.purpose, sc.content, model=model,
                          subjects=sc.subjects)
                 total = (time.perf_counter() - t0) * 1000
                 ex = cap.exchanges[n0:]
@@ -339,21 +370,87 @@ def main() -> int:
                 mangled = [m.group(0) for m in ALIAS_BODY.finditer(ALIAS.sub("", ans))]
                 check(f"{sc.name}: aliases survive provider formatting", not mangled,
                       f"{len(exact)} exact alias uses in answer, {len(mangled)} mangled")
-                left = ALIAS.findall(restored)
+                left = [m.group(0) for m in ALIAS_BODY.finditer(restored)]   # incl. lenient/mangled forms
                 got = [v for v in sc.expect_restored if v in restored]
-                check(f"{sc.name}: restoration", not left and len(got) == len(sc.expect_restored),
-                      f"{len(got)}/{len(sc.expect_restored)} expected values restored, {len(left)} aliases left")
+                used = [x for x in aliases_out if x in ans] + mangled
+                check(f"{sc.name}: restoration (every alias the model used came back as the real value)",
+                      not left, f"{len(used)} alias uses in the answer, {len(left)} left unrestored")
+                check(f"{sc.name}: answer names the expected people (content, model-dependent)",
+                      len(got) == len(sc.expect_restored), f"{len(got)}/{len(sc.expect_restored)}")
                 check(f"{sc.name}: C3 never returned", not any(v in restored for v in sc.never_returned),
                       f"{len(sc.never_returned)} checked")
 
+            # --- multi-turn: declared subjects across turns (same contract, same conversation) ---
+            mt = next(x for x in SCENARIOS if x.ner_misses)
+            conv = "conv-" + os.urandom(6).hex()
+            mt_raw = mt.raw + ["Imran", "Ansari"]
+            turns = [("Summarise this ticket in two lines for the payroll lead.\n---\n" + NER_MISS, mt.subjects),
+                     ("Draft a two-line reply to the requester confirming when the arrears will be paid.",
+                      {"requester": mt.subjects["requester"]}),          # app no longer declares the others
+                     ("Summarise the whole thread for the payroll lead in one line, naming who did what.",
+                      {"requester": mt.subjects["requester"]})]
+            history, mt_out, mt_ok = [], [], True
+            for i, (ask, subj) in enumerate(turns, 1):
+                history.append({"role": "user", "content": ask})
+                n0 = len(cap.exchanges)
+                t0 = time.perf_counter()
+                r = post(client, mt.purpose, None, model=model, subjects=subj, messages=list(history), conv=conv)
+                total = (time.perf_counter() - t0) * 1000
+                ex = cap.exchanges[n0:]
+                body = r.json()
+                restored = ((body.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+                outbound = "\n".join(e["outbound"] for e in ex)
+                sent_text = outbound + "\n" + payload_strings(outbound)
+                leaked = [v for v in mt_raw if v.lower() in sent_text.lower()]
+                rec = {"scenario": f"M turn {i}", "status": r.status_code, "latency_ms": round(total, 1),
+                       "gateway_decision": ledger_row(out, r.headers.get("X-PGW-Request-Id", "")),
+                       "outbound_http": [e["outbound"] for e in ex], "inbound_http": [e.get("inbound") for e in ex],
+                       "restored_response": restored}
+                records.append(rec)
+                (out / f"multiturn_{i}.json").write_text(json.dumps(rec, indent=1, ensure_ascii=False))
+                check(f"M turn {i}: no raw value (incl. undeclared-this-turn names) in outbound",
+                      bool(ex) and not leaked, f"status {r.status_code}, {len(leaked)} found")
+                if have_answers and r.status_code == 200:
+                    left = [m.group(0) for m in ALIAS_BODY.finditer(restored)]
+                    check(f"M turn {i}: restored answer has no aliases left", not left, f"{len(left)} left")
+                mt_out.append(json.loads(ex[0]["outbound"]) if ex else None)
+                mt_ok &= r.status_code == 200
+                history.append({"role": "assistant", "content": restored or "(no answer)"})
+            if mt_ok and all(mt_out):
+                def first_user(o):
+                    ms = o.get("messages", [])
+                    u = next(m for m in ms if m.get("role") == "user")
+                    c = u["content"]
+                    return c if isinstance(c, str) else "".join(x.get("text", "") for x in c)
+                firsts = [first_user(o) for o in mt_out]
+                seqs = [ALIAS.findall(f) for f in firsts]
+                check("M: alias stability (same aliases, same positions, for turn-1 text in turns 2 and 3)",
+                      seqs[0] == seqs[1] == seqs[2] and bool(seqs[0]), f"{len(seqs[0])} aliases per turn")
+                check("M: turn-1 text protected byte-identically in later turns (utility)",
+                      firsts[0] == firsts[1] == firsts[2],
+                      "identical" if firsts[0] == firsts[1] == firsts[2] else
+                      "differs: a value detected in the model's reply was propagated into earlier text")
+            db = (out / "restore_ledger.sqlite").read_bytes()
+            import sqlite3
+            n_rows = sqlite3.connect(str(out / "restore_ledger.sqlite")).execute(
+                "SELECT COUNT(*) FROM restore_ledger WHERE conversation_id=?", (conv,)).fetchone()[0]
+            check("M: restore ledger holds the conversation as keyed hashes only", n_rows > 0 and not any(
+                v.encode() in db or v.lower().encode() in db for v in mt_raw), f"{n_rows} rows, no plaintext")
+            r = post(client, mt.purpose, None, model=model, subjects=mt.subjects, messages=list(history))
+            error_bodies.append(r.text)
+            check("M: history without a conversation id is refused (fail closed)", r.status_code == 400
+                  and r.json()["error"]["type"] == "conversation_id_required", f"status {r.status_code}")
+
             # --- provider failures (real endpoint) must fail closed with no content ---
-            if args.provider == "anthropic":
-                for label, upk in (("invalid API key", dict(key="sk-ant-invalid-pilot-check")),
-                                   ("provider timeout", dict(key=key or "sk-ant-invalid", timeout=0.001))):
+            if args.provider != "mock":
+                for label, upk in (("invalid API key", dict(key="invalid-pilot-check")),
+                                   ("provider timeout", dict(key=key or "invalid", timeout=0.001))):
                     fcap = Capture()
-                    fapp = create_app(make_settings(out, anthropic_upstream(fcap, upk["key"], upk.get("timeout", 60))))
+                    fapp = create_app(make_settings(out, real_upstream(args.provider, fcap, upk["key"],
+                                                                       upk.get("timeout", 60))))
                     with TestClient(fapp) as fc:
-                        fr = post(fc, "ticket_summary", SCENARIOS[0].content, subjects=SCENARIOS[0].subjects)
+                        fr = post(fc, "ticket_summary", SCENARIOS[0].content, model=model,
+                                  subjects=SCENARIOS[0].subjects)
                     error_bodies.append(fr.text)
                     check(f"provider failure ({label}) fails closed", fr.status_code == 502
                           and not any(v in fr.text for v in ALL_RAW) and "choices" not in fr.json(),
@@ -418,9 +515,15 @@ def main() -> int:
     (out / "logs.txt").write_text(logs)
     (out / "stderr.txt").write_text(stderr.getvalue())
 
-    lat = [r["latency_ms"] for r in records]
+    review = ["# Answers for human review (synthetic data; trusted environment only)", ""]
+    for r in records:
+        review += [f"## {r['scenario']} (HTTP {r['status']})", "", r.get("restored_response") or "(none)", "",
+                   "- Useful? [ ]  Correct vs. the input facts? [ ]  Notes:", ""]
+    (out / "human_review.md").write_text("\n".join(review))
+    lat = [r["latency_ms"] for r in records if isinstance(r["latency_ms"], dict)]
     lines = [f"# Pilot validation (Path A declared subjects + Path B local compute): {mode}", "",
-             f"- Model: `{MODEL}` · data: synthetic only · captures: outside the repo",
+             f"- Model: `{model}` · data: synthetic only · captures: outside the repo",
+             f"- Policy/contract integrity digest: `{next((r['gateway_decision'] or {}).get('integrity') for r in records if r.get('gateway_decision'))}`",
              f"- Gateway latency (ms, excl. provider), per scenario: {[x['gateway'] for x in lat]}",
              f"- Provider latency (ms): {[x['provider'] for x in lat]}", "",
              "| Check | Result | Note |", "|---|---|---|"]

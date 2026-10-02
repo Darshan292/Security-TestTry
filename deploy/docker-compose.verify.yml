@@ -1,0 +1,14 @@
+# Test-only override used by verify_network.sh. It keeps the real networks, aliases
+# and service-to-network attachments from docker-compose.yml and only swaps the
+# images/commands (the real gateway image is not needed to test the network layer).
+#   docker compose -f docker-compose.yml -f docker-compose.verify.yml up -d
+services:
+  gateway:
+    image: mirror.gcr.io/library/python:3.12-alpine
+    command: ["python", "-m", "http.server", "8080", "--bind", "0.0.0.0", "--directory", "/tmp"]
+    secrets: !reset []
+    volumes:
+      - /root/.ccr/ca-bundle.crt:/ca.crt:ro   # sandbox-only: this sandbox's TLS-intercepting egress
+  example-app:
+    image: mirror.gcr.io/library/python:3.12-alpine
+    command: ["sleep", "3600"]

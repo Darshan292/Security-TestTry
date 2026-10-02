@@ -1,5 +1,9 @@
 {
  "files": {
+  "contracts/band_position.yaml": {
+   "sha256": "e691121463c295897f45edf20462c8766a0f00781cd15d3f1460cc2e037738c3",
+   "version": 1
+  },
   "contracts/esi_letter.yaml": {
    "sha256": "f3c015d107ee52128b3e73381340121b064d4b1e11ac68929fac0f0566f53b02",
    "version": 1

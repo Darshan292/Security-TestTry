@@ -1,0 +1,8 @@
+# PLACEHOLDER: replace @ESU-ORG/privacy-gateway-owners with the real security-owner team before enabling
+# "Require review from Code Owners" in branch protection. Changes here alter what leaves the organisation.
+/policies/       @ESU-ORG/privacy-gateway-owners
+/contracts/      @ESU-ORG/privacy-gateway-owners
+/registry/       @ESU-ORG/privacy-gateway-owners
+/pgw/product/    @ESU-ORG/privacy-gateway-owners
+/pgw/egress.py   @ESU-ORG/privacy-gateway-owners
+/.github/        @ESU-ORG/privacy-gateway-owners

@@ -1,0 +1,61 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # dev.txt only holds test/lint extras (it is compiled with runtime.txt as a constraint, not as a superset),
+      # so install runtime.txt as well. Both are hash-locked.
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements/runtime.txt -r requirements/dev.txt
+      # Scanners are CI tooling, not shipped dependencies; they are not hash-locked here (pin/lock them if desired).
+      - name: Install scanners
+        run: pip install bandit pip-audit
+      - name: Policy/contract integrity (policies/MANIFEST.json must match)
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from pgw.product.integrity import ROOT, SEALED_GLOBS, verify
+          files = sorted(p for g in SEALED_GLOBS for p in ROOT.glob(g))
+          assert files, "no sealed files found"
+          print("manifest digest", verify(files), "for", len(files), "files")
+          PY
+      # Tests that need en_core_web_lg skip when it is absent (see tests/test_declared_subjects.py, tests/test_ner.py).
+      - name: pytest
+        run: python -m pytest tests -q
+      - name: ruff
+        run: ruff check pgw demo
+      - name: bandit
+        run: bandit -r pgw -ll
+      - name: pip-audit (locked requirements)
+        run: |
+          for f in runtime dev ner; do
+            pip-audit --require-hashes --disable-pip -r requirements/$f.txt
+          done
+
+  ner-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install NER extra and dev (mirrors INSTALL.md)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements/ner.txt -r requirements/ner-model.txt
+          pip install --require-hashes -r requirements/runtime.txt -r requirements/dev.txt
+      - name: pytest (NER tests enabled)
+        run: python -m pytest tests -q

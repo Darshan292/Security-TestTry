@@ -26,6 +26,16 @@ class ComputeResult:
     declared: list[tuple[T, str]]                 # values the pipeline must alias wherever they occur
     withheld: list[tuple[T, str]]                 # exact values that must never appear in egress bytes
     outputs: dict                                 # all computed outputs (stays inside; for tests/audit only)
+    raw: dict = None                              # sentinel -> RAW output, put back after detection (see run)
+
+
+_SENTINEL_BASE = 0xE010    # Unicode private-use characters: no detector matches them, no user text needs them
+
+
+def restore_raw(text: str, raw: dict) -> str:
+    for k, v in (raw or {}).items():
+        text = text.replace(k, v)
+    return text
 
 
 # --- payload validation ------------------------------------------------------------------------------------
@@ -129,7 +139,28 @@ def esi_eligibility(payload: dict) -> dict:
             "monthly_gross": e["monthly_gross"]}
 
 
-FUNCTIONS = {"salary_difference": salary_difference, "esi_eligibility": esi_eligibility}
+def band_position(payload: dict) -> dict:
+    """Where an employee's CTC sits in their pay band (band limits are company policy, C0)."""
+    e, b = payload["employee"][0], payload["band"][0]
+    lo, hi, ctc = b["min_ctc"], b["max_ctc"], e["annual_ctc"]
+    if hi <= lo:
+        raise ValueError("band maximum must exceed band minimum")
+    if ctc < lo:
+        position = "below the band minimum"
+    elif ctc > hi:
+        position = "above the band maximum"
+    else:
+        third = (ctc - lo) * 3 // (hi - lo + 1)
+        position = ("in the lower third of the band", "in the middle third of the band",
+                    "in the upper third of the band")[min(third, 2)]
+    pct = (Decimal(ctc - lo) * 100 / Decimal(hi - lo)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return {"employee_name": e["name"], "employee_id": e["employee_id"], "band_name": b["name"],
+            "band_min": inr(lo), "band_max": inr(hi), "position": position, "pct_through_band": f"{pct}%",
+            "annual_ctc": ctc, "headroom": hi - ctc}
+
+
+FUNCTIONS = {"salary_difference": salary_difference, "esi_eligibility": esi_eligibility,
+             "band_position": band_position}
 
 
 def run(contract: Contract, messages: list) -> ComputeResult:
@@ -142,14 +173,24 @@ def run(contract: Contract, messages: list) -> ComputeResult:
         else:                                                # C2/C3 inputs never leave in any form
             withheld += [(entity, f) for f in surface_forms(value)]
     outputs = FUNCTIONS[contract.compute](payload)           # function name validated at startup
-    fields = {}
+    fields, raw = {}, {}
     for name, value in outputs.items():
         spec = contract.outputs.get(name) or Output(name, DataClass.D, "INTERNAL")
         if spec.egress == "INTERNAL":
             withheld += [(T.DERIVED, f) for f in surface_forms(value) if len(f) >= 4]
             continue
+        if spec.egress == "RAW":
+            # The contract decided this value crosses as is. It must not be re-classified by detectors (a C0 band
+            # limit such as "₹18,00,000" would otherwise be generalised and the model would get wrong facts), so
+            # it is held behind a sentinel during protection and put back afterwards. Withheld values are still
+            # checked at egress against the final bytes.
+            sentinel = chr(_SENTINEL_BASE + len(raw))
+            raw[sentinel] = str(value)
+            fields[name] = sentinel
+            continue
         fields[name] = str(value)
         if spec.egress == "TRANSFORMED":
             declared.append((spec.entity, str(value)))
-    prompt = contract.prompt_template.format(instruction=payload["instruction"], **fields)
-    return ComputeResult(prompt=prompt, declared=declared, withheld=withheld, outputs=outputs)
+    instruction = "".join(c for c in payload["instruction"] if not 0xE000 <= ord(c) <= 0xF8FF)
+    prompt = contract.prompt_template.format(instruction=instruction, **fields)
+    return ComputeResult(prompt=prompt, declared=declared, withheld=withheld, outputs=outputs, raw=raw)

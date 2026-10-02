@@ -9,8 +9,8 @@
 # The gateway additionally enforces a destination allowlist in code
 # (PGW_EGRESS_ALLOWLIST / pgw.gateway.settings.check_destination).
 #
-# NOT exercised in CI/this repo's test environment: verify on a real Docker host
-# (see deploy/README.md for a one-line check).
+# Network layer verified with real containers on 2026-10-02: see deploy/verify_network.sh
+# and the "Verified 2026-10-02" section of deploy/README.md. Kubernetes is NOT exercised.
 
 services:
   gateway:

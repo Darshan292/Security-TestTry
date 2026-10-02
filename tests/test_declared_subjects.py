@@ -39,7 +39,7 @@ def make(tmp, behaviour="summarise", ner=None, tasks=None, integrity=True):
     reg = tmp / "apps.yaml"
     reg.write_text(yaml.safe_dump({"apps": [{
         "app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY), "restore_output": True, "models": ["mock-1"],
-        "purposes": ["ticket_summary", "hr_case_explanation", "salary_comparison"],
+        "purposes": ["ticket_summary", "hr_case_explanation", "salary_comparison", "band_position"],
         "tasks": tasks or {p: str(ROOT / f"contracts/{p}.yaml")
                            for p in ("ticket_summary", "hr_case_explanation", "salary_comparison")}}]}))
     mock = MockLLMUpstream(behaviour)
@@ -369,3 +369,37 @@ def test_quoted_thread_is_not_refused(tmp_path):
     client, mock = make(tmp_path)
     sig = "Tejaswini Kulkarni | KD-11914 | +91 98450 12345\n> Tejaswini wrote: ok\n"
     assert call(client, sig * 60, TK).status_code == 200
+
+
+def test_conversation_ledger_failure_before_send_fails_closed(tmp_path, monkeypatch):
+    import pgw.detect.edm as E
+    monkeypatch.setattr(E.RestoreLedger, "record", lambda *a, **k: (_ for _ in ()).throw(OSError("disk")))
+    client, mock = make(tmp_path)
+    r = call(client, TICKET, SUBJECTS, conv="c-led")
+    assert r.status_code == 503 and r.json()["error"]["type"] == "ledger_unavailable" and not mock.received
+
+
+def test_later_turn_reprotects_names_not_declared_again(tmp_path):
+    client, mock = make(tmp_path)
+    assert call(client, TICKET, SUBJECTS, conv="c-mt").status_code == 200
+    hist = [{"role": "user", "content": TICKET}, {"role": "assistant", "content": "Nandini re-ran it."},
+            {"role": "user", "content": "Thanks, please loop in tejaswini kulkarni and NANDINI again."}]
+    r = client.post("/v1/chat/completions", json={"model": "mock-1", "messages": hist,
+                    "pgw_subjects": {"requester": SUBJECTS["requester"]}},
+                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
+                             "X-PGW-Conversation-Id": "c-mt"})
+    assert r.status_code == 200
+    w = wire(mock).lower()
+    assert "nandini" not in w and "tejaswini" not in w and "kulkarni" not in w
+
+
+def test_raw_c0_outputs_are_not_regeneralised(tmp_path):
+    client, mock = make(tmp_path, tasks={"band_position": str(ROOT / "contracts/band_position.yaml")})
+    body = {"instruction": "Explain.", "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063",
+            "annual_ctc": 2180000}], "band": [{"name": "P3", "min_ctc": 1800000, "max_ctc": 2600000}]}
+    r = call(client, json.dumps(body), purpose="band_position")
+    assert r.status_code == 200, r.text
+    w = wire(mock)
+    assert "₹18,00,000" in w and "₹26,00,000" in w and "middle third" in w
+    for v in ("21,80,000", "2180000", "4,20,000", "48%", "Hetal"):
+        assert v not in w

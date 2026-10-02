@@ -223,7 +223,15 @@ def test_stream_ledger_failure_is_logged_not_swallowed(tmp_path, monkeypatch, ca
                               "choices": [{"index": 0, "delta": {"content": "partial"}}]})
             raise RuntimeError("connection reset")
     import pgw.detect.edm as E
-    monkeypatch.setattr(E.RestoreLedger, "record", lambda *a, **k: (_ for _ in ()).throw(OSError("disk")))
+    calls = {"n": 0}
+    orig_record = E.RestoreLedger.record
+
+    def flaky(self, *a, **k):   # the pre-send write (declared subjects) succeeds; the post-stream write fails
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise OSError("disk")
+        return orig_record(self, *a, **k)
+    monkeypatch.setattr(E.RestoreLedger, "record", flaky)
     client = TestClient(create_app(settings(tmp_path, Broken("summarise"))))
     with caplog.at_level(logging.INFO, logger="pgw.gateway"):
         r = call(client, TICKET, stream=True, headers={"X-PGW-Conversation-Id": "conv-1"})

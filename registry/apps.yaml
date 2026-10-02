@@ -13,12 +13,13 @@ apps:
   - app_id: hr-helpdesk-pilot
     tenant: acme
     key_sha256: 3254cb5f99c34b1023cdda3f71688bf2e5ee5dd23cbdf557c8a8549ac10f6206
-    purposes: [ticket_summary, hr_case_explanation, hr_email_draft, salary_comparison, esi_letter]
+    purposes: [ticket_summary, hr_case_explanation, hr_email_draft, salary_comparison, esi_letter, band_position]
     tasks:
       ticket_summary: ../contracts/ticket_summary.yaml
       hr_case_explanation: ../contracts/hr_case_explanation.yaml
       hr_email_draft: ../contracts/hr_email_draft.yaml
       salary_comparison: ../contracts/salary_comparison.yaml
       esi_letter: ../contracts/esi_letter.yaml
+      band_position: ../contracts/band_position.yaml
     restore_output: true
-    models: [mock-1, claude-opus-5-5]
+    models: [mock-1, claude-opus-5-5, openai/gpt-oss-120b]

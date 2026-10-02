@@ -333,7 +333,7 @@ def create_app(settings: Settings) -> Starlette:
             if purpose not in dict(app.tasks):
                 raise _Reject(403, "no_data_contract", "purpose has no data contract for this app")
             contract = contracts[purpose]
-        messages, declared, withheld, subj = body["messages"], None, [], []
+        messages, declared, withheld, subj, raw_outputs = body["messages"], None, [], [], None
         if contract is not None:
             ctx = dataclasses.replace(ctx, alias_ns=contract.ref)
         if "pgw_subjects" in body and (contract is None or contract.subjects is None):
@@ -366,7 +366,7 @@ def create_app(settings: Settings) -> Starlette:
                     _log(logging.ERROR, event="compute_failed", request_id=rid, error_type=type(e).__name__)
                     raise _Reject(503, "compute_unavailable", "local computation failed; request not sent") from None
                 messages = [{"role": "user", "content": cr.prompt}]
-                declared, withheld = cr.declared, cr.withheld
+                declared, withheld, raw_outputs = cr.declared, cr.withheld, cr.raw
 
         if subj:   # after all size checks, off the event loop, under the deadline
             n = await bounded(subjects.count_occurrences, subjects.request_texts(messages), declared)
@@ -400,8 +400,18 @@ def create_app(settings: Settings) -> Starlette:
                         contract)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
 
+        if raw_outputs:   # contract-RAW local-compute outputs, held out of detection, go back in now
+            for m in prot.messages:
+                if isinstance(m.get("content"), str):
+                    m["content"] = local_compute.restore_raw(m["content"], raw_outputs)
         if subj:
             subjects.prefer_declared_spelling(prot, subj)
+            if ctx.conversation_id:   # later turns re-protect these even if the app does not re-declare them
+                try:
+                    ledger.record(ctx, subjects.ledger_items(subj))
+                except Exception as e:
+                    _log(logging.ERROR, event="ledger_record_failed", request_id=rid, error_type=type(e).__name__)
+                    raise _Reject(503, "ledger_unavailable", "conversation ledger unavailable; request not sent") from None
         up_body = {k: v for k, v in body.items() if k != "messages" and not k.startswith("pgw_")}
         up_body["messages"] = prot.messages
         if contract is not None:   # tell the model how to treat placeholders (added after detection)
