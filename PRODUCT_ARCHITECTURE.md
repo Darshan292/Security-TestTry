@@ -2,7 +2,7 @@
 
 - **Status:** Proposed (2026-10-02). Supersedes DESIGN.md §1, §4 and §5 as the product description. ADR-0001…0010 remain the decision record; departures are marked.
 - **Evidence base:** R1–R3 security evaluations, R4 architecture analysis, R4 E-UTIL (`eval/eutil/E_UTIL_REPORT.md`).
-- **Nothing in this document is implemented yet unless the "Exists" column says so.**
+- **Nothing in this document is implemented yet unless the "Exists" column says so.** Since 2026-10-02, a thin vertical slice exists: app contracts, C0–C4 routing, redact-not-block, LOCAL_COMPUTE with one function, and fail-closed tests (PRODUCT_SLICE.md).
 - **This is not a readiness claim.** The system has failed every held-out leakage gate so far (R1–R3) and must not see real HR data.
 
 ## 1. What the product is

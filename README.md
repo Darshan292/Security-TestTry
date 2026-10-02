@@ -11,6 +11,7 @@ Read [SECURITY_EVALUATION_R2.md](SECURITY_EVALUATION_R2.md) first (R1: [SECURITY
 
 | If you want… | Read |
 |---|---|
+| **Working product slice (two paths, end to end)** | [PRODUCT_SLICE.md](PRODUCT_SLICE.md) · `python -m demo.demo_slice` |
 | **The product: what may cross the boundary, routing, architecture** | [PRODUCT_ARCHITECTURE.md](PRODUCT_ARCHITECTURE.md) · [E-UTIL report](eval/eutil/E_UTIL_REPORT.md) · demo: `python -m demo.demo_gateway` |
 | The measured truth about the slice | [SECURITY_EVALUATION.md](SECURITY_EVALUATION.md) |
 | Why it leaks and the proposed architecture change (R2 root cause, ablation) | [ROOT_CAUSE_ANALYSIS_R2.md](ROOT_CAUSE_ANALYSIS_R2.md) |

@@ -5,6 +5,7 @@ or log line ever contains request text or values (ADR-0007).
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import hmac
 import json
@@ -28,6 +29,9 @@ from ..egress import check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
 from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer
+from ..product import local_compute
+from ..product.content import unreliable_script
+from ..product.contracts import Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
 from .settings import Settings
 from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError
@@ -69,12 +73,45 @@ class AppEntry:
     purposes: frozenset
     restore_output: bool
     models: frozenset
+    tasks: tuple = ()      # ((purpose, contract_path), ...): apps with tasks only use contracted purposes
 
 
 def load_registry(path: str) -> list[AppEntry]:
     raw = yaml.safe_load(Path(path).read_text())
-    return [AppEntry(a["app_id"], a["tenant"], a["key_sha256"].lower(), frozenset(a["purposes"]),
-                     bool(a.get("restore_output", True)), frozenset(a["models"])) for a in raw["apps"]]
+    base = Path(path).resolve().parent
+    out = []
+    for a in raw["apps"]:
+        tasks = tuple(sorted((p, str(c if Path(c).is_absolute() else (base / c).resolve()))
+                             for p, c in (a.get("tasks") or {}).items()))
+        if any(p not in a["purposes"] for p, _ in tasks):
+            raise ValueError(f"app {a['app_id']}: every task purpose must be a registered purpose")
+        out.append(AppEntry(a["app_id"], a["tenant"], a["key_sha256"].lower(), frozenset(a["purposes"]),
+                            bool(a.get("restore_output", True)), frozenset(a["models"]), tasks))
+    return out
+
+
+PLACEHOLDER_NOTE = ("Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. "
+                    "Keep them exactly as written wherever you refer to them; do not guess what they stand for.")
+
+
+def load_contracts(registry: list[AppEntry], policy: PolicyPack) -> tuple[dict[str, Contract], PolicyPack]:
+    """Contracts by purpose, and a policy pack extended with their per-type actions. Any problem stops startup."""
+    contracts: dict[str, Contract] = {}
+    for app in registry:
+        for purpose, path in app.tasks:
+            c = load_contract(path)
+            if purpose in policy.purposes:
+                raise ContractError(f"purpose {purpose!r} is already defined by the policy pack; contracted "
+                                    "purposes must be distinct so contracts cannot change other apps' behaviour")
+            if purpose in contracts and contracts[purpose].ref != c.ref:
+                raise ContractError(f"purpose {purpose!r} is bound to two different contracts")
+            if c.route == "LOCAL_COMPUTE" and c.compute not in local_compute.FUNCTIONS:
+                raise ContractError(f"unknown compute function {c.compute!r}")
+            contracts[purpose] = c
+    if not contracts:
+        return contracts, policy
+    purposes = {**policy.purposes, **{p: c.actions() for p, c in contracts.items()}}
+    return contracts, dataclasses.replace(policy, purposes=purposes)
 
 
 def build_upstream(s: Settings) -> Upstream:
@@ -121,6 +158,7 @@ def create_app(settings: Settings) -> Starlette:
     policy = PolicyPack.load(settings.policy_path)
     keys = Keys(bytes.fromhex(settings.master_key)) if settings.master_key else Keys.from_env()
     registry = load_registry(settings.registry_path)
+    contracts, policy = load_contracts(registry, policy)
     roster = load_roster(settings.roster_path, keys.derive("*", "edm")) if settings.roster_path else None
     ledger = RestoreLedger(keys.derive("*", "ledger"), settings.ledger_db_path)
     protector = Protector(policy, keys, roster, ledger)
@@ -140,12 +178,13 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(401, "unauthorized", "missing or invalid credentials")
         return found
 
-    def ledger_line(rid, app, purpose, model, body_hash, counts, decision, ms, reason=None):
+    def ledger_line(rid, app, purpose, model, body_hash, counts, decision, ms, reason=None, contract=None):
         try:
+            extra = {"contract": contract.ref, "route": contract.route} if contract is not None else {}
             egress_ledger.write(request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose, model=model,
                                 provider=upstream.name, body_sha256=body_hash, entity_counts=counts,
                                 policy=policy.ref, decision=decision, latency_ms=round(ms, 2), reason=reason,
-                                ts=round(time.time(), 3))
+                                ts=round(time.time(), 3), **extra)
         except Exception as e:  # audit write failure must not leak content; fail closed
             _log(logging.ERROR, event="egress_ledger_write_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "ledger_unavailable", "audit ledger unavailable") from None
@@ -203,11 +242,40 @@ def create_app(settings: Settings) -> Starlette:
         ctx = Context(app.tenant, app.app_id, purpose, conv, app.restore_output)
         t0 = time.perf_counter()
 
+        # --- data contract and route (PRODUCT_ARCHITECTURE §2); every failure here is before any send ---
+        contract: Contract | None = None
+        if app.tasks:
+            if purpose not in dict(app.tasks):
+                raise _Reject(403, "no_data_contract", "purpose has no data contract for this app")
+            contract = contracts[purpose]
+        messages, declared, withheld = body["messages"], None, []
+        if contract is not None:
+            texts = [m.get("content") for m in messages if isinstance(m, dict) and isinstance(m.get("content"), str)]
+            if sum(len(t) for t in texts) > contract.max_chars:
+                raise _Reject(413, "content_too_large", "request exceeds the data contract's size limit")
+            if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
+                ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                            "content_class_C4", contract)
+                raise _Reject(422, "content_requires_private_route",
+                              "content in a script the gateway cannot protect reliably; not sent externally")
+            if contract.route == "LOCAL_COMPUTE":
+                try:
+                    cr = await run_in_threadpool(local_compute.run, contract, messages)
+                except local_compute.PayloadError as e:
+                    raise _Reject(400, "invalid_contract_payload", str(e)) from None
+                except Exception as e:
+                    _log(logging.ERROR, event="compute_failed", request_id=rid, error_type=type(e).__name__)
+                    raise _Reject(503, "compute_unavailable", "local computation failed; request not sent") from None
+                messages = [{"role": "user", "content": cr.prompt}]
+                declared, withheld = cr.declared, cr.withheld
+
         # --- protect + egress (fail closed) ---
         try:
-            prot = await run_in_threadpool(protector.protect, body["messages"], ctx)
+            prot = await (run_in_threadpool(protector.protect, messages, ctx) if declared is None
+                          else run_in_threadpool(protector.protect, messages, ctx, declared))
         except BlockedRequest as e:
-            ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000, "policy")
+            ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000, "policy",
+                        contract)
             raise _Reject(422, "request_blocked", "request contains data that policy forbids sending",
                           types=list(e.types)) from None
         except (UnsupportedContent, ConversationIdRequired) as e:
@@ -224,25 +292,31 @@ def create_app(settings: Settings) -> Starlette:
 
         up_body = {k: v for k, v in body.items() if k != "messages"}
         up_body["messages"] = prot.messages
+        if contract is not None:   # tell the model how to treat placeholders (added after detection)
+            up_body["messages"] = [{"role": "system", "content": PLACEHOLDER_NOTE}] + list(prot.messages)
         wire = upstream.wire_bytes(up_body)
         body_hash = hashlib.sha256(wire).hexdigest()
         try:
-            egress_check(wire, prot.sensitive_values)
+            egress_check(wire, prot.sensitive_values + withheld)
         except EgressViolation:
             ms = (time.perf_counter() - t0) * 1000
-            ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "VIOLATION", ms, "egress")
+            ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "VIOLATION", ms, "egress", contract)
             _log(logging.CRITICAL, event="egress_violation", request_id=rid, tenant=app.tenant, app=app.app_id)
             raise _Reject(500, "PGW_EGRESS_VIOLATION", "egress invariant violated; request not sent") from None
         except Exception as e:
             _log(logging.ERROR, event="egress_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
         ms = (time.perf_counter() - t0) * 1000
-        ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "SENT", ms)
+        ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "SENT", ms, None, contract)
         _log(logging.INFO, event="sent", request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose,
              model=model, decision="SENT", latency_ms=round(ms, 2), stream=stream)
 
+        never = policy.never_restore
+        if contract is not None:   # only the classes the contract lists are restored
+            never = frozenset(never | {t for t in EntityType if not contract.restorable(t)})
+
         def new_restorer() -> Restorer:
-            return Restorer(prot.alias_map, restore=app.restore_output, never_restore=policy.never_restore,
+            return Restorer(prot.alias_map, restore=app.restore_output, never_restore=never,
                             roster=roster, mode=policy.stream_mode(purpose))
 
         def record(items) -> None:

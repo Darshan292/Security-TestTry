@@ -7,3 +7,15 @@ apps:
     purposes: [hr_case_summary, email_draft, ticket_classification, comp_band_analysis]
     restore_output: true
     models: [mock-1, gpt-4o-mini]
+
+  # PILOT (product slice): every purpose is bound to a data contract; uncontracted purposes are refused.
+  # The demo key below is "pilot-hr-helpdesk-key-change-me"; replace it.
+  - app_id: hr-helpdesk-pilot
+    tenant: acme
+    key_sha256: 3254cb5f99c34b1023cdda3f71688bf2e5ee5dd23cbdf557c8a8549ac10f6206
+    purposes: [ticket_summary, salary_comparison]
+    tasks:
+      ticket_summary: ../contracts/ticket_summary.yaml
+      salary_comparison: ../contracts/salary_comparison.yaml
+    restore_output: true
+    models: [mock-1, gpt-4o-mini]

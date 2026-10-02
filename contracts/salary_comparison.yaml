@@ -1,0 +1,33 @@
+# Data contract: compare two employees' pay (PATH B, LOCAL_COMPUTE).
+# Exact CTC values arrive as structured fields, are used only inside the gateway, and never leave it.
+# The external model receives identities as aliases plus derived results, and writes the explanation.
+contract: salary_comparison
+version: 1
+task_type: salary_comparison
+route: LOCAL_COMPUTE
+compute: salary_difference
+data_classes:
+  C1: ALIAS
+  C2: ALIAS        # only the *derived* difference is ever in the prompt; it is aliased and restored
+  C3: REDACT
+  C4: REFUSE
+restore: [C1, C2]
+max_chars: 4000
+input_schema:
+  instruction: {type: str, max_len: 500}
+  employees:
+    type: list
+    min: 2
+    max: 2
+    items:
+      name: {type: str, max_len: 100}
+      employee_id: {type: str, max_len: 20}
+      annual_ctc: {type: int, min: 1, max: 1000000000}
+prompt_template: |
+  {instruction}
+
+  Facts computed inside the privacy gateway from exact HRIS data (exact salaries are not shared with you):
+  - Employees compared: {higher_name} ({higher_id}) and {lower_name} ({lower_id}).
+  - {higher_name} has the higher annual CTC.
+  - The difference is {difference} per year, which is {pct_of_lower}% of the lower CTC.
+  Write the answer for the HR manager using only these facts.

@@ -1,0 +1,14 @@
+# Data contract: HR/payroll ticket summarisation (PATH A, PRODUCT_ARCHITECTURE §2).
+# Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
+# government/financial identifiers are not needed for a summary, so they are removed, not blocked.
+contract: ticket_summary
+version: 1
+task_type: hr_ticket_summary
+route: EXT_PSEUDO
+data_classes:
+  C1: ALIAS        # names, employee IDs, emails, phones -> scoped aliases
+  C2: GENERALIZE   # salary, DOB -> bands, never exact
+  C3: REDACT       # PAN, Aadhaar, bank account, card, UPI, secrets -> removed
+  C4: REFUSE       # non-Latin-script personal text: no private route yet
+restore: [C1]
+max_chars: 20000

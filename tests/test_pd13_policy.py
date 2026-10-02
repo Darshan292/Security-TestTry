@@ -188,7 +188,7 @@ def test_two_digit_years_resolve_against_the_latest_date():
 def test_analyze_and_protect_are_the_inherited_methods():
     assert PD13Protector.analyze is Protector.analyze and PD13Protector.protect is Protector.protect
     assert list(inspect.signature(PD13Protector.analyze).parameters) == ["self", "messages", "ctx"]
-    assert list(inspect.signature(PD13Protector.protect).parameters) == ["self", "messages", "ctx"]
+    assert list(inspect.signature(PD13Protector.protect).parameters) == ["self", "messages", "ctx", "declared"]   # base gained contract-declared values
 
 
 def test_d1_is_off_inside_and_restored_after():

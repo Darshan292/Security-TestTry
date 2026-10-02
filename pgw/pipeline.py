@@ -240,23 +240,31 @@ class Protector:
                     out.append(Detection(s, e, d.type, d.score, f"{d.source}@{name}" if name != "base" else d.source))
         return out
 
-    def protect(self, messages: list[dict], ctx: Context) -> Protected:
+    def protect(self, messages: list[dict], ctx: Context,
+                declared: list[tuple[EntityType, str]] | None = None) -> Protected:
+        """declared: values a data contract states explicitly (e.g. names and IDs from a structured payload).
+        They are protected wherever they occur, independent of detection; they can only add protection."""
         messages = copy.deepcopy(messages)
         segs = _segments(messages)
 
         if ctx.restore_output and not ctx.conversation_id and any(s.role == "assistant" for s in segs):
             raise ConversationIdRequired()
 
-        per_seg = self._detect_segments(segs, ctx)
+        per_seg = self._detect_segments(segs, ctx, declared) if declared else self._detect_segments(segs, ctx)
         return self._transform(messages, segs, per_seg, ctx)
 
     def analyze(self, messages: list[dict], ctx: Context) -> list[list[Detection]]:
         """Final resolved spans per segment (for evaluation); does not transform."""
         return self._detect_segments(_segments(copy.deepcopy(messages)), ctx)
 
-    def _detect_segments(self, segs: list[Segment], ctx: Context) -> list[list[Detection]]:
-        # 1. Detect per segment.
+    def _detect_segments(self, segs: list[Segment], ctx: Context,
+                         declared: list[tuple[EntityType, str]] | None = None) -> list[list[Detection]]:
+        # 1. Detect per segment (plus contract-declared values, which need no detection).
         per_seg: list[list[Detection]] = [self.detect_text(s.text) for s in segs]
+        for t, v in declared or ():
+            if v and v.strip():
+                for i, seg in enumerate(segs):
+                    per_seg[i] += [Detection(s, e, t, 1.0, "C:declared") for s, e in _occurrences(seg.text, t, v)]
         if self.ledger is not None and ctx.conversation_id:
             normed = [normalize(s.text) for s in segs]
             for i, dets in enumerate(self.ledger.detect(ctx, [n for n, _ in normed])):
