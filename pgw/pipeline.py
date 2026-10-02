@@ -58,9 +58,29 @@ class Keys:
             raise RuntimeError("PGW_MASTER_KEY (64 hex chars) is required")
         return cls(bytes.fromhex(hexkey))
 
-    def derive(self, tenant: str, purpose: str) -> bytes:
-        return HKDF(algorithm=hashes.SHA256(), length=32, salt=None,
-                    info=f"pgw/{purpose}/v1/{tenant}".encode()).derive(self.master)
+    # Single-master mode (tests/demos): one implicit key id for every tenant and the platform ("*").
+    # Per-tenant keys with rotation: pgw.keys.TenantKeyring (same interface).
+    KEY_ID = "v1"
+
+    def active_id(self, tenant: str) -> str:
+        return self.KEY_ID
+
+    def has(self, tenant: str, key_id: str) -> bool:
+        return key_id == self.KEY_ID
+
+    def derive(self, tenant: str, purpose: str, key_id: str | None = None) -> bytes:
+        if key_id not in (None, self.KEY_ID):
+            raise KeyUnavailable("unknown key id")
+        return hkdf(self.master, tenant, purpose)
+
+
+class KeyUnavailable(Exception):
+    """No key for this tenant / key id. Requests fail closed (503); never another tenant's key."""
+
+
+def hkdf(master: bytes, tenant: str, purpose: str) -> bytes:
+    return HKDF(algorithm=hashes.SHA256(), length=32, salt=None,
+                info=f"pgw/{purpose}/v1/{tenant}".encode()).derive(master)
 
 
 # --- weak PERSON cues (Phase 1 has no NER) ---------------------------------------
@@ -305,6 +325,19 @@ class Protector:
             per_seg[i] = _resolve(per_seg[i])
         return per_seg
 
+    def _alias_key_id(self, ctx: Context) -> str:
+        """Active key id for new conversations; an existing conversation keeps the key id pinned in the
+        restore ledger while that key still exists, so aliases stay stable across a key rotation.
+        Raises KeyUnavailable when the tenant has no key (fail closed)."""
+        active = self.keys.active_id(ctx.tenant)
+        if self.ledger is None or not ctx.conversation_id:
+            return active
+        pinned = self.ledger.pinned_key(ctx)
+        if pinned is not None and pinned != active and self.keys.has(ctx.tenant, pinned):
+            return pinned
+        self.ledger.pin_key(ctx, active)
+        return active
+
     def _transform(self, messages, segs, per_seg, ctx) -> Protected:
         # 4. Decide.
         entities: dict[tuple[EntityType, str], Entity] = {}
@@ -324,7 +357,7 @@ class Protector:
         scope_id = ctx.conversation_id or secrets.token_hex(16)
         # Contracted purposes get their own alias key: the same person is unlinkable across purposes.
         label = f"alias/{ctx.alias_ns}" if ctx.alias_ns else "alias"
-        alloc = AliasAllocator(scope_key(self.keys.derive(ctx.tenant, label), scope_id))
+        alloc = AliasAllocator(scope_key(self.keys.derive(ctx.tenant, label, self._alias_key_id(ctx)), scope_id))
         prot = Protected(messages, scope_id, entities)
         for key, ent in entities.items():
             if ent.action is Action.TOKENIZE:

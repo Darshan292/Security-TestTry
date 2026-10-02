@@ -242,20 +242,33 @@ def test_stream_ledger_failure_is_logged_not_swallowed(tmp_path, monkeypatch, ca
 
 # --- egress destination ------------------------------------------------------------------------------------------
 
+TERMS = {"provider_region": "in-south", "provider_zero_retention": True}
+
+
+def test_real_provider_requires_attested_data_terms():
+    for s in (Settings(upstream_kind="anthropic", anthropic_api_key="k"),
+              Settings(upstream_kind="anthropic", anthropic_api_key="k", provider_region="in-south"),
+              Settings(upstream_kind="anthropic", anthropic_api_key="k", provider_zero_retention=True)):
+        with pytest.raises(ValueError):
+            build_upstream(s)
+    assert Settings.from_env({"PGW_PROVIDER_REGION": "in-south",
+                              "PGW_PROVIDER_ZERO_RETENTION_ATTESTED": "1"}).provider_zero_retention
+
+
 def test_real_providers_only_reach_allowlisted_destinations():
-    ok = Settings(upstream_kind="anthropic", anthropic_api_key="k")
+    ok = Settings(upstream_kind="anthropic", anthropic_api_key="k", **TERMS)
     assert build_upstream(ok).name == "anthropic"
-    for bad in (Settings(upstream_kind="anthropic", anthropic_base_url="https://evil.example"),
-                Settings(upstream_kind="anthropic", anthropic_base_url="http://api.anthropic.com"),
-                Settings(upstream_kind="openai"),       # default allowlist has no OpenAI host
-                Settings(upstream_kind="openai", upstream_url="https://api.anthropic.com.evil.example/v1")):
+    for bad in (Settings(upstream_kind="anthropic", anthropic_base_url="https://evil.example", **TERMS),
+                Settings(upstream_kind="anthropic", anthropic_base_url="http://api.anthropic.com", **TERMS),
+                Settings(upstream_kind="openai", **TERMS),       # default allowlist has no OpenAI host
+                Settings(upstream_kind="openai", upstream_url="https://api.anthropic.com.evil.example/v1", **TERMS)):
         with pytest.raises(ValueError):
             build_upstream(bad)
 
 
 def test_sdk_base_url_env_cannot_redirect_the_provider(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://evil.example")
-    up = build_upstream(Settings(upstream_kind="anthropic", anthropic_api_key="k"))
+    up = build_upstream(Settings(upstream_kind="anthropic", anthropic_api_key="k", **TERMS))
     assert str(up._client.base_url).startswith("https://api.anthropic.com")
 
 

@@ -7,6 +7,24 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 DEFAULT_EGRESS_ALLOWLIST: tuple[str, ...] = ("api.anthropic.com",)
+DEFAULT_PRIVATE_ALLOWLIST: tuple[str, ...] = ("127.0.0.1", "localhost", "::1", "pgw-private-llm")
+
+
+def check_private_destination(url: str, private_allowlist, egress_allowlist) -> None:
+    """The private (C4) route may only reach an in-boundary endpoint: an exact host from the private allowlist,
+    never a host that is also an external provider destination. Raises ValueError otherwise."""
+    if not isinstance(url, str) or any(c.isspace() or ord(c) < 32 or c == "\\" for c in url):
+        raise ValueError("private destination: malformed URL")
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if parts.scheme not in ("http", "https") or parts.username or parts.password or not host:
+        raise ValueError("private destination: http(s) URL without userinfo required")
+    if host not in {h.lower() for h in private_allowlist}:
+        raise ValueError(f"private destination not allowlisted: {host}")
+    if any(host == str(e).lower().rsplit(":", 1)[0] for e in egress_allowlist):
+        raise ValueError("private destination must not be an external provider host")
+
+
 DEFAULT_MANIFEST = str(Path(__file__).resolve().parents[2] / "policies" / "MANIFEST.json")
 
 
@@ -68,6 +86,12 @@ class Settings:
     openai_api_key: str = field(default="", repr=False)
     anthropic_api_key: str = field(default="", repr=False)
     master_key: str = field(default="", repr=False)   # 64 hex chars
+    # Per-tenant keys with rotation (pgw.keys). When set, master_key is not used. Env: PGW_TENANT_KEYS_FILE
+    tenant_keys_file: str | None = None
+    # Provider data terms (organisational control, attested here so it is explicit and audited): a real external
+    # provider is not built unless zero data retention / no training is attested and a processing region is named.
+    provider_region: str | None = None
+    provider_zero_retention: bool = False
     # Exact-hostname allowlist for outbound provider calls (see check_destination). Env: PGW_EGRESS_ALLOWLIST
     egress_allowlist: tuple[str, ...] = DEFAULT_EGRESS_ALLOWLIST
     anthropic_base_url: str = "https://api.anthropic.com"   # passed explicitly: the SDK's env override is ignored
@@ -84,6 +108,12 @@ class Settings:
     integrity_manifest: str | None = DEFAULT_MANIFEST
     policy_signing_key: str = field(default="", repr=False)   # hex; if set, the manifest signature must verify
     require_signed_policy: bool = False
+    # Private (C4) route: one in-boundary OpenAI-compatible endpoint. None = no private route (contracts that
+    # need it then stop startup).
+    private_upstream_url: str | None = None
+    private_model: str = "local"
+    private_allowlist: tuple[str, ...] = DEFAULT_PRIVATE_ALLOWLIST
+    private_upstream: object | None = field(default=None, repr=False)   # injected (tests)
     upstream: object | None = field(default=None, repr=False)   # injected Upstream (tests/demos)
 
     @classmethod
@@ -100,6 +130,9 @@ class Settings:
             openai_api_key=e.get("OPENAI_API_KEY", ""),
             anthropic_api_key=e.get("ANTHROPIC_API_KEY", ""),
             master_key=e.get("PGW_MASTER_KEY", ""),
+            tenant_keys_file=e.get("PGW_TENANT_KEYS_FILE") or None,
+            provider_region=e.get("PGW_PROVIDER_REGION") or None,
+            provider_zero_retention=e.get("PGW_PROVIDER_ZERO_RETENTION_ATTESTED", "") == "1",
             egress_allowlist=parse_allowlist(e.get("PGW_EGRESS_ALLOWLIST")),
             anthropic_base_url=e.get("PGW_ANTHROPIC_BASE_URL", cls.anthropic_base_url),
             upstream_timeout_s=float(e.get("PGW_UPSTREAM_TIMEOUT_S", cls.upstream_timeout_s)),
@@ -112,4 +145,6 @@ class Settings:
             integrity_manifest=e.get("PGW_INTEGRITY_MANIFEST", cls.integrity_manifest),   # no off switch in env
             policy_signing_key=e.get("PGW_POLICY_SIGNING_KEY", ""),
             require_signed_policy=e.get("PGW_REQUIRE_SIGNED_POLICY", "") == "1",
+            private_upstream_url=e.get("PGW_PRIVATE_UPSTREAM_URL") or None,
+            private_model=e.get("PGW_PRIVATE_MODEL", "local"),
         )

@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OPTIONAL_EXTRAS = {"spacy"}            # optional NER extra: requirements/ner.txt
+OPTIONAL_EXTRAS = {"spacy",            # optional NER extra: requirements/ner.txt
+                   "llama_cpp"}         # optional local-LLM backend for pgw.private_llm (not locked; not shipped)
 # import name -> PyPI distribution name, where they differ
 DIST = {"yaml": "pyyaml", "ahocorasick": "pyahocorasick"}
 

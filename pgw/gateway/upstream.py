@@ -48,7 +48,9 @@ class OpenAICompatUpstream:
     def __init__(self, base_url: str, api_key: str, timeout: float = 120.0,
                  client: httpx.AsyncClient | None = None):
         self.url = base_url.rstrip("/") + "/chat/completions"
-        self._headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        self._headers = {"Content-Type": "application/json"}
+        if api_key:   # an in-boundary endpoint may need no key; "Bearer " alone is an illegal header
+            self._headers["Authorization"] = f"Bearer {api_key}"
         self._client = client or httpx.AsyncClient(timeout=timeout)
 
     def wire_bytes(self, body: dict) -> bytes:

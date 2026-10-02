@@ -161,44 +161,80 @@ class RestoreLedger:
 
     SQLite here; the design's production target is the PostgreSQL ledger DB.
     Any exception from this class is a detector failure and must fail closed.
+
+    Keying: with `keys` (pgw.pipeline.Keys or pgw.keys.TenantKeyring) each row is hashed with the
+    TENANT's active ledger key and stores its key id, so lookups keep working for rows written under a
+    previous key id until they expire (a row whose key id is gone raises: fail closed). Without `keys`
+    (tests, rows from before key ids existed: key_id '') the single `key` is used.
+    The same table family pins the alias key id per conversation (pinned_key / pin_key).
     """
 
-    def __init__(self, key: bytes, path: str = ":memory:", ttl_s: int = 24 * 3600):
+    def __init__(self, key: bytes, path: str = ":memory:", ttl_s: int = 24 * 3600, keys=None):
         self.key = key
+        self.keys = keys
         self.ttl_s = ttl_s
+        self._kcache: dict[tuple[str, str], bytes] = {}
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS restore_ledger ("
             " tenant TEXT, app TEXT, conversation_id TEXT, h BLOB, type TEXT, expires_at REAL,"
+            " key_id TEXT NOT NULL DEFAULT '',"
             " PRIMARY KEY (tenant, app, conversation_id, h))"
         )
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(restore_ledger)")}
+        if "key_id" not in cols:   # ledger written before key ids: rows keep the legacy key ('')
+            self.db.execute("ALTER TABLE restore_ledger ADD COLUMN key_id TEXT NOT NULL DEFAULT ''")
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS conversation_keys ("
+            " tenant TEXT, app TEXT, conversation_id TEXT, key_id TEXT, expires_at REAL,"
+            " PRIMARY KEY (tenant, app, conversation_id))"
+        )
+        self.db.commit()
 
-    def _k(self, t: str, c: str) -> bytes:
-        return hmac.new(self.key, t.encode() + b"\x1f" + c.encode(), hashlib.sha256).digest()[:16]
+    def _key(self, tenant: str, key_id: str) -> bytes:
+        if not key_id:
+            return self.key
+        k = self._kcache.get((tenant, key_id))
+        if k is None:   # raises KeyUnavailable for a retired/unknown key id: fail closed
+            k = self._kcache[(tenant, key_id)] = self.keys.derive(tenant, "ledger", key_id)
+        return k
+
+    def _k(self, t: str, c: str, key: bytes | None = None) -> bytes:
+        return hmac.new(self.key if key is None else key, t.encode() + b"\x1f" + c.encode(),
+                        hashlib.sha256).digest()[:16]
 
     def record(self, ctx: Context, items: Iterable[tuple[EntityType, str]]) -> None:
         if not ctx.conversation_id:
             return
         exp = time.time() + self.ttl_s
-        rows = [(ctx.tenant, ctx.app, ctx.conversation_id, self._k(t.value, canon(t, v)), t.value, exp)
+        kid = self.keys.active_id(ctx.tenant) if self.keys is not None else ""
+        key = self._key(ctx.tenant, kid)
+        rows = [(ctx.tenant, ctx.app, ctx.conversation_id, self._k(t.value, canon(t, v), key), t.value, exp, kid)
                 for t, v in items]
         with self.db:
-            self.db.executemany("INSERT OR REPLACE INTO restore_ledger VALUES (?,?,?,?,?,?)", rows)
+            self.db.executemany("INSERT OR REPLACE INTO restore_ledger"
+                                " (tenant, app, conversation_id, h, type, expires_at, key_id)"
+                                " VALUES (?,?,?,?,?,?,?)", rows)
 
-    def _load(self, ctx: Context) -> dict[bytes, str]:
+    def _load(self, ctx: Context) -> dict[str, dict[bytes, str]]:
         cur = self.db.execute(
-            "SELECT h, type FROM restore_ledger WHERE tenant=? AND app=? AND conversation_id=? AND expires_at>?",
+            "SELECT key_id, h, type FROM restore_ledger"
+            " WHERE tenant=? AND app=? AND conversation_id=? AND expires_at>?",
             (ctx.tenant, ctx.app, ctx.conversation_id, time.time()),
         )
-        return dict(cur.fetchall())
+        out: dict[str, dict[bytes, str]] = {}
+        for kid, h, t in cur.fetchall():
+            out.setdefault(kid, {})[h] = t
+        return out
 
     def detect(self, ctx: Context, texts: list[str]) -> list[list[Detection]]:
         if not ctx.conversation_id:
             return [[] for _ in texts]
-        hashes = self._load(ctx)
-        if not hashes:
+        by_kid = self._load(ctx)
+        if not by_kid:
             return [[] for _ in texts]
-        types = {EntityType(t) for t in hashes.values()}
+        keyed = [(self._key(ctx.tenant, kid), hashes) for kid, hashes in sorted(by_kid.items())]
+        types = {EntityType(t) for hashes in by_kid.values() for t in hashes.values()}
         result = []
         for text in texts:
             dets = []
@@ -206,13 +242,26 @@ class RestoreLedger:
                 for t in types:
                     if not shape_ok(t, cand):
                         continue
-                    if self._k(t.value, canon(t, cand)) in hashes:
+                    c = canon(t, cand)
+                    if any(self._k(t.value, c, key) in hashes for key, hashes in keyed):
                         dets.append(Detection(s, e, t, 1.0, "D3b:restore_ledger"))
                         break
             result.append(dets)
         return result
 
+    def pinned_key(self, ctx: Context) -> str | None:
+        row = self.db.execute(
+            "SELECT key_id FROM conversation_keys WHERE tenant=? AND app=? AND conversation_id=? AND expires_at>?",
+            (ctx.tenant, ctx.app, ctx.conversation_id, time.time())).fetchone()
+        return row[0] if row else None
+
+    def pin_key(self, ctx: Context, key_id: str) -> None:
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO conversation_keys VALUES (?,?,?,?,?)",
+                            (ctx.tenant, ctx.app, ctx.conversation_id, key_id, time.time() + self.ttl_s))
+
     def erase(self, ctx: Context) -> None:
         with self.db:
-            self.db.execute("DELETE FROM restore_ledger WHERE tenant=? AND app=? AND conversation_id=?",
-                            (ctx.tenant, ctx.app, ctx.conversation_id))
+            args = (ctx.tenant, ctx.app, ctx.conversation_id)
+            self.db.execute("DELETE FROM restore_ledger WHERE tenant=? AND app=? AND conversation_id=?", args)
+            self.db.execute("DELETE FROM conversation_keys WHERE tenant=? AND app=? AND conversation_id=?", args)

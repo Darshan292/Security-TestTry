@@ -24,6 +24,10 @@
    "sha256": "21a17a2816ad8edd81a49e6fdd992c74310ed7b08b17c98f077e51de0b82b274",
    "version": 3
   },
+  "contracts/ticket_summary_any_script.yaml": {
+   "sha256": "7e1a012bc432a5704a0cd7d4abe48f3201c57136a1edc965834342d104e9d4d9",
+   "version": 1
+  },
   "policies/hris-default.yaml": {
    "sha256": "dface432ef2ff1e63990d65d8642dcee46deec47f1d6e2763e8c86404f3ff44a",
    "version": 1

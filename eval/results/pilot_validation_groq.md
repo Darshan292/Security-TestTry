@@ -1,9 +1,9 @@
 # Pilot validation (Path A declared subjects + Path B local compute): real provider (groq, openai/gpt-oss-120b)
 
 - Model: `openai/gpt-oss-120b` · data: synthetic only · captures: outside the repo
-- Policy/contract integrity digest: `6c704bd8744f638a`
-- Gateway latency (ms, excl. provider), per scenario: [43.1, 69.7, 33.2, 26.8, 28.8, 22.2, 22.4]
-- Provider latency (ms): [868.1, 2504.1, 813.0, 507.8, 788.2, 567.6, 799.0]
+- Policy/contract integrity digest: `bf1f720c614c4144`
+- Gateway latency (ms, excl. provider), per scenario: [44.6, 68.9, 39.9, 27.4, 28.9, 24.4, 25.3]
+- Provider latency (ms): [895.3, 3653.7, 1209.0, 426.2, 478.3, 338.0, 660.1]
 
 | Check | Result | Note |
 |---|---|---|
@@ -28,8 +28,8 @@
 | A3 email drafting: no raw protected value in outbound bytes | PASS | 7 values checked, 0 found |
 | A3 email drafting: aliases in outbound | PASS | 4 distinct |
 | A3 email drafting: ledger row with contract, route, integrity | PASS | SENT hr_email_draft@2 subjects=4 |
-| A3 email drafting: aliases survive provider formatting | PASS | 4 exact alias uses in answer, 0 mangled |
-| A3 email drafting: restoration (every alias the model used came back as the real value) | PASS | 4 alias uses in the answer, 0 left unrestored |
+| A3 email drafting: aliases survive provider formatting | PASS | 3 exact alias uses in answer, 0 mangled |
+| A3 email drafting: restoration (every alias the model used came back as the real value) | PASS | 3 alias uses in the answer, 0 left unrestored |
 | A3 email drafting: answer names the expected people (content, model-dependent) | PASS | 1/1 |
 | A3 email drafting: C3 never returned | PASS | 2 checked |
 | A4 ticket with names NER misses: request reached the provider | PASS | 1 exchange(s) |
@@ -38,8 +38,8 @@
 | A4 ticket with names NER misses: ledger row with contract, route, integrity | PASS | SENT ticket_summary@3 subjects=4 |
 | A4 ticket with names NER misses: detectors alone (incl. NER) miss declared names | PASS | detectors alone find 0/2 |
 | A4 ticket with names NER misses: declared subjects protected where NER misses them | PASS | 0 leaked after declaration |
-| A4 ticket with names NER misses: aliases survive provider formatting | PASS | 4 exact alias uses in answer, 0 mangled |
-| A4 ticket with names NER misses: restoration (every alias the model used came back as the real value) | PASS | 4 alias uses in the answer, 0 left unrestored |
+| A4 ticket with names NER misses: aliases survive provider formatting | PASS | 3 exact alias uses in answer, 0 mangled |
+| A4 ticket with names NER misses: restoration (every alias the model used came back as the real value) | PASS | 3 alias uses in the answer, 0 left unrestored |
 | A4 ticket with names NER misses: answer names the expected people (content, model-dependent) | PASS | 2/2 |
 | A4 ticket with names NER misses: C3 never returned | PASS | 0 checked |
 | B1 salary comparison: request reached the provider | PASS | 1 exchange(s) |
@@ -55,9 +55,9 @@
 | B2 ESI eligibility letter: contract RAW/C0 values cross as declared | PASS | 2/2 present |
 | B2 ESI eligibility letter: aliases in outbound | PASS | 2 distinct |
 | B2 ESI eligibility letter: ledger row with contract, route, integrity | PASS | SENT esi_letter@1 subjects=None |
-| B2 ESI eligibility letter: aliases survive provider formatting | PASS | 2 exact alias uses in answer, 0 mangled |
-| B2 ESI eligibility letter: restoration (every alias the model used came back as the real value) | PASS | 2 alias uses in the answer, 0 left unrestored |
-| B2 ESI eligibility letter: answer names the expected people (content, model-dependent) | PASS | 1/1 |
+| B2 ESI eligibility letter: aliases survive provider formatting | PASS | 0 exact alias uses in answer, 0 mangled |
+| B2 ESI eligibility letter: restoration (every alias the model used came back as the real value) | PASS | 0 alias uses in the answer, 0 left unrestored |
+| B2 ESI eligibility letter: answer names the expected people (content, model-dependent) | FAIL | 0/1 |
 | B2 ESI eligibility letter: C3 never returned | PASS | 0 checked |
 | B3 pay band position: request reached the provider | PASS | 1 exchange(s) |
 | B3 pay band position: no raw protected value in outbound bytes | PASS | 11 values checked, 0 found |
@@ -90,4 +90,4 @@
 | no protected value in audit ledger | PASS | 47 values, 0 found |
 | no protected value in error bodies | PASS | 47 values, 0 found |
 
-**82 pass, 0 fail, 0 blocked.**
+**81 pass, 1 fail, 0 blocked.**

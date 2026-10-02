@@ -1,0 +1,28 @@
+# Data contract: ticket summarisation for tickets in any script (PATH A + PRIVATE route for C4 content).
+# Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
+# government/financial identifiers are not needed for a summary, so they are removed, not blocked.
+contract: ticket_summary_any_script
+version: 1
+task_type: hr_ticket_summary
+route: EXT_PSEUDO
+data_classes:
+  C1: ALIAS        # names, employee IDs, emails, phones -> scoped aliases
+  C2: GENERALIZE   # salary, DOB -> bands, never exact
+  C3: REDACT       # PAN, Aadhaar, bank account, card, UPI, secrets -> removed
+  C4: PRIVATE      # non-Latin-script content: only to the in-boundary model (PRIVATE_LOCAL route)
+restore: [C1]
+# Purpose-dependent personal attributes. Detectors cannot see these; the stance is an obligation on the app
+# and a statement of what the provider may receive next to aliased identities (still personal data).
+purpose_dependent:
+  leave_balance: PSEUDONYMISED_RAW        # tickets about leave need the balance to be summarised
+  attendance: PSEUDONYMISED_RAW
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED    # medical detail must not be in helpdesk tickets sent for summary
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: PSEUDONYMISED_RAW
+  derived_compensation: NOT_EXPECTED
+max_chars: 20000
+declared_subjects:          # people the app knows are involved; protected without relying on detection
+  required: [requester]
+  roles: {requester: 1, assignee: 1, mentioned: 20, other: 10}
+  fields: {name: PERSON, employee_id: EMPLOYEE_ID, email: EMAIL, phone: PHONE}

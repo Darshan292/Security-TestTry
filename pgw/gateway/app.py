@@ -10,6 +10,7 @@ import dataclasses
 import hashlib
 import hmac
 import json
+import re
 import logging
 import threading
 import time
@@ -32,9 +33,9 @@ from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer
 from ..product import integrity, local_compute, subjects
 from ..product.content import unreliable_script
-from ..product.contracts import Contract, ContractError, DataClass, load_contract
+from ..product.contracts import CLASS_OF, Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
-from .settings import Settings, check_destination
+from .settings import Settings, check_destination, check_private_destination
 from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError
 
 log = logging.getLogger("pgw.gateway")
@@ -92,6 +93,8 @@ def load_registry(path: str) -> list[AppEntry]:
     return out
 
 
+_LONG_DIGITS = re.compile(r"(?<!\d)\d(?:[\s\-./]?\d){8,}(?!\d)")
+
 PLACEHOLDER_NOTE = ("Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. "
                     "Keep them exactly as written wherever you refer to them; do not guess what they stand for.")
 
@@ -123,6 +126,9 @@ def build_upstream(s: Settings) -> Upstream:
         return s.upstream  # type: ignore[return-value]
     if s.upstream_kind == "mock":
         return MockLLMUpstream("summarise")
+    if s.upstream_kind in ("openai", "anthropic") and not (s.provider_zero_retention and s.provider_region):
+        raise ValueError("real provider refused: attest PGW_PROVIDER_ZERO_RETENTION_ATTESTED=1 and set "
+                         "PGW_PROVIDER_REGION (contracted data terms; see OPERATIONS.md)")
     if s.upstream_kind == "openai":
         check_destination(s.upstream_url, s.egress_allowlist)
         return OpenAICompatUpstream(s.upstream_url, s.openai_api_key, timeout=s.upstream_timeout_s)
@@ -155,17 +161,13 @@ def load_roster(path: str, key: bytes) -> RosterIndex:
     return idx
 
 
-class EgressLedger:
-    """Append-only JSONL, one line per upstream call. Metadata only, never content."""
+from ..audit import ChainedLedger as _ChainedLedger   # noqa: E402
 
-    def __init__(self, path: str):
-        self.path = path
-        self._lock = threading.Lock()
 
-    def write(self, **rec) -> None:
-        line = json.dumps(rec, sort_keys=True)
-        with self._lock, open(self.path, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+class EgressLedger(_ChainedLedger):
+    """Append-only JSONL, one line per upstream call. Metadata only, never content. Hash-chained, fsync'd and
+    MAC'd with the platform audit key when a tenant key file is configured (pgw.audit); a log that does not
+    verify stops startup."""
 
 
 @dataclass
@@ -189,13 +191,14 @@ def create_app(settings: Settings) -> Starlette:
         integrity_ref = "unchecked"
         _log(logging.WARNING, event="integrity_check_disabled")
     policy = PolicyPack.load(settings.policy_path)
-    keys = Keys(bytes.fromhex(settings.master_key)) if settings.master_key else Keys.from_env()
+    from ..keys import build_keys   # per-tenant key file if configured, else the single master key
+    keys: Keys = build_keys(settings, registry)   # or pgw.keys.TenantKeyring: same interface
     contracts, policy = load_contracts(registry, policy)
     for p in contracts:   # contracted (RESTRICTED-by-default) purposes never stream unrestored text
         if policy.stream_mode(p) != "buffered":
             raise ContractError(f"purpose {p!r}: contracted purposes must use buffered output")
     roster = load_roster(settings.roster_path, keys.derive("*", "edm")) if settings.roster_path else None
-    ledger = RestoreLedger(keys.derive("*", "ledger"), settings.ledger_db_path)
+    ledger = RestoreLedger(keys.derive("*", "ledger"), settings.ledger_db_path, keys=keys)
     protector = Protector(policy, keys, roster, ledger)
     # Contracted purposes (Path A and the free-text field of Path B) also get the local NER. A model that does
     # not load stops startup (NerUnavailable); a model that fails at request time fails that request closed.
@@ -208,7 +211,17 @@ def create_app(settings: Settings) -> Starlette:
     elif contracts:
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
-    egress_ledger = EgressLedger(settings.egress_ledger_path)
+    private = settings.private_upstream
+    if private is None and settings.private_upstream_url:
+        check_private_destination(settings.private_upstream_url, settings.private_allowlist,
+                                  settings.egress_allowlist)
+        import httpx   # in-boundary traffic must never be routed through an egress proxy from the environment
+        private = OpenAICompatUpstream(settings.private_upstream_url, "", timeout=settings.upstream_timeout_s,
+                                       client=httpx.AsyncClient(timeout=settings.upstream_timeout_s, trust_env=False))
+    for p, c in contracts.items():
+        if c.classes[DataClass.C4] == "PRIVATE" and private is None:
+            raise ContractError(f"purpose {p!r} routes C4 content privately but no private endpoint is configured")
+    egress_ledger = EgressLedger(settings.egress_ledger_path, keys if settings.tenant_keys_file else None)
     slots = threading.BoundedSemaphore(settings.max_concurrent_protect)
     _log(logging.INFO, event="started", integrity=integrity_ref, ner=settings.ner_model if contracts else None)
 
@@ -263,6 +276,8 @@ def create_app(settings: Settings) -> Starlette:
                 extra["declared_subjects"] = n_subjects
             egress_ledger.write(request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose, model=model,
                                 provider=upstream.name, body_sha256=body_hash, entity_counts=counts,
+                                provider_terms={"region": settings.provider_region,
+                                                "zero_retention_attested": settings.provider_zero_retention},
                                 policy=policy.ref, integrity=integrity_ref, decision=decision,
                                 latency_ms=round(ms, 2), reason=reason, ts=round(time.time(), 3), **extra)
         except Exception as e:  # audit write failure must not leak content; fail closed
@@ -350,6 +365,8 @@ def create_app(settings: Settings) -> Starlette:
             texts = subjects.request_texts(messages)    # every string, incl. list-form content parts and tool args
             if _text_size(messages) > contract.max_chars:
                 raise _Reject(413, "content_too_large", "request exceeds the data contract's size limit")
+            if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
+                return await _private(rid, app, purpose, model, body, ctx, contract, t0)
             if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                             "content_class_C4", contract)
@@ -450,6 +467,40 @@ def create_app(settings: Settings) -> Starlette:
         if not stream:
             return await _non_stream(rid, up_body, new_restorer, record)
         return await _stream(rid, up_body, new_restorer, record)
+
+    async def _private(rid, app, purpose, model, body, ctx, contract, t0) -> Response:
+        """C4 content the gateway cannot protect reliably goes, unprotected, ONLY to the in-boundary model.
+        The external upstream is never called. The answer still passes the output gate (raw C3 is masked)."""
+        if body.get("stream"):
+            raise _Reject(400, "unsupported_parameter", "streaming is not available on the private route")
+        p_body = {k: v for k, v in body.items() if not k.startswith("pgw_") and k not in ("tools", "tool_choice")}
+        p_body["model"] = settings.private_model
+        ms = (time.perf_counter() - t0) * 1000
+        ledger_line(rid, app, purpose, model, hashlib.sha256(private.wire_bytes(p_body)).hexdigest(), {},
+                    "SENT_PRIVATE", ms, "content_class_C4", dataclasses.replace(contract, route="PRIVATE_LOCAL"))
+        try:
+            data = await private.complete(p_body)
+        except Exception as e:
+            _log(logging.ERROR, event="private_upstream_failed", request_id=rid, error_type=type(e).__name__)
+            raise _Reject(502, "private_upstream_error", "private model unavailable; nothing was sent externally") from None
+        try:
+            text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+            out = None
+            if isinstance(text, str):   # C3 never returns to the app, whichever model produced it
+                out = text
+                for d in sorted(detect_d2(text), key=lambda d: d.start, reverse=True):
+                    if CLASS_OF.get(d.type) is DataClass.C3:
+                        out = out[:d.start] + f"[{d.type.value}]" + out[d.end:]
+                # Detectors cannot read C4 content reliably (that is why it is here): also mask every long digit
+                # run (account / Aadhaar / card lengths, any separators), whatever script surrounds it.
+                out = _LONG_DIGITS.sub("[NUMBER]", out)
+        except Exception as e:
+            _log(logging.ERROR, event="restore_failed", request_id=rid, error_type=type(e).__name__)
+            raise _Reject(503, "restore_unavailable", "response withheld") from None
+        return JSONResponse({"id": data.get("id"), "object": "chat.completion", "created": data.get("created"),
+                             "model": data.get("model"), "choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": out}}]},
+                            headers={"X-PGW-Request-Id": rid, "X-PGW-Route": "PRIVATE_LOCAL"})
 
     async def _non_stream(rid, up_body, new_restorer, record) -> Response:
         try:

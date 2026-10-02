@@ -1,77 +1,107 @@
-# Pilot Readiness Review: HR helpdesk slice
+# Pilot Readiness Review: HR helpdesk privacy gateway
 
-**Date:** 2026-10-02 (after Path A declared subjects). **Data:** synthetic only.
+- **Date:** 2026-10-02.
+- **Data:** synthetic HRIS data only. No real employee data was used anywhere.
+- **Status:** not production-ready, and not yet authorised for real HR data.
+- **Real provider:** Groq `openai/gpt-oss-120b`, through the OpenAI-compatible adapter (allowlisted host).
+- **Evidence:** `eval/results/pilot_validation_groq.md` (content-free). Full captures stay outside the repo: exact outbound and inbound bytes, restored answers, ledger rows, latency, and contract and policy integrity digest.
+- **Runs:** four real-provider runs of the full suite on the final code paths.
+- **Tests:** 1,599 passing.
 
-**Verdict:** not production-ready. This is not ready for real HR data. It can be demonstrated on synthetic data, but no real model answer has been validated. `ANTHROPIC_API_KEY` is still not configured in this environment, so every check that needs a model answer is **BLOCKED**, not passed.
+The suite has 8 workflows:
+- A1 HR ticket summary;
+- A2 HR case explanation;
+- A3 HR email draft;
+- A4 a ticket whose names the detectors miss;
+- B1 salary comparison;
+- B2 ESI eligibility;
+- B3 pay-band position (the additional local-compute task);
+- a 3-turn HR case conversation.
 
-## A. What is proven
+The private-route check was run separately, also against live processes.
 
-The table covers 6 tasks:
-- **Path A** (external model on protected text): A1 ticket summary, A2 case explanation, A3 email draft, A4 a ticket whose names NER misses.
-- **Path B** (local compute first): B1 salary comparison, B2 ESI letter.
+## A. What is technically proven (real external LLM, real network path, synthetic data)
 
-| # | Property | Evidence |
+| # | Property | Result |
 |---|---|---|
-| 1 | Raw protected values never leave | **Real endpoint.** None of 52 values in the exact HTTP bytes sent to `api.anthropic.com` (raw or JSON-decoded) |
-| 2 | Declared subjects are protected even where NER misses them | **Real endpoint, A4.** The existing detectors (incl. en_core_web_lg) find **0 of 2** names in that text; after declaration **0 leaked** |
-| 3 | Local-compute inputs never leave | **Real endpoint, B1/B2.** 27 values checked (identities plus every written form of the exact CTCs, wage and INTERNAL outputs): 0 found; only contract-declared results cross |
-| 5 | Provider failure fails closed | **Real endpoint.** Invalid key gives 502; timeout gives 502. No content is returned |
-| 6 | Egress violations fail closed | Pipeline leak gives 500, and a declared-subject leak (declarations dropped) gives 500. Nothing sent in either case |
-| 7 | No sensitive value in logs, stderr, ledger or error bodies | 42 values, 0 found |
+| 1 | Protected raw values never leave | 0 of 47 distinct protected values in any outbound byte, raw or JSON-decoded, in every run |
+| 2 | Declared subjects stay protected where NER misses them | The detectors alone find 0 of 2 names in A4. After declaration, 0 leak. This held in all runs, including later turns where the app did not declare them again |
+| 3 | Exact LOCAL_COMPUTE inputs never leave | B1 salaries, B2 wage, B3 CTC, percentage and headroom: 0 forms found. Only contract-declared results cross |
+| 4 | Aliases survive the real model | 0 mangled aliases across all answers in all runs. The model reformatted freely (tables, bullets, Markdown) |
+| 5 | Restoration works on realistic formatting | Every alias the model used came back as the real value, with 0 left unrestored, in every run |
+| 6 | C3 never returns to the application | PAN, bank account, Aadhaar and UPI: never in a restored answer. The private route additionally masks long digit runs |
+| 7 | Failures are fail-closed | Real provider: invalid key 502, timeout 502. Detector crash 503, deadline 503, pipeline leak 500, declared-subject leak 500, conversation without an ID 400. A non-allowlisted destination, unattested provider data terms, a tampered contract, a missing tenant key and a broken audit chain all refuse startup or the request. Nothing is sent in any failure case |
+| 8 | No sensitive values in logs, stderr, ledger or error bodies | 47 values checked: 0 found |
 
-How declared subjects work:
-- The app sends requester, assignee, mentioned employees and other subjects as `pgw_subjects`. Their schema is fixed per contract and sealed in the manifest.
-- Every written variant is aliased, without relying on detection. That covers case, joins, handles, Unicode folding, IDs with any separator, phone groupings, and compound names.
-- The same matchers then sweep the outbound bytes; any hit fails closed.
-- Aliases are scoped per contract.
-- Only the contract's restore classes are returned to the app, using the declared spelling.
+Multi-turn (Step 2), 3 turns:
+- Aliases are identical, in the same positions, across turns.
+- No raw re-identification, including names the app stopped declaring after turn 1; they persist as keyed hashes in the conversation ledger.
+- The restore ledger holds no plaintext.
+- A ledger failure before sending fails closed.
 
-Robustness:
-- An adversarial review produced 17 reproduced findings. Each is fixed, fails closed, or is documented below.
-- Each has a regression test in `tests/test_declared_subjects.py`.
-- Full suite: 1,569 passed.
+Other proven items:
+- **Private route (Step 3):** proven live with real processes. A Hindi ticket went only to the in-boundary endpoint (`PRIVATE_LOCAL`, 0 external calls). A Latin ticket on the same purpose went to Groq with values protected.
+- **Network restriction (Step 4):** proven with real Docker containers.
+  - The app container cannot reach `api.groq.com`, `api.anthropic.com` or `example.com`.
+  - It cannot use a direct IP, 1.1.1.1, DNS via 8.8.8.8, or the host proxy.
+  - The gateway container can reach the external network.
+  - Result: 13/13 checks, run twice (`deploy/verify_network.sh`).
+- **Operations (Step 5), implemented and unit-tested:**
+  - per-tenant keys with no cross-tenant fallback;
+  - key rotation with aliases pinned per conversation;
+  - a hash-chained, fsync'd audit log (HMAC when a key file is configured) that verifies at startup;
+  - CI workflow and CODEOWNERS;
+  - provider data terms attested in config and recorded in each audit row;
+  - contract ownership and change process in `OPERATIONS.md`.
 
-The other gateway failures were also exercised: detector crash 503, deadline 503, non-allowlisted provider refused at startup. Every request writes a content-free ledger row with the contract version, route, integrity digest and subject count.
+**Defects the real model exposed, all fixed with regression tests:**
+- C0 pay-band limits were being re-generalised in local-compute prompts, so the model received wrong figures.
+- A keyless in-boundary endpoint got an illegal `Authorization` header.
+- The C3 output gate missed an account number written in Hindi.
 
-## B. What is still unproven
+## B. What is only tested synthetically, or in-process
 
-- **#4, restoration on a real provider response.** Alias survival, restoration and answer quality are proven only against the mock: 55/55 checks, including A4 restoring the names NER missed. This is BLOCKED until a key exists.
-- **Human review** of the six restored answers.
-- **Latency with a real model.** Gateway overhead is about 22–54 ms per request excluding the provider, but buffered output with adaptive thinking has not been measured.
-- **Network isolation.** The compose and k8s configs have never run.
-- **Multi-turn** on contract paths.
+- **All data is synthetic:** a 3-person roster, a handful of tickets, a single tenant in the provider runs.
+- **Load:** in-process, single host, mock upstream (`eval/results/load_test.md`).
+  - NER off: about 45 req/s at concurrency 8.
+  - NER on: about 12 req/s at concurrency 1. At concurrency 8, protection timed out and the worker slots saturated (0–44 of 200 requests succeeded across runs).
+  - **NER-enabled concurrency is a real capacity problem today.**
+- **Keys, rotation and audit chain:** tested by unit tests only. Not exercised in a real deployment, across restarts at scale, or through backup/restore.
+- **CI workflow:** written, but it has never run on GitHub.
+- **Private route model:** the endpoint ran its deterministic extractive stand-in, not an LLM. No model weights could be downloaded here (Hugging Face is blocked). A GGUF model plugs in via `PGW_PRIVATE_GGUF`, untested.
 
-## C. Remaining blockers
+## C. What remains unproven
 
-1. **Undeclared people and identifiers still depend on detection.** An unknown name in lowercase or unusual form leaves raw, and NER is a secondary net only.
-2. **Indirect identifiers cross by design:** pronouns, roles, dates, ticket IDs, leave balances, and the ESI yes/no. In small teams these re-identify people, which needs a DPIA decision.
-3. **Accepted residuals in declared matching:**
-   - single initials ("T. Kulkarni" sends "T.");
-   - name parts that are common English words ("Will", "Do") are masked only when capitalised;
-   - homoglyphs from other scripts are left to the C4 refusal;
-   - escaped JSON inside content fails closed (500) instead of being masked.
-4. **Utility cost from the existing NER:** it over-masks some words, e.g. "Raised" in "Raised by:" became a PERSON alias in the captured payload. No detector change was made, by instruction.
-5. **Ops:**
-   - no CI;
-   - JSONL/SQLite audit storage with no alerting;
-   - one master key for all tenants, and demo app keys;
-   - unsigned manifest by default; the registry is not sealed;
-   - no load test;
-   - provider retention terms not settled.
+- **Human review of the answers has not been done.** `human_review.md` in each capture folder is the review sheet. My first-pass reading is not a substitute. It found:
+  - A1, B1, B2, B3 (after the fix) and the multi-turn answers are correct.
+  - A2 is correct but adds speculative causes.
+  - A3 used the employee's own email and phone as HR's signature and left `[BANK_ACCOUNT]` markers in the draft.
+  - A4 once lost the requester because the existing NER tags "Raised" as a person.
+- **Model content varies between runs.** Whether a person is named at all differs, e.g. "you" instead of the name. In 2 of 4 runs a value the detectors found in the model's reply was propagated back into earlier turn text: a ticket ID became `[COMPENSATION …]`. That is over-masking, not a leak.
+- **Kubernetes NetworkPolicy:** no cluster. Docker caveat: the host-side bridge IP is reachable from apps, so host services bound to 0.0.0.0 would be reachable too.
+- **Undeclared people and identifiers still depend on detection.** Indirect identifiers cross by design (pronouns, roles, dates, leave balances); that needs a DPIA decision.
+- **Groq's data terms for this account were not verified.** The run used a standard API key. The attestation mechanism exists; the contract does not.
+- **Not done:** KMS/HSM, WORM audit shipping, multi-tenant runs, real ESU tasks.
 
-## D. Is the synthetic-data demo ready for an ESU architect?
+## D. What can safely be demonstrated to an ESU architect (synthetic data only)
 
-**Yes, for the gateway mechanics:**
-- the exact bytes that reached the real endpoint for all six tasks, next to what the app sent;
-- A4, where NER finds 0 of 2 names and the declaration protects both;
-- Path B, where salaries never leave;
-- the fail-closed matrix;
-- startup refusals on a tampered or unsafe contract.
+- The suite live against a real LLM, showing:
+  - outbound bytes next to the app's input;
+  - restored answers;
+  - the audit row with contract version and integrity digest.
+- A4 and the conversation: NER finds 0 of 2 names, the declaration protects both, and they stay protected in later turns.
+- Path B: salaries and wages never leave; correct answers come back.
+- The private route: a Hindi ticket stays in-boundary.
+- The Docker bypass matrix.
+- The fail-closed matrix, and the startup refusals.
 
-**No, for model answers:** without a key, restored real answers cannot be shown. Do not claim answer quality, anonymisation, network isolation or production readiness.
+**Do not claim:** answer quality without the human review, anonymisation, Kubernetes isolation, real local-LLM quality, or production readiness.
 
-## E. The single next product capability
+## E. Minimum required before an authorised, controlled HR-data pilot
 
-Strictly speaking, the next step is not a capability: **run `python -m scripts.pilot_validation` with a key**, then have a human read the six answers. That one command closes B#4.
-
-The next capability after that is **multi-turn conversations on contract paths with declared subjects**. Today each request is protected on its own. A real helpdesk thread replies with prior turns, so aliases must stay stable across turns, using the existing restore ledger plus the per-contract alias scope. Earlier restored answers must also be re-protected when the app sends them back. This is untested today and is the next leak surface a pilot will hit.
+1. **Human review** of the answers by HR/payroll staff, with sign-off on usefulness and correctness. Fix the A3 prompt/contract issues.
+2. **DPIA and provider terms:** a DPIA covering the indirect identifiers that cross by design. Contracted zero-retention/no-training terms and region for the chosen provider, verified, not just attested.
+3. **Capacity:** fix NER concurrency, e.g. a detection process pool, or fewer slots with queueing. Then re-run the load test on the target hardware.
+4. **Deployment:** the real gateway image deployed on the target platform. On Kubernetes, the NetworkPolicy exercised. Host services bound only to loopback. Keys in KMS or at least a sealed secret store; audit shipped off-host. CI green on GitHub.
+5. **The app must send declared subjects for every person it knows**, verified in integration tests against the real helpdesk app.
+6. **Pilot scope:** a small named user group, a few low-risk purposes (ticket summary, case explanation), Latin-script tickets only unless a real local model is installed, daily audit-chain verification, and a kill switch.

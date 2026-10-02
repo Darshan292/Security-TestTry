@@ -46,7 +46,7 @@ _ACTION = {"ALIAS": Action.TOKENIZE, "GENERALIZE": Action.GENERALIZE, "REDACT": 
 _ALLOWED = {DataClass.C1: {"ALIAS", "REDACT", "REFUSE"},
             DataClass.C2: {"ALIAS", "GENERALIZE", "REDACT", "REFUSE"},
             DataClass.C3: {"REDACT", "REFUSE"},          # never aliased to an external model either
-            DataClass.C4: {"REFUSE"}}                    # slice: no private route yet, so refuse
+            DataClass.C4: {"REFUSE", "PRIVATE"}}         # PRIVATE: only to the in-boundary model endpoint
 ROUTES = {"EXT_PSEUDO", "LOCAL_COMPUTE"}
 EGRESS = {"RAW", "TRANSFORMED", "INTERNAL"}
 
@@ -196,6 +196,8 @@ def load_contract(path: str | Path) -> Contract:
         raise
     except (KeyError, TypeError, ValueError) as e:
         raise ContractError(f"malformed contract: {type(e).__name__} {e}") from None
+    if c.classes[DataClass.C4] == "PRIVATE" and c.route != "EXT_PSEUDO":
+        raise ContractError("C4: PRIVATE applies to EXT_PSEUDO contracts only")
     if c.subjects is not None and (c.route != "EXT_PSEUDO" or c.classes[DataClass.C1] == "REFUSE"):
         raise ContractError("declared_subjects need an EXT_PSEUDO route whose C1 action replaces identities")
     if c.route == "LOCAL_COMPUTE":
