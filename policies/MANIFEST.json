@@ -5,16 +5,16 @@
    "version": 1
   },
   "contracts/esi_letter.yaml": {
-   "sha256": "f3c015d107ee52128b3e73381340121b064d4b1e11ac68929fac0f0566f53b02",
-   "version": 1
+   "sha256": "83631538d7e67599f3d5d1b551bc281529174c52d24e46c51266d7d5764e5e2e",
+   "version": 2
   },
   "contracts/hr_case_explanation.yaml": {
-   "sha256": "e36b1e55cf9f00411c671e5d9cf5c3984d75da84f9ef5cf90fe5ec4449e77bf2",
-   "version": 2
+   "sha256": "025e52674804c06eb45f0620d07688a8538f4c4691794f0ddf0c3902f06400b0",
+   "version": 3
   },
   "contracts/hr_email_draft.yaml": {
-   "sha256": "162ab81bb415b57cd030e4de70e63fcc8e0806c2d14bcbfd6e988220c0932feb",
-   "version": 2
+   "sha256": "1eb6c343270613efdf39bc7e9f9b713b32550699205655d573c070b7e1f2b98d",
+   "version": 3
   },
   "contracts/salary_comparison.yaml": {
    "sha256": "f385d85e85a23134a416c5f39f062163874767c50a7b66107bd8ec61c49eb15a",

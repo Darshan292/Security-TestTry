@@ -1,7 +1,7 @@
 # Data contract: draft an email from HR to an employee (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. The draft is restored for a human to review and send; it is never auto-sent.
 contract: hr_email_draft
-version: 2
+version: 3
 task_type: hr_email_draft
 route: EXT_PSEUDO
 data_classes:
@@ -23,3 +23,12 @@ declared_subjects:          # people the app knows are involved; protected witho
   required: [recipient]
   roles: {recipient: 1, mentioned: 10, other: 5}
   fields: {name: PERSON, employee_id: EMPLOYEE_ID, email: EMAIL, phone: PHONE}
+# The sender is the HR Operations team (organisational, C0). Its contacts are declared here so they are never
+# confused with the recipient's own contacts; they are held out of detection and cross as is.
+org_contacts: ["hr-ops@kestrel-dyn.in", "+91 80 4000 1234"]
+guidance: >-
+  You are writing on behalf of HR Operations, Kestrel Dynamics. The recipient is the employee named in the request.
+  The only contact details for reaching HR are hr-ops@kestrel-dyn.in and +91 80 4000 1234 (HR helpdesk). Never
+  present the recipient's own email address, phone number or employee ID as a way to contact HR. Sign the email as
+  "HR Operations, Kestrel Dynamics". Do not add template fillers such as [Company Name]. Output only the email
+  (subject line and body), ready to send after human review.

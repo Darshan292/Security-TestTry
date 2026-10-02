@@ -117,28 +117,45 @@ class NerDetector:
         self.detect("Warm up text for Priya Nair.")
 
     def detect(self, text: str) -> list[Detection]:
-        if not isinstance(text, str):
-            raise NerUnavailable(f"expected str, got {type(text).__name__}")
-        if not text.strip() or SPACY_SCORE < self.min_score:
-            return []
-        nlp = self.nlp
-        text = _SURR.sub("\ufffd", text)   # lone surrogates crash spaCy; same length, offsets unchanged
-        out: list[Detection] = []
-        try:
-            for off, chunk in _chunks(text):
-                if not chunk.strip():
-                    continue
-                doc = nlp(chunk)
-                for ent in doc.ents:
-                    if ent.label_ not in _PERSON_LABELS:
-                        continue
-                    s, e = _trim(chunk, ent.start_char, ent.end_char)
-                    if e > s:
-                        out.append(Detection(off + s, off + e, EntityType.PERSON, SPACY_SCORE, self._source))
-        except NerUnavailable:
-            raise
-        except BaseException as e:  # noqa: BLE001
-            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+        return self.detect_many([text])[0]
+
+    def detect_many(self, texts: list[str]) -> list[list[Detection]]:
+        """Detect on several texts with ONE ``nlp.pipe`` call; result i belongs to texts[i].
+
+        Identical texts are run once. Same contract as ``detect``: any failure raises ``NerUnavailable``.
+        """
+        for text in texts:
+            if not isinstance(text, str):
+                raise NerUnavailable(f"expected str, got {type(text).__name__}")
+        results: dict[str, list[Detection]] = {}
+        jobs: list[tuple[str, int, str]] = []        # (text key, offset, chunk)
+        for text in texts:
+            if text in results:
+                continue
+            results[text] = []
+            if not text.strip() or SPACY_SCORE < self.min_score:
+                continue
+            clean = _SURR.sub("\ufffd", text)   # lone surrogates crash spaCy; same length, offsets unchanged
+            for off, chunk in _chunks(clean):
+                if chunk.strip():
+                    jobs.append((text, off, chunk))
+        if jobs:
+            nlp = self.nlp
+            try:
+                chunks = [c for _, _, c in jobs]
+                docs = nlp.pipe(chunks, batch_size=16) if hasattr(nlp, "pipe") else map(nlp, chunks)
+                for (key, off, chunk), doc in zip(jobs, docs):
+                    for ent in doc.ents:
+                        if ent.label_ not in _PERSON_LABELS:
+                            continue
+                        s, e = _trim(chunk, ent.start_char, ent.end_char)
+                        if e > s:
+                            results[key].append(
+                                Detection(off + s, off + e, EntityType.PERSON, SPACY_SCORE, self._source))
+            except NerUnavailable:
                 raise
-            raise NerUnavailable(f"NER inference failed: {type(e).__name__}: {e}") from e
-        return out
+            except BaseException as e:  # noqa: BLE001
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                raise NerUnavailable(f"NER inference failed: {type(e).__name__}: {e}") from e
+        return [list(results[t]) for t in texts]

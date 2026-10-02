@@ -94,7 +94,7 @@ def test_integrity_digest_is_recorded_in_every_ledger_row(tmp_path):
         (t / "contracts/ticket_summary.yaml").read_text().replace("C2: GENERALIZE", "C2: REDACT")),
     lambda t: (t / "policies/hris-default.yaml").write_text((t / "policies/hris-default.yaml").read_text() + "\n# x\n"),
     lambda t: (t / "contracts/esi_letter.yaml").unlink() or (t / "contracts/esi_letter.yaml").write_text(
-        (ROOT / "contracts/esi_letter.yaml").read_text().replace("version: 1", "version: 2", 1)),
+        __import__("re").sub(r"(?m)^version: \d+", "version: 99", (ROOT / "contracts/esi_letter.yaml").read_text(), 1)),
 ], ids=["contract edited", "policy edited", "version changed"])
 def test_unreviewed_change_stops_startup(tmp_path, tamper):
     m = sealed_tree(tmp_path)

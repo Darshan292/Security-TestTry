@@ -1,7 +1,7 @@
 # Data contract: explain an HR case's status and next steps to the HR operator (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. Same class treatment as ticket summaries; restored output goes to HR staff only.
 contract: hr_case_explanation
-version: 2
+version: 3
 task_type: hr_case_explanation
 route: EXT_PSEUDO
 data_classes:
@@ -23,3 +23,8 @@ declared_subjects:          # people the app knows are involved; protected witho
   required: [requester]
   roles: {requester: 1, assignee: 1, mentioned: 20, other: 10}
   fields: {name: PERSON, employee_id: EMPLOYEE_ID, email: EMAIL, phone: PHONE}
+guidance: >-
+  Answer in three labelled parts. 1) Facts: only what the case text states. 2) Possible causes to verify: you have
+  no access to the payroll or HR systems, so every cause is a hypothesis; label it as such, list at most three, and
+  never state one as the conclusion. 3) Next steps: concrete checks HR Operations can make to find the actual cause.
+  Do not invent system names, timelines, codes or policies that are not in the case. Keep it under 200 words.

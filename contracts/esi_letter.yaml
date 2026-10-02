@@ -1,7 +1,7 @@
 # Data contract: explain an employee's ESI coverage (LOCAL_COMPUTE). The wage stays inside the gateway; the
 # coverage decision is computed locally and, by explicit decision below, crosses next to an aliased identity.
 contract: esi_letter
-version: 1
+version: 2
 task_type: esi_coverage_explanation
 route: LOCAL_COMPUTE
 compute: esi_eligibility
@@ -48,4 +48,4 @@ prompt_template: |
   Facts computed inside the privacy gateway (the employee's wage is not shared with you):
   - Employee: {employee_name} ({employee_id}).
   - Result: the employee is {eligibility}. The statutory monthly wage ceiling for ESI is {threshold}.
-  Write the explanation for the employee using only these facts.
+  Address the explanation to the employee by name ({employee_name}) and write it for them, using only these facts.

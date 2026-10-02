@@ -96,6 +96,9 @@ class Contract:
     prompt_template: str | None = None
     max_chars: int = 20000
     subjects: SubjectSpec | None = None
+    guidance: str | None = None                   # task guidance for the model (system message, sealed)
+    org_contacts: tuple[str, ...] = ()            # organisational C0 contacts (role mailbox, helpdesk number)
+    redaction_text: dict = field(default_factory=dict)   # C3 type -> words shown instead of a "[TYPE]" marker
 
     @property
     def ref(self) -> str:
@@ -151,6 +154,31 @@ def _parse_subjects(raw) -> SubjectSpec | None:
     return SubjectSpec(roles, required, fields)
 
 
+def _parse_guidance(raw) -> str | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip() or len(raw) > 2000:
+        raise ContractError("guidance must be non-empty text of at most 2000 characters")
+    return raw.strip()
+
+
+def _parse_org_contacts(raw) -> list[str]:
+    """Organisational contacts the contract owner declares non-personal (C0). Sealed and code-owned: a personal
+    address listed here would cross raw, so each entry must be a role mailbox or a switchboard/helpdesk number."""
+    out = [str(x).strip() for x in (raw or [])]
+    if len(out) > 10 or any(not x or len(x) > 120 or any(ord(c) < 32 for c in x) for x in out):
+        raise ContractError("org_contacts: at most 10 single-line entries")
+    return out
+
+
+def _parse_redaction_text(raw) -> dict:
+    out = {str(k).upper(): str(v) for k, v in (raw or {}).items()}
+    bad = [k for k in out if k != "DEFAULT" and CLASS_OF.get(T(k) if k in T.__members__ else None) is not DataClass.C3]
+    if bad or any(not v.strip() or len(v) > 80 or "[" in v for v in out.values()):
+        raise ContractError("redaction_text: keys must be C3 types (or DEFAULT); values short plain text")
+    return out
+
+
 def load_contract(path: str | Path) -> Contract:
     raw = yaml.safe_load(Path(path).read_text())
     try:
@@ -191,7 +219,10 @@ def load_contract(path: str | Path) -> Contract:
                      classes=classes, restore=restore, purpose_dependent=pdep, compute=raw.get("compute"),
                      input_schema=schema, outputs=outputs, prompt_template=raw.get("prompt_template"),
                      max_chars=int(raw.get("max_chars", 20000)),
-                     subjects=_parse_subjects(raw.get("declared_subjects")))
+                     subjects=_parse_subjects(raw.get("declared_subjects")),
+                     guidance=_parse_guidance(raw.get("guidance")),
+                     org_contacts=tuple(_parse_org_contacts(raw.get("org_contacts"))),
+                     redaction_text=_parse_redaction_text(raw.get("redaction_text")))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:

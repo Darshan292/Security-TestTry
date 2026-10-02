@@ -97,6 +97,8 @@ class Scenario:
     never_returned: list[str] = field(default_factory=list)   # C3: never in the restored response
     subjects: dict | None = None         # PATH A declared subjects (pgw_subjects)
     ner_misses: list[str] = field(default_factory=list)       # declared names to check NER alone would miss
+    answer_has: list[str] = field(default_factory=list)       # business-correctness (content) checks, case-insens.
+    answer_lacks: list[str] = field(default_factory=list)
 
 
 def _forms(*vals):
@@ -120,12 +122,15 @@ SCENARIOS = [
              raw=["Hetal Shah", "KD-11063", "2341 2341 2346", "234123412346", "Kavita Rao"],
              must_cross=["12 days"],    # leave_balance: PSEUDONYMISED_RAW in this contract
              expect_restored=["Hetal Shah"], never_returned=["2341 2341 2346"],
+             answer_has=["hypothes"], answer_lacks=["[AADHAAR]"],
              subjects={"requester": {"name": "Hetal Shah", "employee_id": "KD-11063"},
                        "mentioned": [{"name": "Kavita Rao"}]}),
     Scenario("A3 email drafting", "hr_email_draft", EMAIL,
              raw=["Amit Trivedi", "KD-10989", "amit.trivedi@kestrel-dyn.in", "97400 11223", "9740011223",
                   "50100234567891", "amit@okhdfc"],
              expect_restored=["Amit"], never_returned=["50100234567891", "amit@okhdfc"],
+             answer_has=["hr-ops@kestrel-dyn.in"],
+             answer_lacks=["97400 11223", "amit.trivedi@kestrel-dyn.in", "[UPI_ID]", "[BANK_ACCOUNT]", "[Company"],
              subjects={"recipient": {"name": "Amit Trivedi", "employee_id": "KD-10989",
                                      "email": "amit.trivedi@kestrel-dyn.in", "phone": "+91 97400 11223"}}),
     Scenario("A4 ticket with names NER misses", "ticket_summary", "Summarise this ticket in two lines for the "
@@ -142,7 +147,7 @@ SCENARIOS = [
     Scenario("B2 ESI eligibility letter", "esi_letter", json.dumps(ESI),
              raw=["Hetal Shah", "KD-11063"] + _forms(19800, 1200),
              must_cross=["covered by ESI", "₹21,000"],   # RAW by contract (justified) / C0
-             expect_restored=["Hetal Shah"]),
+             expect_restored=["Hetal Shah"], answer_has=["Hetal Shah"]),
 ]
 SCENARIOS.append(
     Scenario("B3 pay band position", "band_position", json.dumps(BAND),
@@ -238,7 +243,8 @@ def make_settings(out: Path, upstream, **kw) -> Settings:
     return Settings(registry_path=str(ROOT / "registry/apps.yaml"),
                     roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                     ledger_db_path=str(out / "restore_ledger.sqlite"), egress_ledger_path=str(out / "egress.jsonl"),
-                    master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream, **kw)
+                    master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream,
+                    **kw)
 
 
 def post(client, purpose, content, model=MODEL, subjects=None, messages=None, conv=None):
@@ -309,7 +315,7 @@ def main() -> int:
     cap = Capture()
     up = MockCapture(cap) if args.provider == "mock" else real_upstream(args.provider, cap, key or "invalid-pilot-check")
     with contextlib.redirect_stderr(stderr):
-        app = create_app(make_settings(out, up))
+        app = create_app(make_settings(out, up, ner_workers=2))   # the main app runs NER in the bounded pool
         with TestClient(app) as client:
             for sc in SCENARIOS:
                 n0 = len(cap.exchanges)
@@ -375,6 +381,12 @@ def main() -> int:
                 used = [x for x in aliases_out if x in ans] + mangled
                 check(f"{sc.name}: restoration (every alias the model used came back as the real value)",
                       not left, f"{len(used)} alias uses in the answer, {len(left)} left unrestored")
+                low = restored.lower()
+                for k, v in enumerate(sc.answer_has, 1):   # labels never carry the value (summary is content-free)
+                    check(f"{sc.name}: answer contains required item {k} (business correctness)", v.lower() in low)
+                for v in sc.answer_lacks:
+                    check(f"{sc.name}: answer does not contain a forbidden item (business correctness)",
+                          v.lower() not in low, "ok" if v.lower() not in low else "present")
                 check(f"{sc.name}: answer names the expected people (content, model-dependent)",
                       len(got) == len(sc.expect_restored), f"{len(got)}/{len(sc.expect_restored)}")
                 check(f"{sc.name}: C3 never returned", not any(v in restored for v in sc.never_returned),

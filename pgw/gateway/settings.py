@@ -98,6 +98,10 @@ class Settings:
     upstream_timeout_s: float = 60.0
     # Local NER (D4) for contracted purposes. None = off (tests/demos); from_env defaults it ON.
     ner_model: str | None = None
+    # NER worker processes (pgw.detect.ner_pool). 0 = in-process NerDetector (tests); from_env defaults to min(4, cpu).
+    ner_workers: int = 0
+    ner_queue_max: int = 8                 # requests allowed to wait for a worker; beyond it: fail closed at once
+    ner_timeout_s: float = 8.0             # per NER call (queue wait + inference); must stay below protect_timeout_s
     # Resource limits (fail closed with 413/503; nothing is sent).
     max_body_bytes: int = 262_144
     max_content_chars: int = 50_000        # all strings in `messages`, summed
@@ -137,6 +141,9 @@ class Settings:
             anthropic_base_url=e.get("PGW_ANTHROPIC_BASE_URL", cls.anthropic_base_url),
             upstream_timeout_s=float(e.get("PGW_UPSTREAM_TIMEOUT_S", cls.upstream_timeout_s)),
             ner_model=_off_or(e.get("PGW_NER_MODEL", "en_core_web_lg")),
+            ner_workers=int(e.get("PGW_NER_WORKERS", max(1, min(4, os.cpu_count() or 1)))),
+            ner_queue_max=int(e.get("PGW_NER_QUEUE_MAX", cls.ner_queue_max)),
+            ner_timeout_s=float(e.get("PGW_NER_TIMEOUT_S", cls.ner_timeout_s)),
             max_body_bytes=int(e.get("PGW_MAX_BODY_BYTES", cls.max_body_bytes)),
             max_content_chars=int(e.get("PGW_MAX_CONTENT_CHARS", cls.max_content_chars)),
             max_messages=int(e.get("PGW_MAX_MESSAGES", cls.max_messages)),

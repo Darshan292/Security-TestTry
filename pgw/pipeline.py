@@ -248,12 +248,21 @@ class Protector:
         overlaps are resolved later, so an evasion only has to be undone by one view.
         """
         out = []
-        for name, view, omap in _views(text):
+        views = list(_views(text))
+        ner_res: dict[str, list[Detection]] = {}
+        if self.ner is not None and _abl.get().D4:
+            # one batched call over the distinct NER view texts (a pool dedupes/batches; errors propagate)
+            ner_views = [v for n, v, _ in views if n in ("base", "casefold_titled", "despaced")]
+            if ner_views:
+                many = getattr(self.ner, "detect_many", None)
+                res = many(ner_views) if many is not None else [self.ner.detect(v) for v in dict.fromkeys(ner_views)]
+                ner_res = dict(zip(ner_views if many is not None else dict.fromkeys(ner_views), res))
+        for name, view, omap in views:
             dets = recognizers.detect_d2(view) + detect_person_cues(view)
             if self.roster is not None and _abl.get().D3:
                 dets += self.roster.detect(view)
-            if self.ner is not None and _abl.get().D4 and name in ("base", "casefold_titled", "despaced"):
-                dets += [d for d in self.ner.detect(view) if _name_shaped(view[d.start:d.end])]
+            if name in ("base", "casefold_titled", "despaced") and view in ner_res:
+                dets += [d for d in ner_res[view] if _name_shaped(view[d.start:d.end])]
             for d in dets:
                 s, e = to_original(omap, d.start, d.end)
                 if e > s:

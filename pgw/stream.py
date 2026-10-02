@@ -52,6 +52,7 @@ class Restorer:
     never_restore: frozenset = frozenset()
     roster: object | None = None   # RosterIndex, for names the model "knew"
     mode: str = "incremental"      # "incremental" | "buffered"
+    allowed: frozenset = frozenset()   # contract org_contacts (C0, lowercase) the model may write in its answer
     events: list[GateEvent] = field(default_factory=list)
     restored: list = field(default_factory=list)   # (EntityType, value) actually emitted -> restore ledger
     _buf: str = ""
@@ -182,6 +183,8 @@ class Restorer:
         # 2. deterministic recognisers over the whole output so far (context-dependent types need it)
         for d in recognizers.detect_d2(text):
             if d.end <= off or d.type not in _GATE_TYPES:
+                continue
+            if text[d.start:d.end].lower() in self.allowed:   # declared organisational contact, not personal
                 continue
             if any(s <= d.start < e for s, e in alias_spans):
                 continue

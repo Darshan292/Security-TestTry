@@ -95,8 +95,25 @@ def load_registry(path: str) -> list[AppEntry]:
 
 _LONG_DIGITS = re.compile(r"(?<!\d)\d(?:[\s\-./]?\d){8,}(?!\d)")
 
+# Words shown instead of a C3 redaction marker that the model copied into its answer (contract may override).
+# A neutral word reads correctly after any phrasing ("account (withheld)", "Aadhaar (withheld) was submitted").
+REDACTION_TEXT = {"DEFAULT": "(withheld)"}
+_MARKER = re.compile(r"\[(BANK_ACCOUNT|UPI_ID|AADHAAR|PAN|CARD|SECRET)\]")
+_ORG_SENTINEL = 0xE100
+
+
+def render_markers(text, contract) -> str:
+    if not isinstance(text, str) or contract is None:
+        return text
+    table = {**REDACTION_TEXT, **contract.redaction_text}
+    return _MARKER.sub(lambda m: table.get(m.group(1), table["DEFAULT"]), text)
+
+
 PLACEHOLDER_NOTE = ("Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. "
-                    "Keep them exactly as written wherever you refer to them; do not guess what they stand for.")
+                    "Keep them exactly as written wherever you refer to them; do not guess what they stand for. "
+                    "A type name in brackets without a code, such as [BANK_ACCOUNT], marks a value that was withheld "
+                    "entirely: never copy it into your answer; refer to it in words (e.g. 'the registered bank "
+                    "account').")
 
 
 def load_contracts(registry: list[AppEntry], policy: PolicyPack) -> tuple[dict[str, Contract], PolicyPack]:
@@ -205,8 +222,13 @@ def create_app(settings: Settings) -> Starlette:
     contract_protector = protector
     if contracts and settings.ner_model:
         from ..detect.ner import NerDetector
-        ner = NerDetector(settings.ner_model)
-        ner.warm()
+        if settings.ner_workers > 0:   # bounded worker processes (fail closed when full/slow); 0 = in-process
+            from ..detect.ner_pool import NerPool
+            ner = NerPool(settings.ner_model, settings.ner_workers, settings.ner_queue_max,
+                          min(settings.ner_timeout_s, settings.protect_timeout_s * 0.8))
+        else:
+            ner = NerDetector(settings.ner_model)
+            ner.warm()
         contract_protector = Protector(policy, keys, roster, ledger, ner=ner)
     elif contracts:
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
@@ -392,6 +414,18 @@ def create_app(settings: Settings) -> Starlette:
 
         # --- protect + egress (fail closed) ---
         prot_impl = contract_protector if contract is not None else protector
+        org = contract.org_contacts if contract is not None else ()
+        if org:   # organisational C0 contacts are held out of detection (sentinels) and put back after protection
+            messages = json.loads(json.dumps(messages))
+            for m in messages:
+                parts = [m] if isinstance(m.get("content"), str) else [
+                    p for p in (m.get("content") or []) if isinstance(p, dict) and isinstance(p.get("text"), str)]
+                for part in parts:
+                    key = "content" if part is m else "text"
+                    t = "".join(c for c in part[key] if not _ORG_SENTINEL <= ord(c) < _ORG_SENTINEL + 0x100)
+                    for i, oc in enumerate(org):
+                        t = re.sub(re.escape(oc), chr(_ORG_SENTINEL + i), t, flags=re.IGNORECASE)
+                    part[key] = t
         try:
             prot = await (bounded(prot_impl.protect, messages, ctx) if declared is None
                           else bounded(prot_impl.protect, messages, ctx, declared))
@@ -417,6 +451,14 @@ def create_app(settings: Settings) -> Starlette:
                         contract)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
 
+        if org:
+            for m in prot.messages:
+                parts = [m] if isinstance(m.get("content"), str) else [
+                    p for p in (m.get("content") or []) if isinstance(p, dict) and isinstance(p.get("text"), str)]
+                for part in parts:
+                    key = "content" if part is m else "text"
+                    for i, oc in enumerate(org):
+                        part[key] = part[key].replace(chr(_ORG_SENTINEL + i), oc)
         if raw_outputs:   # contract-RAW local-compute outputs, held out of detection, go back in now
             for m in prot.messages:
                 if isinstance(m.get("content"), str):
@@ -432,12 +474,15 @@ def create_app(settings: Settings) -> Starlette:
         up_body = {k: v for k, v in body.items() if k != "messages" and not k.startswith("pgw_")}
         up_body["messages"] = prot.messages
         if contract is not None:   # tell the model how to treat placeholders (added after detection)
-            up_body["messages"] = [{"role": "system", "content": PLACEHOLDER_NOTE}] + list(prot.messages)
+            note = PLACEHOLDER_NOTE + (("\n\n" + contract.guidance) if contract.guidance else "")
+            up_body["messages"] = [{"role": "system", "content": note}] + list(prot.messages)
         wire = upstream.wire_bytes(up_body)
         body_hash = hashlib.sha256(wire).hexdigest()
         try:
             egress_check(wire, prot.sensitive_values + withheld)
-            subjects.check_outbound(wire, declared if subj else [], (PLACEHOLDER_NOTE, model))
+            subjects.check_outbound(wire, declared if subj else [],
+                                    (PLACEHOLDER_NOTE, model, *((contract.guidance,) if contract and contract.guidance
+                                                                else ()), *org))
         except EgressViolation:
             ms = (time.perf_counter() - t0) * 1000
             ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "VIOLATION", ms, "egress", contract)
@@ -458,15 +503,16 @@ def create_app(settings: Settings) -> Starlette:
 
         def new_restorer() -> Restorer:
             return Restorer(prot.alias_map, restore=app.restore_output, never_restore=never,
-                            roster=roster, mode=policy.stream_mode(purpose))
+                            roster=roster, mode=policy.stream_mode(purpose),
+                            allowed=frozenset(o.lower() for o in (contract.org_contacts if contract else ())))
 
         def record(items) -> None:
             if ctx.conversation_id:
                 ledger.record(ctx, items)
 
         if not stream:
-            return await _non_stream(rid, up_body, new_restorer, record)
-        return await _stream(rid, up_body, new_restorer, record)
+            return await _non_stream(rid, up_body, new_restorer, record, contract)
+        return await _stream(rid, up_body, new_restorer, record, contract)
 
     async def _private(rid, app, purpose, model, body, ctx, contract, t0) -> Response:
         """C4 content the gateway cannot protect reliably goes, unprotected, ONLY to the in-boundary model.
@@ -502,7 +548,7 @@ def create_app(settings: Settings) -> Starlette:
                              "message": {"role": "assistant", "content": out}}]},
                             headers={"X-PGW-Request-Id": rid, "X-PGW-Route": "PRIVATE_LOCAL"})
 
-    async def _non_stream(rid, up_body, new_restorer, record) -> Response:
+    async def _non_stream(rid, up_body, new_restorer, record, contract=None) -> Response:
         try:
             data = await upstream.complete(up_body)
         except Exception as e:   # provider failure: nothing is returned to the app
@@ -517,7 +563,7 @@ def create_app(settings: Settings) -> Starlette:
                 msg: dict = {"role": "assistant", "content": None}   # unknown fields are dropped, not forwarded
                 if isinstance(m.get("content"), str):
                     r = new_restorer()
-                    msg["content"] = r.feed(m["content"]) + r.finish()
+                    msg["content"] = render_markers(r.feed(m["content"]) + r.finish(), contract)
                     restored += r.restored
                     events += len(r.events)
                 calls = []
@@ -543,7 +589,7 @@ def create_app(settings: Settings) -> Starlette:
             out["usage"] = data["usage"]
         return JSONResponse(out, headers={"X-PGW-Request-Id": rid, "X-PGW-Gate-Events": str(events)})
 
-    async def _stream(rid, up_body, new_restorer, record) -> Response:
+    async def _stream(rid, up_body, new_restorer, record, contract=None) -> Response:
         it = upstream.stream(up_body).__aiter__()
         try:   # prime: a failure before the first event can still be a proper HTTP error
             first = await it.__anext__()
@@ -611,7 +657,7 @@ def create_app(settings: Settings) -> Starlette:
                     raise UpstreamError("upstream stream ended early")
                 # upstream finished cleanly: flush holdback, then whole tool calls, then finish
                 for idx, st in sorted(states.items()):
-                    tail = st.restorer.finish()
+                    tail = render_markers(st.restorer.finish(), contract)
                     if tail:
                         yield chunk(idx, {"content": tail})
                     events += len(st.restorer.events)
@@ -649,5 +695,16 @@ def create_app(settings: Settings) -> Starlette:
     async def health(request: Request) -> Response:
         return JSONResponse({"status": "ok"})
 
+    import contextlib
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app):
+        try:
+            yield
+        finally:   # release NER worker processes (each holds a model copy) when the app stops
+            close = getattr(getattr(contract_protector, "ner", None), "close", None)
+            if close is not None:
+                close()
+
     return Starlette(routes=[Route("/v1/chat/completions", chat, methods=["POST"]),
-                             Route("/healthz", health, methods=["GET"])])
+                             Route("/healthz", health, methods=["GET"])], lifespan=lifespan)
