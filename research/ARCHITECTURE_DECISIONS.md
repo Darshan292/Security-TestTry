@@ -56,6 +56,7 @@ evasions, W-12 external names at 0.794, W-13 secrets in new places.
 | PD-14 | **Third corpus from an independent generator design**, frozen before any PD-13 code; families held out by family, ≥ 10 templates per family; gates pre-registered first (refines PD-6) | M-32 (template concentration); a reseed of synth2 reshuffles spent templates | Evaluation integrity |
 | PD-13 status (2026-10-01) | **NOT ADOPTED.** Fails G1, G2, G3, G5 and G6; passes G4 (SECURITY_EVALUATION_R3.md). The default-inversion idea is supported for shaped values (M-38); L3 dictionaries are refuted as a generalising mechanism (M-39) | M-36, M-37, M-38, M-39, M-40, M-41 | — |
 | PD-15 | **Architecture V2 (proposal, R4_ARCHITECTURE_ANALYSIS.md §7):** A canonicalisation → B structure → C candidates → D resolution → E policy (data contracts, content-class routing) → F transformation → G egress/response gate. Field names leave the security decision; delete D1, L3 typing and per-view NER. Not implemented | M-36…M-44 | W-10, W-11, W-13, T-18 |
+| PD-16 | **Product contract and task routing (PRODUCT_ARCHITECTURE.md):** data classes C0–C4; routes EXT-PSEUDO / LOCAL-COMPUTE / PRIVATE-LLM / REFUSE, declared per purpose and only tightened by content; redact unneeded HIGH identifiers instead of blocking; wire local NER; delete D1, cues, D0 cross-product, the PD-13 package and blocking-by-presence. Not implemented | M-45, M-46, M-47, M-48 | W-10…W-13, T-18 |
 
 ## Required amendments (documentation only; the code already reflects the first)
 

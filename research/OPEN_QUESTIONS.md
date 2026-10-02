@@ -39,7 +39,7 @@ Priority: **P0** blocks any real-data use · **P1** blocks the next phase gate �
 | Q-28 | Who authors corpus v3, with what generator design, so it is independent of the fixers and of this analysis? | test2 now informs the design and cannot validate it | PD-14 | M-32 | Owner decision before any PD-13 code | Owner | **P0** |
 | Q-29 | How should PERSON exposure in unstructured, spoken, code-mixed and non-Latin text be cut, given it is 61 % of B's residual? | Blocks CSVE gates for any architecture | PD-12, PD-13 | M-41 | Owner review of R3 before any new experiment | Owner | **P0** |
 | Q-30 | What causes B's 93-second document? | Availability and T-18 | PD-13 | M-41, M-42 | **Answered (R4):** not reproducible (max 1.19 s, likely an external stall). Real DoS shapes are quadratic paths in shared D0/D2 code, plus unbounded linear NER cost | Architect | P1 |
-| Q-31 | Does maximal (default-transform) protection preserve task utility? | Decides V2's core posture (R4 §9) | PD-15, PD-7 | none (E-UTIL never run) | E-UTIL at the protection frontier on dev3 | Owner (API key) | **P0** |
+| Q-31 | Does maximal (default-transform) protection preserve task utility? | Decides V2's core posture (R4 §9) | PD-15, PD-16 | M-45, M-46, M-47 | **Partly answered (R4 E-UTIL, stand-in model):** yes for identities and language tasks; no for computation over personal quantities, and masking non-personal values hurts. To be confirmed with the production provider and human review | Owner | P0 |
 
 ## Closed in this iteration
 
