@@ -1,0 +1,141 @@
+{
+ "amount_date_prose": {
+  "cls": "heldout",
+  "unchanged_value(context-only change)": 2784,
+  "not_recovered": 738
+ },
+ "bidi_controls": {
+  "cls": "heldout",
+  "unchanged_value(context-only change)": 5577,
+  "recovered_by_U": 5762,
+  "recovered_by_S+rev": 2941
+ },
+ "case_games": {
+  "cls": "known",
+  "unchanged_value(context-only change)": 6191,
+  "recovered_by_U": 8047
+ },
+ "combining_marks": {
+  "cls": "heldout",
+  "unchanged_value(context-only change)": 5577,
+  "recovered_by_U": 8703
+ },
+ "compat_forms": {
+  "cls": "heldout",
+  "unchanged_value(context-only change)": 258,
+  "recovered_by_U": 14084,
+  "not_recovered": 26
+ },
+ "digit_script": {
+  "cls": "known",
+  "unchanged_value(context-only change)": 6440,
+  "recovered_by_U": 6171,
+  "not_recovered": 26
+ },
+ "homoglyph_swap": {
+  "cls": "known",
+  "unchanged_value(context-only change)": 5249,
+  "recovered_by_U": 9040
+ },
+ "json_escapes": {
+  "cls": "heldout",
+  "not_recovered": 633,
+  "unchanged_value(context-only change)": 1992,
+  "recovered_by_D": 42
+ },
+ "mail_qp": {
+  "cls": "heldout",
+  "not_recovered": 337,
+  "unchanged_value(context-only change)": 12745,
+  "recovered_by_D": 1182
+ },
+ "markup_entities": {
+  "cls": "known",
+  "not_recovered": 368,
+  "recovered_by_D": 13857,
+  "unchanged_value(context-only change)": 143
+ },
+ "markup_run_split": {
+  "cls": "heldout",
+  "not_recovered": 372,
+  "recovered_by_S": 13990,
+  "unchanged_value(context-only change)": 6
+ },
+ "mime_encoded_word": {
+  "cls": "heldout",
+  "not_recovered": 3273,
+  "unchanged_value(context-only change)": 10308
+ },
+ "pdf_cell_glue": {
+  "cls": "heldout",
+  "unchanged_value(context-only change)": 11275
+ },
+ "pdf_glyph_gaps": {
+  "cls": "known",
+  "not_recovered": 268,
+  "recovered_by_U": 14090,
+  "unchanged_value(context-only change)": 10
+ },
+ "pdf_page_break": {
+  "cls": "heldout",
+  "unchanged_value(context-only change)": 13202,
+  "not_recovered": 1054
+ },
+ "reversed_value": {
+  "cls": "heldout",
+  "not_recovered": 239,
+  "recovered_by_S+rev": 8058,
+  "unchanged_value(context-only change)": 6060,
+  "recovered_by_U": 2
+ },
+ "scan_glyph_errors": {
+  "cls": "known",
+  "unchanged_value(context-only change)": 535,
+  "not_recovered": 3845,
+  "span_count_changed": 561
+ },
+ "script_rendering": {
+  "cls": "heldout"
+ },
+ "sheet_coercion": {
+  "cls": "heldout",
+  "span_count_changed": 111,
+  "unchanged_value(context-only change)": 3584,
+  "not_recovered": 621,
+  "recovered_by_U": 208
+ },
+ "stt_dictation": {
+  "cls": "known",
+  "unchanged_value(context-only change)": 6258,
+  "not_recovered": 2759,
+  "recovered_by_U": 9
+ },
+ "terminal_wrap": {
+  "cls": "known",
+  "unchanged_value(context-only change)": 11941,
+  "not_recovered": 15,
+  "recovered_by_U": 1923
+ },
+ "unicode_spaces": {
+  "cls": "known",
+  "not_recovered": 250,
+  "recovered_by_U": 5966,
+  "unchanged_value(context-only change)": 8040
+ },
+ "url_encoding": {
+  "cls": "heldout",
+  "not_recovered": 3489,
+  "recovered_by_D": 4894,
+  "unchanged_value(context-only change)": 5959
+ },
+ "utf8_as_cp1252": {
+  "cls": "heldout",
+  "not_recovered": 331,
+  "unchanged_value(context-only change)": 1426
+ },
+ "zw_insert": {
+  "cls": "known",
+  "not_recovered": 268,
+  "recovered_by_U": 14100
+ }
+}

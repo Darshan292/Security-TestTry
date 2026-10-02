@@ -132,7 +132,12 @@ G4 passes only because it is relative. In absolute terms, 8 of 14 held-out kinds
 | B | 65 ms | **259 ms** | 647 ms | **93.3 s** |
 | C | 63 ms | 257 ms | 633 ms | 5.4 s |
 
-v3 documents are long (about 3 KB on average), so A is also much slower than on test2. **B has a 93-second document.** This is a pathological L1/L2 input and a DoS risk of the T-18 class. It is unexplained, and has not been investigated, per instruction.
+v3 documents are long (about 3 KB on average), so A is also much slower than on test2.
+
+**Correction (2026-10-02, R4 read-only profiling, `eval/analysis_r4/`):**
+- **The maxima do not reproduce.** Run serially, every test3 item takes at most 1.19 s in every arm (A, B and C alike: the same document, sized 22 KB), and p50/p95/p99 match the table above. The 93 s, 11.6 s and 5.4 s maxima are best explained by external stalls during runs disturbed by container restarts. That is not proven, and the harness does not record which item was slowest.
+- **About 80 % of detection time is spaCy.** NER runs once per D0 view (3 passes). It scales linearly at about 55 ms/KB with no input-size cap.
+- **Real DoS shapes exist in shared code, used by all arms including A:** `normalize._join_digits` is quadratic on long digit runs (a 20 KB run takes 16 s), and `recognizers._cli_and_files` is quadratic on long whitespace-free tokens (20 KB takes 3 s).
 
 ## 7. Generalisation gap (CSVE, dev3build → dev3val → test3)
 

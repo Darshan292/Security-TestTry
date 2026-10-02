@@ -1,0 +1,91 @@
+{
+ "exposed_values_by_class": {
+  "PERSON:prose": 379,
+  "shape_gap(unshaped form)": 290,
+  "PERSON:in_field": 215,
+  "PERSON:nonlatin": 213,
+  "anchoring_scope(not person-bearing)": 148,
+  "parsing_segmentation(shaped in isolation, missed in context)": 77,
+  "L3_release": 26
+ },
+ "by_class_type": {
+  "L3_release | DATE_OF_BIRTH": 26,
+  "PERSON:in_field | PERSON": 215,
+  "PERSON:nonlatin | PERSON": 213,
+  "PERSON:prose | PERSON": 379,
+  "anchoring_scope(not person-bearing) | BANK_ACCOUNT": 53,
+  "anchoring_scope(not person-bearing) | COMPENSATION": 88,
+  "anchoring_scope(not person-bearing) | DATE_OF_BIRTH": 4,
+  "anchoring_scope(not person-bearing) | SECRET": 3,
+  "parsing_segmentation(shaped in isolation, missed in context) | BANK_ACCOUNT": 20,
+  "parsing_segmentation(shaped in isolation, missed in context) | IFSC": 57,
+  "shape_gap(unshaped form) | BANK_ACCOUNT": 9,
+  "shape_gap(unshaped form) | COMPENSATION": 75,
+  "shape_gap(unshaped form) | DATE_OF_BIRTH": 92,
+  "shape_gap(unshaped form) | EMPLOYEE_ID": 34,
+  "shape_gap(unshaped form) | IFSC": 9,
+  "shape_gap(unshaped form) | PHONE": 51,
+  "shape_gap(unshaped form) | SECRET": 18,
+  "shape_gap(unshaped form) | UPI_ID": 2
+ },
+ "baseline": {
+  "csve": 0.36074074074074075,
+  "csve_high": 0.10962962962962963
+ },
+ "fix_one_class": {
+  "L3_release": {
+   "csve": 0.35777777777777775,
+   "csve_high": 0.10666666666666667
+  },
+  "PERSON:in_field": {
+   "csve": 0.2785185185185185,
+   "csve_high": 0.10962962962962963
+  },
+  "PERSON:nonlatin": {
+   "csve": 0.3207407407407407,
+   "csve_high": 0.10962962962962963
+  },
+  "PERSON:prose": {
+   "csve": 0.2725925925925926,
+   "csve_high": 0.10962962962962963
+  },
+  "anchoring_scope(not person-bearing)": {
+   "csve": 0.3592592592592593,
+   "csve_high": 0.08148148148148149
+  },
+  "parsing_segmentation(shaped in isolation, missed in context)": {
+   "csve": 0.3474074074074074,
+   "csve_high": 0.1
+  },
+  "shape_gap(unshaped form)": {
+   "csve": 0.31703703703703706,
+   "csve_high": 0.04518518518518518
+  }
+ },
+ "fix_group": {
+  "stronger_PERSON": {
+   "csve": 0.14148148148148149,
+   "csve_high": 0.10962962962962963
+  },
+  "normalization": {
+   "csve": 0.36074074074074075,
+   "csve_high": 0.10962962962962963
+  },
+  "parsing": {
+   "csve": 0.3474074074074074,
+   "csve_high": 0.1
+  },
+  "value_shape": {
+   "csve": 0.31703703703703706,
+   "csve_high": 0.04518518518518518
+  },
+  "anchoring_policy": {
+   "csve": 0.3562962962962963,
+   "csve_high": 0.07851851851851852
+  }
+ },
+ "fix_all_but_PERSON": {
+  "csve": 0.29703703703703704,
+  "csve_high": 0.0
+ }
+}
