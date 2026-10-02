@@ -1,0 +1,91 @@
+# THREAT_MODEL T13 / ADR-0001: apps cannot reach LLM providers; only gateway pods can.
+# NOT exercised in this repo's test environment: needs a cluster whose CNI enforces
+# NetworkPolicy. Validate with the checks in deploy/README.md.
+#
+# Namespaces (adjust names): `apps` = application workloads, `pgw` = the gateway.
+# The pgw namespace must carry the label kubernetes.io/metadata.name=pgw (set automatically).
+---
+# 1. Default-deny ALL egress (and ingress) for the app namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-egress, namespace: apps}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+---
+# 2. Apps may reach ONLY the gateway service (and DNS, needed to resolve its name).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-egress-to-gateway, namespace: apps}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: pgw}
+          podSelector:
+            matchLabels: {app: pgw-gateway}
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+---
+# 3. Gateway ingress: only from the app namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: gateway-ingress-from-apps, namespace: pgw}
+spec:
+  podSelector: {matchLabels: {app: pgw-gateway}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: apps}}}]
+      ports: [{protocol: TCP, port: 8080}]
+---
+# 4. Gateway egress: DNS + provider endpoints only. Default-deny for everything else.
+#
+# Standard NetworkPolicy cannot match hostnames. Options, strongest first:
+#   a) Cilium (CiliumNetworkPolicy toFQDNs, below) or Calico (egress policy with
+#      `destination.domains`, Calico Enterprise/Cloud) -> FQDN allowlist.
+#   b) An egress proxy (e.g. Envoy/Squid) in front: allow gateway -> proxy only and
+#      let the proxy enforce the hostname allowlist.
+#   c) Plain NetworkPolicy with ipBlock CIDRs for the provider's published ranges
+#      (below): coarse, goes stale, review regularly.
+# The allowed set must match PGW_EGRESS_ALLOWLIST (api.anthropic.com by default).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: gateway-egress-cidr, namespace: pgw}
+spec:
+  podSelector: {matchLabels: {app: pgw-gateway}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        # PLACEHOLDER: replace with the provider's currently published egress/ingress
+        # CIDRs (Anthropic publishes api.anthropic.com address ranges in its docs;
+        # 160.79.104.0/23 at the time of writing - VERIFY before use).
+        - ipBlock: {cidr: 160.79.104.0/23}
+      ports: [{protocol: TCP, port: 443}]
+---
+# 4b. Preferred where Cilium is the CNI: FQDN allowlist (use INSTEAD of 4, not alongside it).
+# apiVersion: cilium.io/v2
+# kind: CiliumNetworkPolicy
+# metadata: {name: gateway-egress-fqdn, namespace: pgw}
+# spec:
+#   endpointSelector: {matchLabels: {app: pgw-gateway}}
+#   egress:
+#     - toEndpoints:
+#         - matchLabels: {io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns}
+#       toPorts:
+#         - ports: [{port: "53", protocol: ANY}]
+#           rules: {dns: [{matchPattern: "*"}]}     # lets Cilium learn FQDN -> IP
+#     - toFQDNs: [{matchName: api.anthropic.com}]   # exact name, no matchPattern wildcards
+#       toPorts: [{ports: [{port: "443", protocol: TCP}]}]

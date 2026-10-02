@@ -1,0 +1,53 @@
+# THREAT_MODEL T13: "Apps bypass gateway and call providers directly".
+# ADR-0001 binding rule 1: only the gateway holds provider keys, and only the
+# gateway can reach providers. Two properties are enforced here, so that
+# "please use the gateway" becomes "you cannot not use the gateway":
+#   1. Application containers live ONLY on `appnet`, an `internal: true` network
+#      (no default route, no NAT): they cannot reach the internet or any provider.
+#   2. Only the gateway is also attached to `egressnet` (a normal bridge with a
+#      route out) and only the gateway receives provider credentials.
+# The gateway additionally enforces a destination allowlist in code
+# (PGW_EGRESS_ALLOWLIST / pgw.gateway.settings.check_destination).
+#
+# NOT exercised in CI/this repo's test environment: verify on a real Docker host
+# (see deploy/README.md for a one-line check).
+
+services:
+  gateway:
+    image: pgw-gateway:local          # build from the repo root; install with INSTALL.md
+    command: ["python", "-m", "pgw.gateway"]
+    environment:
+      PGW_HOST: "0.0.0.0"
+      PGW_PORT: "8080"
+      PGW_UPSTREAM: anthropic
+      PGW_EGRESS_ALLOWLIST: "api.anthropic.com"
+      # Provider credentials: ONLY here. Supplied from the host env / .env, never baked in.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:?set in the deploy environment}"
+      PGW_MASTER_KEY_FILE: /run/secrets/pgw_master_key   # or PGW_MASTER_KEY from env
+    secrets: [pgw_master_key]
+    networks:
+      appnet:
+        aliases: [gateway]            # apps reach it as http://gateway:8080
+      egressnet: {}
+    restart: unless-stopped
+
+  example-app:
+    image: example-app:local
+    environment:
+      # The app only knows the gateway. It gets NO provider keys, and must not be
+      # given any: a key in this container would be unusable (no route) but is still
+      # a policy violation (T13 "shadow API keys held by app teams").
+      LLM_BASE_URL: "http://gateway:8080"
+      GATEWAY_APP_KEY: "${EXAMPLE_APP_GATEWAY_KEY:-}"
+    networks: [appnet]                # appnet ONLY; never add egressnet to an app service
+    depends_on: [gateway]
+
+networks:
+  appnet:
+    internal: true                    # no route out: the core of the T13 control
+  egressnet:
+    driver: bridge                    # reachable only by services that explicitly attach it
+
+secrets:
+  pgw_master_key:
+    environment: PGW_MASTER_KEY       # compose >= 2.23; or use `file: ./secrets/pgw_master_key`

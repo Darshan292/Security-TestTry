@@ -1,0 +1,21 @@
+# Data contract: explain an HR case's status and next steps to the HR operator (PATH A, EXT_PSEUDO).
+# Owner: HR helpdesk app team. Same class treatment as ticket summaries; restored output goes to HR staff only.
+contract: hr_case_explanation
+version: 1
+task_type: hr_case_explanation
+route: EXT_PSEUDO
+data_classes:
+  C1: ALIAS
+  C2: GENERALIZE
+  C3: REDACT
+  C4: REFUSE
+restore: [C1]
+purpose_dependent:
+  leave_balance: PSEUDONYMISED_RAW        # leave cases cannot be explained without the balance
+  attendance: PSEUDONYMISED_RAW
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED    # medical reasons stay in the HRIS, not in the case text sent out
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: PSEUDONYMISED_RAW
+  derived_compensation: NOT_EXPECTED
+max_chars: 20000

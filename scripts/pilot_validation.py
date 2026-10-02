@@ -1,0 +1,380 @@
+"""Pilot validation against a REAL external provider, SYNTHETIC HRIS data only (no real employee data, ever).
+
+Runs the five pilot tasks through the real gateway app (integrity check, local NER, contracts, limits) and the
+real Anthropic adapter, and records inside the trusted environment only:
+  exact outbound HTTP body, exact inbound HTTP body, restored application response, gateway decision (ledger row),
+  latency (total, provider, gateway).
+Then checks: raw protected values never leave; derived values obey their contract; aliases survive provider
+formatting; restoration works; provider failures fail closed; gateway failures fail closed; no protected value
+appears in logs, error bodies, the audit ledger or stderr.
+
+    ANTHROPIC_API_KEY=... python -m scripts.pilot_validation                 # real provider
+    python -m scripts.pilot_validation --provider mock                       # harness self-test only
+
+Captures contain synthetic raw values and go OUTSIDE the repository (default /home/user/pilot_captures/<ts>/).
+The summary (`summary.md`) is content-free: check names, pass/fail, counts and latencies only.
+Without ANTHROPIC_API_KEY the run still goes to the real endpoint with a deliberately invalid key: outbound
+payloads and provider-failure handling are validated for real; checks that need a model answer are BLOCKED.
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import io
+import json
+import logging
+import os
+import re
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from starlette.testclient import TestClient
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from pgw.gateway.app import build_upstream, create_app  # noqa: E402
+from pgw.gateway.settings import Settings, check_destination  # noqa: E402
+from pgw.gateway.upstream import AnthropicUpstream, MockLLMUpstream  # noqa: E402
+from pgw.alias import ALIAS_RE as ALIAS_BODY  # noqa: E402
+from pgw.product.local_compute import surface_forms  # noqa: E402
+
+MODEL = "claude-opus-5-5"
+APP_KEY = "pilot-hr-helpdesk-key-change-me"      # registry/apps.yaml demo key for hr-helpdesk-pilot
+BASE_URL = "https://api.anthropic.com"
+# Exact alias tokens as the gateway mints them ([TYPE_<digit><5 or 7 base32>]); redaction markers such as
+# [BANK_ACCOUNT] are not aliases. ALIAS_RE (the restorer's own lenient pattern) finds mangled variants.
+ALIAS = re.compile(r"\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]")
+
+# --- synthetic scenarios (fictional people at a fictional company; identifiers are synthetic) ----------------
+
+TICKET = (
+    "Ticket PAY-88231 | Category: Payroll | Raised by: Imran Ansari (KD-11914) | Status: Resolved\n"
+    "[28 Sep 2026] Imran Ansari: My October TDS projection shows an extra deduction. I had uploaded rent receipts "
+    "but HRA exemption was not applied. PAN ZXWPA3889P.\n"
+    "[29 Sep 2026] Payroll Ops: Rent receipts were uploaded after the 25 September cut-off. Declaration re-opened "
+    "after approval from the payroll lead Suresh Menon.\n"
+    "[30 Sep 2026] Payroll Ops: The excess TDS will be refunded in the November 2026 payroll to salary account "
+    "644748074748 (IFSC SBIN0095056). Contact imran.ansari@kestrel-dyn.in if needed.\n")
+CASE = (
+    "Case HR-5521 | Type: Leave encashment | Employee: Hetal Shah (KD-11063)\n"
+    "Hetal Shah resigned with last working day 31 Oct 2026 and has 12 days of earned leave balance. Policy LV-04 "
+    "allows encashment of up to 30 days of earned leave at final settlement. Her reporting manager Kavita Rao "
+    "approved the encashment on 1 Oct 2026. Aadhaar 2341 2341 2346 was submitted for the F&F form.\n"
+    "Open question from HR operations: why has the encashment not appeared in the F&F computation yet?")
+EMAIL = (
+    "Draft a short, polite email from HR Operations to Amit Trivedi (KD-10989, amit.trivedi@kestrel-dyn.in, "
+    "+91 97400 11223) confirming that his salary account was updated to 50100234567891 (IFSC HDFC0001234) on "
+    "2 Oct 2026, that his UPI ID amit@okhdfc will not be used for payroll, and that the change applies from the "
+    "October 2026 payroll. Do not include the account number in the email.")
+SALARY = {"instruction": "Who earns more among these two, and by how much? Write a two-line note for the HR manager.",
+          "employees": [{"name": "Amit Trivedi", "employee_id": "KD-10989", "annual_ctc": 2450000},
+                        {"name": "Hetal Shah", "employee_id": "KD-11063", "annual_ctc": 2180000}]}
+ESI = {"instruction": "Explain to the employee whether ESI applies to them, in two lines.",
+       "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063", "monthly_gross": 19800}]}
+
+
+@dataclass
+class Scenario:
+    name: str
+    purpose: str
+    content: str
+    raw: list[str]                       # protected values that must never leave raw
+    must_cross: list[str] = field(default_factory=list)     # contract says RAW: must be in the payload
+    expect_restored: list[str] = field(default_factory=list)  # authorised values the app should get back
+    never_returned: list[str] = field(default_factory=list)   # C3: never in the restored response
+
+
+def _forms(*vals):
+    out = []
+    for v in vals:
+        out += surface_forms(v)
+    return out
+
+
+SCENARIOS = [
+    Scenario("A1 ticket summary", "ticket_summary", "Summarise this ticket in three lines for the weekly payroll "
+             "review.\n---\n" + TICKET,
+             raw=["Imran Ansari", "KD-11914", "ZXWPA3889P", "644748074748", "imran.ansari@kestrel-dyn.in",
+                  "Suresh Menon"],
+             expect_restored=["Imran Ansari"], never_returned=["ZXWPA3889P", "644748074748"]),
+    Scenario("A2 HR case explanation", "hr_case_explanation", "Explain the status of this case and the next "
+             "step for HR operations.\n---\n" + CASE,
+             raw=["Hetal Shah", "KD-11063", "2341 2341 2346", "234123412346", "Kavita Rao"],
+             must_cross=["12 days"],    # leave_balance: PSEUDONYMISED_RAW in this contract
+             expect_restored=["Hetal Shah"], never_returned=["2341 2341 2346"]),
+    Scenario("A3 email drafting", "hr_email_draft", EMAIL,
+             raw=["Amit Trivedi", "KD-10989", "amit.trivedi@kestrel-dyn.in", "97400 11223", "9740011223",
+                  "50100234567891", "amit@okhdfc"],
+             expect_restored=["Amit"], never_returned=["50100234567891", "amit@okhdfc"]),
+    Scenario("B1 salary comparison", "salary_comparison", json.dumps(SALARY),
+             raw=["Amit Trivedi", "KD-10989", "Hetal Shah", "KD-11063"] + _forms(2450000, 2180000, 270000)
+             + ["12.4%"],                # TRANSFORMED: only as an alias
+             expect_restored=["Amit Trivedi", "₹2,70,000"]),
+    Scenario("B2 ESI eligibility letter", "esi_letter", json.dumps(ESI),
+             raw=["Hetal Shah", "KD-11063"] + _forms(19800, 1200),
+             must_cross=["covered by ESI", "₹21,000"],   # RAW by contract (justified) / C0
+             expect_restored=["Hetal Shah"]),
+]
+ALL_RAW = sorted({v for s in SCENARIOS for v in s.raw})
+
+
+# --- capture --------------------------------------------------------------------------------------------------
+
+class Capture:
+    def __init__(self):
+        self.exchanges: list[dict] = []
+
+    async def on_request(self, req):
+        self.exchanges.append({"url": str(req.url), "t_req": time.perf_counter(),
+                               "outbound": req.content.decode("utf-8", "replace")})
+
+    async def on_response(self, resp):
+        await resp.aread()
+        self.exchanges[-1].update(t_resp=time.perf_counter(), status=resp.status_code,
+                                  inbound=resp.content.decode("utf-8", "replace"))
+
+
+def anthropic_upstream(cap: Capture, key: str, timeout: float = 120.0) -> AnthropicUpstream:
+    import anthropic
+    check_destination(BASE_URL, Settings().egress_allowlist)   # same rule build_upstream applies
+    http = anthropic.DefaultAsyncHttpxClient(event_hooks={"request": [cap.on_request], "response": [cap.on_response]})
+    client = anthropic.AsyncAnthropic(api_key=key, base_url=BASE_URL, timeout=timeout, max_retries=0,
+                                      http_client=http)
+    return AnthropicUpstream(key, client=client)
+
+
+class MockCapture(MockLLMUpstream):
+    """Self-test stand-in: echoes the protected prompt, so restoration and alias handling are exercised."""
+    def __init__(self, cap: Capture):
+        super().__init__("echo")
+        self.cap = cap
+
+    async def complete(self, body):
+        out = await super().complete(body)
+        self.cap.exchanges.append({"url": "mock://", "t_req": time.perf_counter(), "t_resp": time.perf_counter(),
+                                   "status": 200, "outbound": self.received[-1].decode(), "inbound": json.dumps(out)})
+        return out
+
+
+def payload_strings(body: str) -> str:
+    """All string values in a JSON body, decoded (an escaped \\u20b9 must not hide a value from the scan)."""
+    try:
+        obj = json.loads(body)
+    except ValueError:
+        return body
+    acc: list[str] = []
+
+    def walk(x):
+        if isinstance(x, str):
+            acc.append(x)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+        elif isinstance(x, dict):
+            for v in x.values():
+                walk(v)
+    walk(obj)
+    return "\n".join(acc)
+
+
+def inbound_text(inbound: str) -> str:
+    try:
+        d = json.loads(inbound)
+    except ValueError:
+        return ""
+    if "content" in d:   # Anthropic Messages response
+        return "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
+    return "".join((c.get("message") or {}).get("content") or "" for c in d.get("choices", []))
+
+
+# --- run ------------------------------------------------------------------------------------------------------
+
+def make_settings(out: Path, upstream, **kw) -> Settings:
+    return Settings(registry_path=str(ROOT / "registry/apps.yaml"),
+                    roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+                    ledger_db_path=str(out / "restore_ledger.sqlite"), egress_ledger_path=str(out / "egress.jsonl"),
+                    master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream, **kw)
+
+
+def post(client, purpose, content, model=MODEL):
+    return client.post("/v1/chat/completions",
+                       headers={"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose},
+                       json={"model": model, "max_tokens": 4096, "messages": [{"role": "user", "content": content}]})
+
+
+def ledger_row(out: Path, rid: str) -> dict | None:
+    for line in (out / "egress.jsonl").read_text().splitlines():
+        r = json.loads(line)
+        if r["request_id"] == rid:
+            return r
+    return None
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--provider", choices=["anthropic", "mock"], default="anthropic")
+    ap.add_argument("--out", default=f"/home/user/pilot_captures/{time.strftime('%Y%m%d-%H%M%S')}")
+    args = ap.parse_args()
+    out = Path(args.out).resolve()
+    if out == ROOT or ROOT in out.parents:
+        raise SystemExit("captures contain synthetic raw values: write them outside the repository")
+    out.mkdir(parents=True, exist_ok=True)
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    have_answers = args.provider == "mock" or bool(key)
+    mode = "mock self-test (NOT provider validation)" if args.provider == "mock" else (
+        "real provider" if key else "real endpoint, invalid key (answers BLOCKED: no ANTHROPIC_API_KEY)")
+
+    logbuf = io.StringIO()
+    handler = logging.StreamHandler(logbuf)
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    root = logging.getLogger()
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    stderr = io.StringIO()
+    checks: list[tuple[str, str, str]] = []     # (check, PASS/FAIL/BLOCKED, content-free note)
+    records = []
+    error_bodies: list[str] = []
+
+    def check(name, ok, note=""):
+        checks.append((name, "BLOCKED" if ok is None else ("PASS" if ok else "FAIL"), note))
+
+    cap = Capture()
+    up = MockCapture(cap) if args.provider == "mock" else anthropic_upstream(cap, key or "sk-ant-invalid-pilot-check")
+    with contextlib.redirect_stderr(stderr):
+        app = create_app(make_settings(out, up))
+        with TestClient(app) as client:
+            for sc in SCENARIOS:
+                n0 = len(cap.exchanges)
+                t0 = time.perf_counter()
+                r = post(client, sc.purpose, sc.content, model="mock-1" if args.provider == "mock" else MODEL)
+                total = (time.perf_counter() - t0) * 1000
+                ex = cap.exchanges[n0:]
+                rid = r.headers.get("X-PGW-Request-Id", "")
+                row = ledger_row(out, rid)
+                body = r.json()
+                restored = ((body.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+                if r.status_code != 200:
+                    error_bodies.append(r.text)
+                outbound = "\n".join(e["outbound"] for e in ex)
+                inbound = "\n".join(e.get("inbound", "") for e in ex)
+                provider_ms = sum((e.get("t_resp", e["t_req"]) - e["t_req"]) * 1000 for e in ex)
+                rec = {"scenario": sc.name, "purpose": sc.purpose, "status": r.status_code, "request_id": rid,
+                       "gateway_decision": row, "latency_ms": {"total": round(total, 1),
+                                                               "provider": round(provider_ms, 1),
+                                                               "gateway": round(total - provider_ms, 1)},
+                       "outbound_http": [e["outbound"] for e in ex], "inbound_http": [e.get("inbound") for e in ex],
+                       "provider_status": [e.get("status") for e in ex], "restored_response": restored,
+                       "app_response": body}
+                records.append(rec)
+                (out / f"{sc.purpose}.json").write_text(json.dumps(rec, indent=1, ensure_ascii=False))
+
+                sent_text = outbound + "\n" + payload_strings(outbound)
+                leaked = [v for v in sc.raw if v in sent_text]
+                check(f"{sc.name}: request reached the provider", bool(ex), f"{len(ex)} exchange(s)")
+                check(f"{sc.name}: no raw protected value in outbound bytes", bool(ex) and not leaked,
+                      f"{len(sc.raw)} values checked, {len(leaked)} found")
+                if sc.must_cross:
+                    missing = [v for v in sc.must_cross if v not in sent_text]
+                    check(f"{sc.name}: contract RAW/C0 values cross as declared", bool(ex) and not missing,
+                          f"{len(sc.must_cross) - len(missing)}/{len(sc.must_cross)} present")
+                aliases_out = sorted(set(ALIAS.findall(payload_strings(outbound))))
+                check(f"{sc.name}: aliases in outbound", bool(aliases_out), f"{len(aliases_out)} distinct")
+                check(f"{sc.name}: ledger row with contract, route, integrity", bool(row and row.get("contract")
+                      and row.get("integrity") not in (None, "unchecked")), (row or {}).get("decision", "none"))
+                if not have_answers or r.status_code != 200:
+                    for c in ("aliases survive provider formatting", "restoration", "C3 never returned"):
+                        check(f"{sc.name}: {c}", None if not have_answers else False,
+                              f"gateway status {r.status_code}")
+                    continue
+                ans = inbound_text(inbound)
+                exact = [a for a in aliases_out if a in ans]
+                mangled = [m.group(0) for m in ALIAS_BODY.finditer(ALIAS.sub("", ans))]
+                check(f"{sc.name}: aliases survive provider formatting", not mangled,
+                      f"{len(exact)} exact alias uses in answer, {len(mangled)} mangled")
+                left = ALIAS.findall(restored)
+                got = [v for v in sc.expect_restored if v in restored]
+                check(f"{sc.name}: restoration", not left and len(got) == len(sc.expect_restored),
+                      f"{len(got)}/{len(sc.expect_restored)} expected values restored, {len(left)} aliases left")
+                check(f"{sc.name}: C3 never returned", not any(v in restored for v in sc.never_returned),
+                      f"{len(sc.never_returned)} checked")
+
+            # --- provider failures (real endpoint) must fail closed with no content ---
+            if args.provider == "anthropic":
+                for label, upk in (("invalid API key", dict(key="sk-ant-invalid-pilot-check")),
+                                   ("provider timeout", dict(key=key or "sk-ant-invalid", timeout=0.001))):
+                    fcap = Capture()
+                    fapp = create_app(make_settings(out, anthropic_upstream(fcap, upk["key"], upk.get("timeout", 60))))
+                    with TestClient(fapp) as fc:
+                        fr = post(fc, "ticket_summary", SCENARIOS[0].content)
+                    error_bodies.append(fr.text)
+                    check(f"provider failure ({label}) fails closed", fr.status_code == 502
+                          and not any(v in fr.text for v in ALL_RAW) and "choices" not in fr.json(),
+                          f"status {fr.status_code}")
+            try:
+                build_upstream(Settings(upstream_kind="anthropic", anthropic_base_url="https://evil.example"))
+                check("non-allowlisted provider destination refused at startup", False)
+            except ValueError:
+                check("non-allowlisted provider destination refused at startup", True)
+
+            # --- gateway failures must fail closed: nothing sent, no content returned ---
+            import pgw.pipeline as P
+            orig = P.Protector.protect
+
+            def crash(self, *a, **k):
+                raise RuntimeError("detector crashed on: " + json.dumps(a[0]))
+
+            def leaky(self, *a, **k):
+                prot = orig(self, *a, **k)
+                prot.messages[-1]["content"] += " Imran Ansari ZXWPA3889P"
+                return prot
+
+            def slow(self, *a, **k):
+                time.sleep(1.5)
+                return orig(self, *a, **k)
+            for label, fn, extra, want in (("detector crash", crash, {}, 503), ("egress invariant", leaky, {}, 500),
+                                           ("protection deadline", slow, {"protect_timeout_s": 0.3}, 503)):
+                gcap = Capture()
+                gup = MockCapture(gcap)
+                P.Protector.protect = fn
+                try:
+                    gapp = create_app(make_settings(out, gup, **extra))
+                    with TestClient(gapp) as gc:
+                        gr = post(gc, "ticket_summary", SCENARIOS[0].content, model="mock-1")
+                finally:
+                    P.Protector.protect = orig
+                error_bodies.append(gr.text)
+                check(f"gateway failure ({label}) fails closed", gr.status_code == want and not gup.received
+                      and not any(v in gr.text for v in ALL_RAW), f"status {gr.status_code}, sent {len(gup.received)}")
+            time.sleep(1.5)   # let the timed-out worker finish before scanning logs
+
+    root.removeHandler(handler)
+    logs = logbuf.getvalue()
+    ledger = (out / "egress.jsonl").read_text()
+    for where, text in (("logs", logs), ("stderr/traces", stderr.getvalue()), ("audit ledger", ledger),
+                        ("error bodies", "\n".join(error_bodies))):
+        hits = [v for v in ALL_RAW if v in text]
+        check(f"no protected value in {where}", not hits, f"{len(ALL_RAW)} values, {len(hits)} found")
+    (out / "logs.txt").write_text(logs)
+    (out / "stderr.txt").write_text(stderr.getvalue())
+
+    lat = [r["latency_ms"] for r in records]
+    lines = [f"# Pilot validation: {mode}", "",
+             f"- Model: `{MODEL}` · data: synthetic only · captures: outside the repo",
+             f"- Gateway latency (ms, excl. provider), per scenario: {[x['gateway'] for x in lat]}",
+             f"- Provider latency (ms): {[x['provider'] for x in lat]}", "",
+             "| Check | Result | Note |", "|---|---|---|"]
+    lines += [f"| {c} | {s} | {n} |" for c, s, n in checks]
+    n_fail = sum(s == "FAIL" for _, s, _ in checks)
+    n_block = sum(s == "BLOCKED" for _, s, _ in checks)
+    lines += ["", f"**{sum(s == 'PASS' for _, s, _ in checks)} pass, {n_fail} fail, {n_block} blocked.**"]
+    (out / "summary.md").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+    print(f"\ncaptures: {out}")
+    return 1 if n_fail else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

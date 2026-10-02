@@ -5,6 +5,7 @@ or log line ever contains request text or values (ADR-0007).
 """
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import hashlib
 import hmac
@@ -17,8 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+from anyio import to_thread
 from starlette.applications import Starlette
-from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
@@ -29,11 +30,11 @@ from ..egress import check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
 from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer
-from ..product import local_compute
+from ..product import integrity, local_compute
 from ..product.content import unreliable_script
 from ..product.contracts import Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
-from .settings import Settings
+from .settings import Settings, check_destination
 from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError
 
 log = logging.getLogger("pgw.gateway")
@@ -41,7 +42,7 @@ log = logging.getLogger("pgw.gateway")
 ALLOWED_TOP = {"model", "messages", "stream", "temperature", "max_tokens", "max_completion_tokens", "top_p",
                "stop", "tools", "tool_choice", "n", "stream_options"}
 LOG_FIELDS = ("event", "request_id", "tenant", "app", "purpose", "model", "status", "decision", "error_type",
-              "latency_ms", "gate_events", "stream")
+              "latency_ms", "gate_events", "stream", "integrity", "ner")
 
 
 def _log(level: int, **fields) -> None:
@@ -115,15 +116,34 @@ def load_contracts(registry: list[AppEntry], policy: PolicyPack) -> tuple[dict[s
 
 
 def build_upstream(s: Settings) -> Upstream:
+    """Real providers are only built for an allowlisted https destination (deploy/README.md: the network layer
+    must enforce the same rule, so application code cannot reach a provider around the gateway)."""
     if s.upstream is not None:
         return s.upstream  # type: ignore[return-value]
     if s.upstream_kind == "mock":
         return MockLLMUpstream("summarise")
     if s.upstream_kind == "openai":
-        return OpenAICompatUpstream(s.upstream_url, s.openai_api_key)
+        check_destination(s.upstream_url, s.egress_allowlist)
+        return OpenAICompatUpstream(s.upstream_url, s.openai_api_key, timeout=s.upstream_timeout_s)
     if s.upstream_kind == "anthropic":
-        return AnthropicUpstream(s.anthropic_api_key)
+        check_destination(s.anthropic_base_url, s.egress_allowlist)
+        return AnthropicUpstream(s.anthropic_api_key, base_url=s.anthropic_base_url, timeout=s.upstream_timeout_s)
     raise ValueError("PGW_UPSTREAM must be mock|openai|anthropic")
+
+
+def _text_size(x) -> int:
+    """Characters in every string inside a messages structure (bounded by the body-size cap)."""
+    if isinstance(x, str):
+        return len(x)
+    if isinstance(x, list):
+        return sum(_text_size(v) for v in x)
+    if isinstance(x, dict):
+        return sum(_text_size(v) for v in x.values())
+    return 0
+
+
+def _sealed_paths(settings: Settings, contracts_paths) -> list[str]:
+    return [settings.policy_path, *sorted(set(contracts_paths))]
 
 
 def load_roster(path: str, key: bytes) -> RosterIndex:
@@ -155,15 +175,71 @@ class _ChoiceState:
 
 
 def create_app(settings: Settings) -> Starlette:
+    # Provider SDK/HTTP client loggers never log above WARNING here (their debug output includes request bodies).
+    for name in ("anthropic", "httpx", "httpcore", "openai"):
+        logging.getLogger(name).setLevel(max(logging.WARNING, logging.getLogger(name).level))
+    registry = load_registry(settings.registry_path)
+    # Integrity first: nothing from an unsealed or modified policy/contract file is acted on.
+    if settings.integrity_manifest is not None:
+        key = bytes.fromhex(settings.policy_signing_key) if settings.policy_signing_key else None
+        integrity_ref = integrity.verify(_sealed_paths(settings, [c for a in registry for _, c in a.tasks]),
+                                         settings.integrity_manifest, key, settings.require_signed_policy)
+    else:
+        integrity_ref = "unchecked"
+        _log(logging.WARNING, event="integrity_check_disabled")
     policy = PolicyPack.load(settings.policy_path)
     keys = Keys(bytes.fromhex(settings.master_key)) if settings.master_key else Keys.from_env()
-    registry = load_registry(settings.registry_path)
     contracts, policy = load_contracts(registry, policy)
+    for p in contracts:   # contracted (RESTRICTED-by-default) purposes never stream unrestored text
+        if policy.stream_mode(p) != "buffered":
+            raise ContractError(f"purpose {p!r}: contracted purposes must use buffered output")
     roster = load_roster(settings.roster_path, keys.derive("*", "edm")) if settings.roster_path else None
     ledger = RestoreLedger(keys.derive("*", "ledger"), settings.ledger_db_path)
     protector = Protector(policy, keys, roster, ledger)
+    # Contracted purposes (Path A and the free-text field of Path B) also get the local NER. A model that does
+    # not load stops startup (NerUnavailable); a model that fails at request time fails that request closed.
+    contract_protector = protector
+    if contracts and settings.ner_model:
+        from ..detect.ner import NerDetector
+        ner = NerDetector(settings.ner_model)
+        ner.warm()
+        contract_protector = Protector(policy, keys, roster, ledger, ner=ner)
+    elif contracts:
+        _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
     egress_ledger = EgressLedger(settings.egress_ledger_path)
+    slots = threading.BoundedSemaphore(settings.max_concurrent_protect)
+    _log(logging.INFO, event="started", integrity=integrity_ref, ner=settings.ner_model if contracts else None)
+
+    async def bounded(fn, *args):
+        """Run CPU work in a worker with a deadline. The slot is released only when the worker really finishes,
+        so a request that times out still occupies capacity and cannot be multiplied into a CPU exhaustion."""
+        if not slots.acquire(blocking=False):
+            raise _Reject(503, "gateway_busy", "gateway at capacity; request not sent")
+
+        def work():
+            try:
+                return fn(*args)
+            finally:
+                slots.release()
+        try:
+            return await asyncio.wait_for(to_thread.run_sync(work, abandon_on_cancel=True),
+                                          settings.protect_timeout_s)
+        except TimeoutError:
+            raise _Reject(503, "protection_timeout", "protection took too long; request not sent") from None
+
+    async def read_body(request: Request) -> bytes:
+        limit = settings.max_body_bytes
+        cl = request.headers.get("content-length")
+        if cl is not None and (not cl.isdigit() or int(cl) > limit):
+            raise _Reject(413, "request_too_large", "request body exceeds the size limit")
+        buf, n = [], 0
+        async for chunk in request.stream():
+            n += len(chunk)
+            if n > limit:
+                raise _Reject(413, "request_too_large", "request body exceeds the size limit")
+            buf.append(chunk)
+        return b"".join(buf)
 
     def authenticate(request: Request) -> AppEntry:
         auth = request.headers.get("authorization", "")
@@ -183,8 +259,8 @@ def create_app(settings: Settings) -> Starlette:
             extra = {"contract": contract.ref, "route": contract.route} if contract is not None else {}
             egress_ledger.write(request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose, model=model,
                                 provider=upstream.name, body_sha256=body_hash, entity_counts=counts,
-                                policy=policy.ref, decision=decision, latency_ms=round(ms, 2), reason=reason,
-                                ts=round(time.time(), 3), **extra)
+                                policy=policy.ref, integrity=integrity_ref, decision=decision,
+                                latency_ms=round(ms, 2), reason=reason, ts=round(time.time(), 3), **extra)
         except Exception as e:  # audit write failure must not leak content; fail closed
             _log(logging.ERROR, event="egress_ledger_write_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "ledger_unavailable", "audit ledger unavailable") from None
@@ -212,8 +288,9 @@ def create_app(settings: Settings) -> Starlette:
         if conv and len(conv) > 128:
             raise _Reject(400, "invalid_conversation_id", "conversation id too long")
 
+        raw_body = await read_body(request)
         try:
-            body = json.loads(await request.body())
+            body = json.loads(raw_body)
         except ValueError:
             raise _Reject(400, "invalid_request", "body is not valid JSON") from None
         if not isinstance(body, dict):
@@ -228,6 +305,10 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(400, "unsupported_parameter", "n must be 1")
         if model not in app.models:
             raise _Reject(403, "model_forbidden", "model not permitted for this app")
+        if len(body["messages"]) > settings.max_messages:
+            raise _Reject(413, "content_too_large", "too many messages")
+        if _text_size(body["messages"]) > settings.max_content_chars:
+            raise _Reject(413, "content_too_large", "message content exceeds the size limit")
         stream = bool(body.get("stream", False))
 
         # tools/stop are not message content, but they still leave the building: they must be clean.
@@ -260,7 +341,9 @@ def create_app(settings: Settings) -> Starlette:
                               "content in a script the gateway cannot protect reliably; not sent externally")
             if contract.route == "LOCAL_COMPUTE":
                 try:
-                    cr = await run_in_threadpool(local_compute.run, contract, messages)
+                    cr = await bounded(local_compute.run, contract, messages)
+                except _Reject:
+                    raise
                 except local_compute.PayloadError as e:
                     raise _Reject(400, "invalid_contract_payload", str(e)) from None
                 except Exception as e:
@@ -270,9 +353,14 @@ def create_app(settings: Settings) -> Starlette:
                 declared, withheld = cr.declared, cr.withheld
 
         # --- protect + egress (fail closed) ---
+        prot_impl = contract_protector if contract is not None else protector
         try:
-            prot = await (run_in_threadpool(protector.protect, messages, ctx) if declared is None
-                          else run_in_threadpool(protector.protect, messages, ctx, declared))
+            prot = await (bounded(prot_impl.protect, messages, ctx) if declared is None
+                          else bounded(prot_impl.protect, messages, ctx, declared))
+        except _Reject as r:
+            ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000, r.etype,
+                        contract)
+            raise
         except BlockedRequest as e:
             ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000, "policy",
                         contract)
@@ -287,7 +375,8 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(403, "purpose_forbidden", "purpose has no policy") from None
         except Exception as e:
             _log(logging.ERROR, event="protect_failed", request_id=rid, error_type=type(e).__name__)
-            ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000, "detector_error")
+            ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000, "detector_error",
+                        contract)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
 
         up_body = {k: v for k, v in body.items() if k != "messages"}
@@ -330,10 +419,9 @@ def create_app(settings: Settings) -> Starlette:
     async def _non_stream(rid, up_body, new_restorer, record) -> Response:
         try:
             data = await upstream.complete(up_body)
-        except UpstreamError as e:
+        except Exception as e:   # provider failure: nothing is returned to the app
+            _log(logging.ERROR, event="upstream_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(502, "upstream_error", "upstream provider error") from None
-        except Exception as e:
-            raise _Reject(502, "upstream_error", type(e).__name__) from None
         try:
             restored: list = []
             events = 0
@@ -375,10 +463,9 @@ def create_app(settings: Settings) -> Starlette:
             first = await it.__anext__()
         except StopAsyncIteration:
             first = None
-        except UpstreamError as e:
-            raise _Reject(502, "upstream_error", "upstream provider error") from None
         except Exception as e:
-            raise _Reject(502, "upstream_error", type(e).__name__) from None
+            _log(logging.ERROR, event="upstream_failed", request_id=rid, error_type=type(e).__name__, stream=True)
+            raise _Reject(502, "upstream_error", "upstream provider error") from None
 
         def sse(obj) -> str:
             return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
@@ -464,8 +551,10 @@ def create_app(settings: Settings) -> Starlette:
                     for st in states.values():
                         restored += st.restorer.restored
                     record(restored)   # what already reached the client
-                except Exception:
-                    pass
+                except Exception as e2:
+                    # Not swallowed: a later turn of this conversation cannot re-protect what was released here.
+                    _log(logging.CRITICAL, event="restore_ledger_record_failed", request_id=rid,
+                         error_type=type(e2).__name__, stream=True)
                 yield sse({"error": {"type": "stream_interrupted", "message": "stream interrupted; response incomplete"}})
 
         return StreamingResponse(gen(), media_type="text/event-stream",

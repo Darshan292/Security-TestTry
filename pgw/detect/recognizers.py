@@ -536,8 +536,11 @@ def _uri_secrets(text: str) -> list[Cand]:
 
 
 # --- credential files and CLI flags
+# host = one or more [A-Za-z0-9_.-*] chars containing at least one letter/dot/star. The original
+# `X*[letter]X*` form was ambiguous (n ways to split the run) and cost O(n^2) on a long token with no ':'
+# (it runs at every line start); the lookahead states the same constraint but only scans a digit/_/- prefix.
 _PGPASS = re.compile(
-    r"(?m)^[ \t]*(?P<host>[A-Za-z0-9_.\-*]*[A-Za-z.*][A-Za-z0-9_.\-*]*):(?:\d{1,5}|\*):[A-Za-z0-9_.\-*]+:[A-Za-z0-9_.\-@*\\]+:"
+    r"(?m)^[ \t]*(?P<host>(?=[0-9_\-]*[A-Za-z.*])[A-Za-z0-9_.\-*]+):(?:\d{1,5}|\*):[A-Za-z0-9_.\-*]+:[A-Za-z0-9_.\-@*\\]+:"
     r"(?P<v>\S[^\r\n]*?)[ \t]*$")
 _CLI_LONG = re.compile(
     r"(?<![\w\-])--(?:password|passwd|pass|pwd)(?:=|[ \t]+)(?:'(?P<sq>[^'\r\n]+)'|\"(?P<dq>[^\"\r\n]+)\"|(?P<raw>[^\s'\"]+))")
@@ -1871,7 +1874,9 @@ def _scan_sql(text: str, out: list) -> None:
 
 
 # ---- labelled person names in prose (high-precision structural cues)
-_PT = r"[A-Z][A-Za-z'’\-]*\.?"
+# A name token is capped at 64 chars ({0,63} after the capital). Unbounded `*` rescanned a long [A-Za-z'-] run from every
+# capital in it (O(n^2) on 100 KB of "A" or the title-cased view of "-p-p-p..."). No real name token is near 64 chars.
+_PT = r"[A-Z][A-Za-z'’\-]{0,63}\.?"
 _PNAME = _PT + r"(?:[ \t]+" + _PT + r"){0,3}"
 _PERSON_CUES = [
     ("angle_email", re.compile(r"(?P<n>" + _PNAME + r")[\"']?[ \t]*<[^<>\s@]+@[^<>\s]+>")),

@@ -1,0 +1,5 @@
+# Optional NER extra (pgw/detect/ner.py). Install on top of runtime.txt.
+-c runtime.txt
+spacy>=3.8,<3.9
+# The en_core_web_lg model is NOT on PyPI; it is pinned by URL + sha256 in
+# requirements/ner.txt (added by hand, see INSTALL.md).

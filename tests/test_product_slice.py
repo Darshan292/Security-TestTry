@@ -46,10 +46,11 @@ def registry(tmp, tasks=None):
     reg = tmp / "apps.yaml"
     reg.write_text(yaml.safe_dump({"apps": [
         {"app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY),
-         "purposes": ["ticket_summary", "salary_comparison", "uncontracted"], "restore_output": True,
+         "purposes": ["ticket_summary", "salary_comparison", "esi_letter", "uncontracted"], "restore_output": True,
          "models": ["mock-1"],
          "tasks": tasks or {"ticket_summary": str(ROOT / "contracts/ticket_summary.yaml"),
-                            "salary_comparison": str(ROOT / "contracts/salary_comparison.yaml")}},
+                            "salary_comparison": str(ROOT / "contracts/salary_comparison.yaml"),
+                            "esi_letter": str(ROOT / "contracts/esi_letter.yaml")}},
         {"app_id": "legacy", "tenant": "acme", "key_sha256": sha(LEGACY_KEY), "purposes": ["hr_case_summary"],
          "restore_output": True, "models": ["mock-1"]},
     ]}))
@@ -61,7 +62,9 @@ def make(tmp, behaviour="summarise", tasks=None):
     s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(registry(tmp, tasks)),
                  roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                  ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
-                 master_key=os.urandom(32).hex(), upstream=mock)
+                 master_key=os.urandom(32).hex(), upstream=mock,
+                 # throwaway contracts are unsealed: skip integrity so these tests reach contract validation
+                 **({"integrity_manifest": None} if tasks else {}))
     return TestClient(create_app(s)), mock
 
 
@@ -125,14 +128,14 @@ def test_path_b_exact_salaries_stay_inside_and_only_derived_result_is_sent(tmp_p
     wire = sent(mock)
     for v in SALARY_FORMS + ["Amit Trivedi", "Hetal Shah", "KD-10989", "KD-11063", "2,70,000", "270000"]:
         assert v not in wire, f"value left the gateway: {v[:4]}..."
-    assert "12.4%" in wire                                       # derived, non-identifying result crosses
-    assert "[PERSON_" in wire and "[COMPENSATION_" in wire       # identities and the derived amount aliased
+    assert "12.4" not in wire                                    # derived from pay: TRANSFORMED, never raw
+    assert "[PERSON_" in wire and "[DERIVED_" in wire            # identities and derived values aliased
 
 
 def test_path_b_answer_restores_names_and_exact_difference(tmp_path):
     client, mock = make(tmp_path)
     out = answer(call(client, "salary_comparison", json.dumps(PAYLOAD)))
-    assert "Amit Trivedi" in out and "Hetal Shah" in out and "₹2,70,000" in out
+    assert "Amit Trivedi" in out and "Hetal Shah" in out and "₹2,70,000" in out and "12.4%" in out
     for v in SALARY_FORMS:                                        # the inputs themselves are never echoed back
         assert v not in out
 
@@ -140,7 +143,7 @@ def test_path_b_answer_restores_names_and_exact_difference(tmp_path):
 def test_local_compute_function_is_exact():
     r = lc.salary_difference(PAYLOAD)
     assert (r["higher_name"], r["difference_value"], r["pct_of_lower"], r["difference"]) == \
-        ("Amit Trivedi", 270000, "12.4", "₹2,70,000")
+        ("Amit Trivedi", 270000, "12.4%", "₹2,70,000")
 
 
 # --- fail closed -------------------------------------------------------------------------------------------
@@ -246,7 +249,50 @@ def test_ledger_records_route_and_contract_without_content(tmp_path):
     call(client, "salary_comparison", json.dumps(PAYLOAD))
     rows = [json.loads(line) for line in (tmp_path / "egress.jsonl").read_text().splitlines()]
     assert [(r["route"], r["contract"], r["decision"]) for r in rows] == [
-        ("EXT_PSEUDO", "ticket_summary@1", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@1", "SENT")]
+        ("EXT_PSEUDO", "ticket_summary@2", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@2", "SENT")]
     text = (tmp_path / "egress.jsonl").read_text()
     for v in TICKET_RAW + SALARY_FORMS + ["Amit Trivedi"]:
         assert v not in text
+
+
+# --- derived-value semantics (contract outputs: RAW / TRANSFORMED / INTERNAL) ---------------------------------
+
+ESI = {"instruction": "Explain to the employee whether ESI applies to them, in two lines.",
+       "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063", "monthly_gross": 19800}]}
+
+
+def test_esi_raw_output_crosses_only_by_contract_and_wage_never_does(tmp_path):
+    client, mock = make(tmp_path)
+    r = call(client, "esi_letter", json.dumps(ESI))
+    assert r.status_code == 200, r.text
+    wire = sent(mock)
+    assert "covered by ESI" in wire and "₹21,000" in wire        # RAW outputs, as the contract justifies
+    for v in ("19800", "19,800", "1200", "1,200", "Hetal Shah", "KD-11063"):   # wage, INTERNAL margin, identity
+        assert v not in wire
+    assert "Hetal Shah" in answer(r)
+
+
+def test_unlisted_compute_output_is_internal_and_checked_at_egress(tmp_path, monkeypatch):
+    real = lc.FUNCTIONS["salary_difference"]
+    monkeypatch.setitem(lc.FUNCTIONS, "salary_difference", lambda p: {**real(p), "secret_note": "budget code ZZ-9931"})
+    from pgw.product.contracts import load_contract
+    res = lc.run(load_contract(ROOT / "contracts/salary_comparison.yaml"),
+                 [{"role": "user", "content": json.dumps(PAYLOAD)}])
+    assert "ZZ-9931" not in res.prompt and any("ZZ-9931" in v for _, v in res.withheld)
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda c: c["outputs"]["pct_of_lower"].update(egress="RAW"),                  # RAW from C2, no justification
+    lambda c: c["outputs"]["difference_value"].update(egress="INTERNAL") or
+              c.update(prompt_template=c["prompt_template"] + " {difference_value}"),  # template uses INTERNAL
+    lambda c: c["outputs"].update(leak={"derived_from": "C3", "egress": "TRANSFORMED"}),  # C3-derived leaving
+    lambda c: c["purpose_dependent"].pop("performance_rating"),                   # stance missing
+    lambda c: c["input_schema"]["employees"]["items"]["annual_ctc"].pop("class"),  # unclassified input
+])
+def test_unsafe_derived_value_contracts_stop_startup(tmp_path, mutate):
+    c = yaml.safe_load((ROOT / "contracts/salary_comparison.yaml").read_text())
+    mutate(c)
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(yaml.safe_dump(c))
+    with pytest.raises(ContractError):
+        make(tmp_path, tasks={"salary_comparison": str(bad)})

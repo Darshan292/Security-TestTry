@@ -20,16 +20,67 @@ It is **not** a PII detector. Detection is one input to a routing and transforma
 
 ## 2. The product contract
 
-*What may cross the boundary, for what purpose, and what stays inside.* Every rule cites its evidence.
+*What may cross the boundary, for what purpose, and what stays inside.* Every rule cites its evidence. Each purpose has a versioned data contract (`contracts/*.yaml`, loaded by `pgw/product/contracts.py`) that fixes the route, the action per class and, for LOCAL-COMPUTE, the egress of every computed output. An unsafe or incomplete contract stops the gateway from starting.
 
 | Data class | Examples | May cross to an external LLM? | Evidence |
 |---|---|---|---|
-| **C0 Non-personal business content** | Instructions, policy text, ticket text minus personal values, counts, leave balances, policy thresholds, non-personal dates, grades, project names | **Yes, raw.** Masking it destroys reasoning | E-UTIL: MAX masked 133 task-critical values and lost case explanation and Q&A; the gateway mis-masked a ₹21,000 policy threshold |
+| **C0 Non-personal business content** | Instructions, policy text, ticket text minus personal values, counts, policy thresholds, non-personal dates, grades, project names | **Yes, raw.** Masking it destroys reasoning | E-UTIL: MAX masked 133 task-critical values and lost case explanation and Q&A; the gateway mis-masked a ₹21,000 policy threshold |
 | **C1 Identity values** | Person names, employee/vendor IDs, work emails, phones | **Only as scoped aliases**, restored on return for authorised apps | E-UTIL: 100 % restored, 0 fabricated, no loss on classification, summary or drafting |
-| **C2 Personal quantities and attributes** | Salary/CTC, DOB/age, ratings, arrears, leave reasons (health) | **Not as exact values.** Generalised (band, decade, month/year) only where the purpose allows. **Computations on them run locally**; only derived, purpose-allowed results may cross | E-UTIL: comparison, eligibility and report tasks fail on placeholders and bands |
+| **C2 Personal quantities and attributes** | Salary/CTC, DOB/age | **Never as exact values.** Generalised (band, decade, month/year) only where the purpose allows. **Computations on them run locally**. Contextual attributes are listed separately below | E-UTIL: comparison, eligibility and report tasks fail on placeholders and bands |
 | **C3 Government, financial and credential identifiers** | Aadhaar, PAN, bank account, card, UPI, passport/UAN, secrets | **Never.** Removed when the task does not need them (the request proceeds); if the task needs them, local or private route, or refused | E-UTIL: blocking whenever present refused 12/40 useful tasks; DESIGN §5.2 rationale kept |
-| **C4 Content the gateway cannot reliably understand** | Non-Latin-script personal text, speech transcripts, scans/OCR, undecodable encodings, under RESTRICTED | **No.** Private/in-boundary LLM, or refused | R3: 61 % of residual exposure is names in such content; E-UTIL: Devanagari names left raw |
+| **C4 Content the gateway cannot reliably understand** | Non-Latin-script personal text, speech transcripts, scans/OCR, undecodable encodings, under RESTRICTED | **No.** Private/in-boundary LLM, or refused (this slice: refused) | R3: 61 % of residual exposure is names in such content; E-UTIL: Devanagari names left raw |
+| **D Derived** | Values computed inside the gateway by LOCAL-COMPUTE: a pay difference, a percentage, an eligibility result, a margin | **Per output**, by the egress rule below. **A derived value is not assumed non-sensitive** | E-UTIL: comparison and eligibility tasks need the result, not the inputs |
 | **Bulk export of C1–C3** | "All PANs and bank accounts as CSV" | **Refused.** It is a database query, not language work | E-UTIL extraction-02 |
+
+### Egress rule for every LOCAL-COMPUTE output (class D)
+
+Each contract declares, per output, one rule. An output the contract does not list is INTERNAL.
+
+| Egress | Meaning | Condition |
+|---|---|---|
+| **RAW** | Leaves as is | Output derived from C0; from any other class only with a written justification of at least 20 characters |
+| **TRANSFORMED** | Leaves only as a scoped alias; restored to the app only if the contract restores class D | None |
+| **INTERNAL** | Never leaves. Default. The egress invariant withholds every surface form (plain, grouped, Indian-grouped, with or without ₹) | None |
+
+Outputs derived from C3 or C4 can never leave (startup error otherwise). A prompt template may not reference INTERNAL or undeclared outputs (startup error).
+
+### C2 purpose-dependent attributes
+
+C2 values (compensation, DOB) are never sent exact. Some attributes cannot be detected reliably and are personal or not depending on the purpose: **leave_balance, attendance, performance_rating, health_or_leave_reason, disciplinary_outcome, eligibility_result, derived_compensation**. Because detection cannot decide, **every contract MUST state a stance for each**; a missing or invalid stance stops startup.
+
+| Stance | Meaning |
+|---|---|
+| **PSEUDONYMISED_RAW** | May cross raw, only next to aliased identities. Still personal data |
+| **NOT_EXPECTED** | The app must not send it for this purpose. An app obligation; not enforced by detection |
+| **LOCAL_ONLY** | Only via LOCAL-COMPUTE inputs and outputs, under the egress rules |
+
+Stances chosen by the shipped contracts:
+
+| Attribute | ticket_summary v2 | salary_comparison v2 | esi_letter v1 |
+|---|---|---|---|
+| leave_balance | PSEUDONYMISED_RAW | NOT_EXPECTED | NOT_EXPECTED |
+| attendance | PSEUDONYMISED_RAW | NOT_EXPECTED | NOT_EXPECTED |
+| performance_rating | NOT_EXPECTED | NOT_EXPECTED | NOT_EXPECTED |
+| health_or_leave_reason | NOT_EXPECTED | NOT_EXPECTED | NOT_EXPECTED |
+| disciplinary_outcome | NOT_EXPECTED | NOT_EXPECTED | NOT_EXPECTED |
+| eligibility_result | PSEUDONYMISED_RAW | NOT_EXPECTED | LOCAL_ONLY |
+| derived_compensation | NOT_EXPECTED | LOCAL_ONLY | LOCAL_ONLY |
+
+**Corrected (2026-10-02):** an earlier version of this section listed leave balances as C0 (non-personal). An employee-specific leave balance is personal data. In ticket_summary it is PSEUDONYMISED_RAW: it crosses only next to aliased identities. Generic policy figures (for example an annual entitlement for all staff) remain C0.
+
+### Worked examples
+
+| Contract | Output | Egress | Why |
+|---|---|---|---|
+| salary_comparison | difference, pct_of_lower | TRANSFORMED | Aliased; the model never sees the amount; restored for the HR manager (contract restores C1, D) |
+| salary_comparison | difference_value, higher_ctc, lower_ctc | INTERNAL | Exact CTCs and the numeric difference never leave |
+| esi_letter | eligibility ("covered by ESI" / "not covered") | RAW, with justification | The letter must state it; only a yes/no next to an aliased identity crosses |
+| esi_letter | threshold (₹21,000) | RAW | Derived from C0: the public statutory ceiling |
+| esi_letter | monthly_gross, margin | INTERNAL | The wage and its distance from the ceiling stay inside |
+
+### Versioning and integrity
+
+Contracts and the policy pack are versioned and sealed in `policies/MANIFEST.json` (sha256 and version per file, optional HMAC signature). The gateway refuses to start on any unreviewed change. After a reviewed change, reseal with `python -m pgw.product.integrity seal`.
 
 ### Task routing (declared by the app per purpose, enforced by the gateway; extends ADR-0004)
 

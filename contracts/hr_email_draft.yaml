@@ -1,0 +1,21 @@
+# Data contract: draft an email from HR to an employee (PATH A, EXT_PSEUDO).
+# Owner: HR helpdesk app team. The draft is restored for a human to review and send; it is never auto-sent.
+contract: hr_email_draft
+version: 1
+task_type: hr_email_draft
+route: EXT_PSEUDO
+data_classes:
+  C1: ALIAS
+  C2: GENERALIZE
+  C3: REDACT
+  C4: REFUSE
+restore: [C1]
+purpose_dependent:
+  leave_balance: PSEUDONYMISED_RAW
+  attendance: NOT_EXPECTED
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: PSEUDONYMISED_RAW
+  derived_compensation: NOT_EXPECTED
+max_chars: 8000

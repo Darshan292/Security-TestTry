@@ -1,0 +1,51 @@
+# Data contract: explain an employee's ESI coverage (LOCAL_COMPUTE). The wage stays inside the gateway; the
+# coverage decision is computed locally and, by explicit decision below, crosses next to an aliased identity.
+contract: esi_letter
+version: 1
+task_type: esi_coverage_explanation
+route: LOCAL_COMPUTE
+compute: esi_eligibility
+data_classes:
+  C1: ALIAS
+  C2: GENERALIZE
+  C3: REDACT
+  C4: REFUSE
+restore: [C1]
+purpose_dependent:
+  leave_balance: NOT_EXPECTED
+  attendance: NOT_EXPECTED
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: LOCAL_ONLY
+  derived_compensation: LOCAL_ONLY
+max_chars: 2000
+input_schema:
+  instruction: {type: str, max_len: 500}
+  employee:
+    type: list
+    min: 1
+    max: 1
+    items:
+      name: {type: str, max_len: 100, class: C1, entity: PERSON}
+      employee_id: {type: str, max_len: 20, class: C1, entity: EMPLOYEE_ID}
+      monthly_gross: {type: int, min: 1, max: 100000000, class: C2, entity: COMPENSATION}
+outputs:
+  employee_name: {derived_from: C1, egress: TRANSFORMED, entity: PERSON}
+  employee_id: {derived_from: C1, egress: TRANSFORMED, entity: EMPLOYEE_ID}
+  eligibility:
+    derived_from: C2
+    egress: RAW
+    justification: >-
+      The letter must state whether the employee is covered; the model cannot write it around a placeholder.
+      Only a yes/no next to an aliased identity crosses; the wage and the margin stay INTERNAL.
+  threshold: {derived_from: C0, egress: RAW}               # statutory ceiling, public
+  margin: {derived_from: C2, egress: INTERNAL}
+  monthly_gross: {derived_from: C2, egress: INTERNAL}
+prompt_template: |
+  {instruction}
+
+  Facts computed inside the privacy gateway (the employee's wage is not shared with you):
+  - Employee: {employee_name} ({employee_id}).
+  - Result: the employee is {eligibility}. The statutory monthly wage ceiling for ESI is {threshold}.
+  Write the explanation for the employee using only these facts.

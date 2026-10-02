@@ -23,6 +23,7 @@ class EntityType(str, Enum):
     EMPLOYEE_ID = "EMPLOYEE_ID"
     COMPENSATION = "COMPENSATION"
     DATE_OF_BIRTH = "DATE_OF_BIRTH"
+    DERIVED = "DERIVED"     # a value computed inside the gateway (LOCAL_COMPUTE); never produced by detectors
 
 
 class Action(str, Enum):

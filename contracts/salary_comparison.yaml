@@ -1,17 +1,25 @@
 # Data contract: compare two employees' pay (PATH B, LOCAL_COMPUTE).
-# Exact CTC values arrive as structured fields, are used only inside the gateway, and never leave it.
-# The external model receives identities as aliases plus derived results, and writes the explanation.
+# Exact CTC values arrive as structured C2 fields, are used only inside the gateway, and never leave it.
+# Every computed output has an explicit egress rule; anything unlisted is INTERNAL.
 contract: salary_comparison
-version: 1
+version: 2
 task_type: salary_comparison
 route: LOCAL_COMPUTE
 compute: salary_difference
 data_classes:
   C1: ALIAS
-  C2: ALIAS        # only the *derived* difference is ever in the prompt; it is aliased and restored
+  C2: GENERALIZE   # applies to free text (the instruction); structured C2 inputs are withheld entirely
   C3: REDACT
   C4: REFUSE
-restore: [C1, C2]
+restore: [C1, D]   # identities and TRANSFORMED derived values come back exact for the HR manager
+purpose_dependent:
+  leave_balance: NOT_EXPECTED
+  attendance: NOT_EXPECTED
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: NOT_EXPECTED
+  derived_compensation: LOCAL_ONLY        # pay differences are personal compensation data
 max_chars: 4000
 input_schema:
   instruction: {type: str, max_len: 500}
@@ -20,14 +28,24 @@ input_schema:
     min: 2
     max: 2
     items:
-      name: {type: str, max_len: 100}
-      employee_id: {type: str, max_len: 20}
-      annual_ctc: {type: int, min: 1, max: 1000000000}
+      name: {type: str, max_len: 100, class: C1, entity: PERSON}
+      employee_id: {type: str, max_len: 20, class: C1, entity: EMPLOYEE_ID}
+      annual_ctc: {type: int, min: 1, max: 1000000000, class: C2, entity: COMPENSATION}
+outputs:
+  higher_name: {derived_from: C1, egress: TRANSFORMED, entity: PERSON}
+  higher_id: {derived_from: C1, egress: TRANSFORMED, entity: EMPLOYEE_ID}
+  lower_name: {derived_from: C1, egress: TRANSFORMED, entity: PERSON}
+  lower_id: {derived_from: C1, egress: TRANSFORMED, entity: EMPLOYEE_ID}
+  difference: {derived_from: C2, egress: TRANSFORMED}     # aliased; the model never sees the amount
+  pct_of_lower: {derived_from: C2, egress: TRANSFORMED}   # relative pay of two people is still personal
+  difference_value: {derived_from: C2, egress: INTERNAL}
+  higher_ctc: {derived_from: C2, egress: INTERNAL}
+  lower_ctc: {derived_from: C2, egress: INTERNAL}
 prompt_template: |
   {instruction}
 
   Facts computed inside the privacy gateway from exact HRIS data (exact salaries are not shared with you):
   - Employees compared: {higher_name} ({higher_id}) and {lower_name} ({lower_id}).
   - {higher_name} has the higher annual CTC.
-  - The difference is {difference} per year, which is {pct_of_lower}% of the lower CTC.
+  - The difference is {difference} per year, which is {pct_of_lower} of the lower CTC.
   Write the answer for the HR manager using only these facts.

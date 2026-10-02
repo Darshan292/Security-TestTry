@@ -1,0 +1,5 @@
+# Dev/test/eval dependencies. Installed on top of runtime.txt.
+-c runtime.txt
+pytest>=8
+pydantic>=2.5
+ruff>=0.5

@@ -89,7 +89,8 @@ def _text_of(content) -> str:
     return "".join(p.get("text", "") for p in content if isinstance(p, dict))
 
 
-_STOP = {"end_turn": "stop", "stop_sequence": "stop", "max_tokens": "length", "tool_use": "tool_calls"}
+_STOP = {"end_turn": "stop", "stop_sequence": "stop", "max_tokens": "length", "tool_use": "tool_calls",
+         "refusal": "content_filter"}
 
 
 def to_anthropic_params(body: dict) -> dict:
@@ -173,10 +174,13 @@ def from_anthropic_message(msg) -> dict:
 class AnthropicUpstream:
     name = "anthropic"
 
-    def __init__(self, api_key: str, client=None):
+    def __init__(self, api_key: str, client=None, base_url: str = "https://api.anthropic.com",
+                 timeout: float = 60.0):
         if client is None:
             import anthropic
-            client = anthropic.AsyncAnthropic(api_key=api_key)
+            # base_url is passed explicitly so ANTHROPIC_BASE_URL in the environment cannot redirect egress
+            # around the gateway's destination allowlist. Retries re-send the same checked bytes.
+            client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=2)
         self._client = client
 
     def wire_bytes(self, body: dict) -> bytes:

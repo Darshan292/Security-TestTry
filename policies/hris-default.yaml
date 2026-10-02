@@ -17,6 +17,7 @@ defaults:
   EMPLOYEE_ID: TOKENIZE
   COMPENSATION: TOKENIZE
   DATE_OF_BIRTH: GENERALIZE
+  DERIVED: TOKENIZE        # LOCAL_COMPUTE outputs; contracts decide per output (PRODUCT_ARCHITECTURE §2)
 
 purposes:
   hr_case_summary: {}

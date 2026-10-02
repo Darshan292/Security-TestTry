@@ -102,7 +102,9 @@ _SPACED_INIT = re.compile(rf"(?<!{_ALNUM}){_ALNUM} \.(?=[ ]+{_ALNUM}[ .](?:{_ALN
 _GAP_OK = re.compile(r"[^\w\n]+")
 
 _DIGIT_SEP = "\\-./\u2010\u2011\u2012\u2013\u2014\u2212_"
-_DIGIT_CHAIN = re.compile(rf"[0-9]+(?:(?: ?[{_DIGIT_SEP}] ?| )[0-9]+)+")
+# (?<![0-9]): only try a chain at the start of a digit run. Without it a long run with no separator
+# (which can never match) was rescanned to its end from every offset, O(n^2). Same matches otherwise.
+_DIGIT_CHAIN = re.compile(rf"(?<![0-9])[0-9]+(?:(?: ?[{_DIGIT_SEP}] ?| )[0-9]+)+")
 _DIGITS = re.compile(r"[0-9]+")
 _JOIN_MIN, _JOIN_MAX = 9, 19
 

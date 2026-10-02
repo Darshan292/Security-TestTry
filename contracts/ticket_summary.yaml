@@ -2,7 +2,7 @@
 # Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
 # government/financial identifiers are not needed for a summary, so they are removed, not blocked.
 contract: ticket_summary
-version: 1
+version: 2
 task_type: hr_ticket_summary
 route: EXT_PSEUDO
 data_classes:
@@ -11,4 +11,14 @@ data_classes:
   C3: REDACT       # PAN, Aadhaar, bank account, card, UPI, secrets -> removed
   C4: REFUSE       # non-Latin-script personal text: no private route yet
 restore: [C1]
+# Purpose-dependent personal attributes. Detectors cannot see these; the stance is an obligation on the app
+# and a statement of what the provider may receive next to aliased identities (still personal data).
+purpose_dependent:
+  leave_balance: PSEUDONYMISED_RAW        # tickets about leave need the balance to be summarised
+  attendance: PSEUDONYMISED_RAW
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED    # medical detail must not be in helpdesk tickets sent for summary
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: PSEUDONYMISED_RAW
+  derived_compensation: NOT_EXPECTED
 max_chars: 20000

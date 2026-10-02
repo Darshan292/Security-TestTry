@@ -1,0 +1,9 @@
+# Direct runtime dependencies of pgw/ (see INSTALL.md). Floors are minimal.
+starlette>=0.40
+uvicorn>=0.30
+httpx>=0.27
+PyYAML>=6.0
+cryptography>=42
+pyahocorasick>=2.0
+# Lazily imported by pgw/gateway/upstream.py when PGW_UPSTREAM=anthropic
+anthropic>=0.40
