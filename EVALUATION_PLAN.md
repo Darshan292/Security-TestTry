@@ -238,3 +238,26 @@ Uncertainty: 95 % CIs on test3 come from a **family-cluster bootstrap** (10,000 
 - E-STREAM-LEAK;
 - E-UTIL;
 - E-DET-R.
+
+## Amendment 2026-10-02 — R4 product validation: E-UTIL protocol (registered before any task is authored)
+
+The detection/corpus iteration stops at R4 (owner instruction). E-UTIL measures **usefulness**, not leakage.
+
+- **Data:** a purpose-built synthetic task suite (`eval/eutil/tasks.jsonl`, 40 items, 8 ESU task types × 5). It is written by an agent that does not read `pgw/`, and every item carries deterministic gold.
+- **Conditions:**
+  - **RAW:** no protection; allowed only because the data is synthetic.
+  - **GATEWAY:** the product path exactly as shipped: `pgw.pipeline.Protector` with `policies/hris-default.yaml`, the task's registered purpose, and the suite roster. **No NER**, because `create_app` does not wire it. Blocking applies.
+  - **MAX:** maximum-protection transformation. Everything detected is tokenised and nothing is blocked; additionally, every remaining digit-bearing token and every non-initial capitalised token outside a fixed stop-list is aliased.
+  - Aliased conditions get the same one-line system note that the aliases are placeholders to keep verbatim.
+- **External model:** no provider API key exists in this environment. The external LLM is a Claude Sonnet subagent with no repository access, which sees only the outbound prompt. This is valid for utility. It is **not** valid for provider latency: only gateway-added latency is reported.
+- **Metrics (deterministic first):**
+  - task correctness (label, JSON field, numeric and fact checks);
+  - preservation of required entities after restore;
+  - factual equivalence vs the RAW output (paired);
+  - completeness (required sections; length ratio);
+  - unnecessary masking (task-critical non-sensitive values aliased; unrestored or fabricated aliases);
+  - blocked rate;
+  - sensitive values present in the outbound prompt;
+  - gateway latency (protect + restore).
+- **Human review:** a side-by-side packet (`eval/eutil/REVIEW_CASES.md`) for the owner. An LLM judge is not used for scoring.
+- **Gate:** the existing E-UTIL gate (≤ 5 % degradation vs RAW, per task type) is applied unchanged and reported per condition.
