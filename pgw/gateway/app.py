@@ -6,6 +6,7 @@ or log line ever contains request text or values (ADR-0007).
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import dataclasses
 import hashlib
 import hmac
@@ -39,6 +40,20 @@ from .settings import Settings, check_destination, check_private_destination
 from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError
 
 log = logging.getLogger("pgw.gateway")
+
+# Demo-only step tracing (demo/ui_server.py). Enabled only programmatically via Settings.trace AND a per-request
+# X-PGW-Trace header; never from the environment. Trace data includes content: use only on a trusted local machine.
+_TRACE: contextvars.ContextVar = contextvars.ContextVar("pgw_trace", default=None)
+
+
+def _tr(stage: str, **data) -> None:
+    fn = _TRACE.get()
+    if fn is None:
+        return
+    try:
+        fn(stage, data)
+    except Exception as e:  # a broken observer must never affect the request
+        log.warning("event='trace_failed' error_type=%r", type(e).__name__)
 
 ALLOWED_TOP = {"model", "messages", "stream", "temperature", "max_tokens", "max_completion_tokens", "top_p",
                "stop", "tools", "tool_choice", "n", "stream_options",
@@ -306,16 +321,28 @@ def create_app(settings: Settings) -> Starlette:
             _log(logging.ERROR, event="egress_ledger_write_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "ledger_unavailable", "audit ledger unavailable") from None
 
+    if settings.trace is not None:
+        _log(logging.WARNING, event="trace_hook_enabled_demo_only")
+
     async def chat(request: Request) -> Response:
         rid = "req_" + uuid.uuid4().hex[:24]
+        token = None
+        if settings.trace is not None and request.headers.get("x-pgw-trace"):
+            run = request.headers["x-pgw-trace"]
+            token = _TRACE.set(lambda stage, data: settings.trace(run, stage, data))
         try:
             resp = await _chat(request, rid)
         except _Reject as r:
             _log(logging.INFO, event="reject", request_id=rid, status=r.status, error_type=r.etype)
+            _tr("error", status=r.status, error_type=r.etype, message=r.message)
             return _err(r.status, r.etype, r.message, rid, **r.extra)
         except Exception as e:    # never include exception text: it may carry request data
             _log(logging.ERROR, event="internal_error", request_id=rid, error_type=type(e).__name__)
+            _tr("error", status=500, error_type="internal_error", message="internal error")
             return _err(500, "internal_error", "internal error", rid)
+        finally:
+            if token is not None:
+                _TRACE.reset(token)
         return resp
 
     async def _chat(request: Request, rid: str) -> Response:
@@ -325,6 +352,7 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(400, "purpose_required", "X-PGW-Purpose header is required")
         if purpose not in app.purposes:
             raise _Reject(403, "purpose_forbidden", "purpose not permitted for this app")
+        _tr("auth", app=app.app_id, tenant=app.tenant, purpose=purpose)
         conv = request.headers.get("x-pgw-conversation-id", "").strip() or None
         if conv and len(conv) > 128:
             raise _Reject(400, "invalid_conversation_id", "conversation id too long")
@@ -370,6 +398,10 @@ def create_app(settings: Settings) -> Starlette:
             if purpose not in dict(app.tasks):
                 raise _Reject(403, "no_data_contract", "purpose has no data contract for this app")
             contract = contracts[purpose]
+            _tr("contract", contract=contract.ref, route=contract.route, task_type=contract.task_type,
+                classes={k.value: v for k, v in contract.classes.items()},
+                restore=sorted(c.value for c in contract.restore), guidance=bool(contract.guidance),
+                org_contacts=len(contract.org_contacts))
         messages, declared, withheld, subj, raw_outputs = body["messages"], None, [], [], None
         if contract is not None:
             ctx = dataclasses.replace(ctx, alias_ns=contract.ref)
@@ -381,6 +413,10 @@ def create_app(settings: Settings) -> Starlette:
             except subjects.SubjectsError as e:
                 raise _Reject(400, "invalid_declared_subjects", str(e)) from None
             declared = subjects.matchers(subj)
+            roles: dict = {}
+            for role, _t, _v in subj:
+                roles[role] = roles.get(role, 0) + 1
+            _tr("subjects", declared_values=len(subj), roles=roles, matchers=len(declared))
             if subjects.found_in(aux, declared):
                 raise _Reject(400, "sensitive_data_in_parameters", "tools/stop contain data that must not be sent")
         if contract is not None:
@@ -395,6 +431,7 @@ def create_app(settings: Settings) -> Starlette:
                 raise _Reject(422, "content_requires_private_route",
                               "content in a script the gateway cannot protect reliably; not sent externally")
             if contract.route == "LOCAL_COMPUTE":
+                _tr("route", route="LOCAL_COMPUTE", reason="contract computes inside the gateway")
                 try:
                     cr = await bounded(local_compute.run, contract, messages)
                 except _Reject:
@@ -406,6 +443,10 @@ def create_app(settings: Settings) -> Starlette:
                     raise _Reject(503, "compute_unavailable", "local computation failed; request not sent") from None
                 messages = [{"role": "user", "content": cr.prompt}]
                 declared, withheld, raw_outputs = cr.declared, cr.withheld, cr.raw
+                _tr("local_compute", function=contract.compute,
+                    outputs=[{"name": n, "egress": (contract.outputs[n].egress if n in contract.outputs
+                                                     else "INTERNAL")} for n in cr.outputs],
+                    withheld_forms=len(cr.withheld), prompt_built=True)
 
         if subj:   # after all size checks, off the event loop, under the deadline
             n = await bounded(subjects.count_occurrences, subjects.request_texts(messages), declared)
@@ -413,6 +454,9 @@ def create_app(settings: Settings) -> Starlette:
                 raise _Reject(413, "content_too_large", "too many occurrences of declared subjects")
 
         # --- protect + egress (fail closed) ---
+        if contract is None or contract.route != "LOCAL_COMPUTE":
+            _tr("route", route=contract.route if contract else "LEGACY",
+                reason="external LLM on protected text" if contract else "uncontracted legacy purpose")
         prot_impl = contract_protector if contract is not None else protector
         org = contract.org_contacts if contract is not None else ()
         if org:   # organisational C0 contacts are held out of detection (sentinels) and put back after protection
@@ -476,6 +520,9 @@ def create_app(settings: Settings) -> Starlette:
         if contract is not None:   # tell the model how to treat placeholders (added after detection)
             note = PLACEHOLDER_NOTE + (("\n\n" + contract.guidance) if contract.guidance else "")
             up_body["messages"] = [{"role": "system", "content": note}] + list(prot.messages)
+        _tr("protect", entities=[{"type": e.type.value, "action": e.action.value, "replacement": e.replacement,
+                                  "value": e.value} for e in prot.entities.values()],
+            counts=prot.type_counts(), ner=bool(getattr(prot_impl, "ner", None)))
         wire = upstream.wire_bytes(up_body)
         body_hash = hashlib.sha256(wire).hexdigest()
         try:
@@ -492,6 +539,10 @@ def create_app(settings: Settings) -> Starlette:
             _log(logging.ERROR, event="egress_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
         ms = (time.perf_counter() - t0) * 1000
+        _tr("egress", values_checked=len(prot.sensitive_values) + len(withheld),
+            declared_matchers=len(declared) if subj else 0, result="passed")
+        _tr("send", provider=upstream.name, model=model, bytes=len(wire), sha256=body_hash,
+            outbound=wire.decode("utf-8", "replace"))
         ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "SENT", ms, None, contract,
                     len(subj) if contract is not None and contract.subjects is not None else None)
         _log(logging.INFO, event="sent", request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose,
@@ -521,11 +572,17 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(400, "unsupported_parameter", "streaming is not available on the private route")
         p_body = {k: v for k, v in body.items() if not k.startswith("pgw_") and k not in ("tools", "tool_choice")}
         p_body["model"] = settings.private_model
+        _tr("route", route="PRIVATE_LOCAL", reason="content the gateway cannot read reliably (C4): in-boundary model only")
+        _tr("send", provider="private (in-boundary)", model=settings.private_model,
+            outbound=json.dumps(p_body, ensure_ascii=False), note="unprotected, but never leaves the boundary")
         ms = (time.perf_counter() - t0) * 1000
         ledger_line(rid, app, purpose, model, hashlib.sha256(private.wire_bytes(p_body)).hexdigest(), {},
                     "SENT_PRIVATE", ms, "content_class_C4", dataclasses.replace(contract, route="PRIVATE_LOCAL"))
         try:
+            t_up = time.perf_counter()
             data = await private.complete(p_body)
+            _tr("provider", ms=round((time.perf_counter() - t_up) * 1000, 1), finish="stop",
+                raw_text=((data.get("choices") or [{}])[0].get("message") or {}).get("content"))
         except Exception as e:
             _log(logging.ERROR, event="private_upstream_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(502, "private_upstream_error", "private model unavailable; nothing was sent externally") from None
@@ -540,6 +597,8 @@ def create_app(settings: Settings) -> Starlette:
                 # Detectors cannot read C4 content reliably (that is why it is here): also mask every long digit
                 # run (account / Aadhaar / card lengths, any separators), whatever script surrounds it.
                 out = _LONG_DIGITS.sub("[NUMBER]", out)
+            _tr("restore", restored=0, gate="C3 and long digit runs masked in the in-boundary model's answer",
+                answer=out)
         except Exception as e:
             _log(logging.ERROR, event="restore_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "restore_unavailable", "response withheld") from None
@@ -550,7 +609,11 @@ def create_app(settings: Settings) -> Starlette:
 
     async def _non_stream(rid, up_body, new_restorer, record, contract=None) -> Response:
         try:
+            t_up = time.perf_counter()
             data = await upstream.complete(up_body)
+            _tr("provider", ms=round((time.perf_counter() - t_up) * 1000, 1),
+                finish=((data.get("choices") or [{}])[0].get("finish_reason")),
+                raw_text=((data.get("choices") or [{}])[0].get("message") or {}).get("content"))
         except Exception as e:   # provider failure: nothing is returned to the app
             _log(logging.ERROR, event="upstream_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(502, "upstream_error", "upstream provider error") from None
@@ -580,6 +643,8 @@ def create_app(settings: Settings) -> Starlette:
                 out_choices.append({"index": ch.get("index", 0), "message": msg,
                                     "finish_reason": ch.get("finish_reason")})
             record(restored)
+            _tr("restore", restored=len(restored), gate_events=events,
+                answer=out_choices[0]["message"]["content"] if out_choices else None)
         except Exception as e:
             _log(logging.ERROR, event="restore_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "restore_unavailable", "response withheld") from None

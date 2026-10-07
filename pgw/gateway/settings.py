@@ -119,6 +119,7 @@ class Settings:
     private_allowlist: tuple[str, ...] = DEFAULT_PRIVATE_ALLOWLIST
     private_upstream: object | None = field(default=None, repr=False)   # injected (tests)
     upstream: object | None = field(default=None, repr=False)   # injected Upstream (tests/demos)
+    trace: object | None = field(default=None, repr=False)   # demo-only step observer; never set from env
 
     @classmethod
     def from_env(cls, env: dict | None = None) -> "Settings":

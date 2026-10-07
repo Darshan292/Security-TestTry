@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Gateway Live Inspector</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--fg:#1c2330;--mut:#5f6b7c;--bd:#d9dee6;--pri:#2457d6;--pri-fg:#fff;--ok:#16874a;--bad:#c62828;--warn:#b26a00;--okbg:#e6f5ec;--badbg:#fdeaea;--warnbg:#fff3df;--code:#f0f2f6;--alias:#d6e4ff;--aliasfg:#12388f;--redact:#ffd9d9;--redactfg:#8c1414}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161d;--card:#1b212b;--fg:#e4e9f1;--mut:#97a3b6;--bd:#2f3846;--pri:#5b8cff;--pri-fg:#0b1020;--ok:#4cc884;--bad:#ff7b7b;--warn:#f0b04a;--okbg:#14301f;--badbg:#3a1b1b;--warnbg:#38290f;--code:#10141b;--alias:#1f3a73;--aliasfg:#bcd1ff;--redact:#5a2020;--redactfg:#ffc4c4}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:12px 16px;background:var(--card);border-bottom:1px solid var(--bd)}
+h1{margin:0 0 8px;font-size:20px}
+h2{margin:0 0 8px;font-size:15px}
+.banner{background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:6px 10px;font-weight:600;margin-bottom:8px}
+#statusbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:600;font-size:12px;border:1px solid var(--bd)}
+.badge.ok{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.badge.warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.badge.bad{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
+.badge.gray{background:var(--code);color:var(--mut)}
+.mut{color:var(--mut)}
+.small{font-size:12px}
+main{display:grid;grid-template-columns:38% 1fr;gap:14px;padding:14px 16px;align-items:start}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px}
+label{display:block;font-weight:600;margin:10px 0 4px;font-size:13px}
+select,input,textarea{width:100%;font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:6px 8px}
+textarea{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;resize:vertical;min-height:90px}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--bd);background:var(--card);color:var(--fg);padding:6px 12px}
+button:hover:not(:disabled){border-color:var(--pri)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.primary{background:var(--pri);color:var(--pri-fg);border-color:var(--pri);font-weight:700;font-size:16px;padding:10px 16px;width:100%}
+.row{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px}
+.row select{width:110px;flex:none}
+.row textarea{min-height:60px}
+.btns{display:flex;gap:8px;margin-top:12px}
+.btns .primary{flex:1}
+.err{color:var(--bad);font-size:12px;margin-top:3px}
+.desc{background:var(--code);border-radius:6px;padding:8px;margin-top:6px;font-size:13px}
+.timeline{list-style:none;margin:0;padding:0}
+.step{border:1px solid var(--bd);border-radius:6px;margin-bottom:6px;background:var(--card)}
+.step.failed{border-color:var(--bad)}
+.step .hd{display:flex;align-items:center;gap:10px;padding:7px 10px;cursor:pointer}
+.step .ttl{flex:1;font-weight:600}
+.step .ms{color:var(--mut);font-variant-numeric:tabular-nums;font-size:12px}
+.step.pending .ttl{color:var(--mut);font-weight:400}
+.ico{width:20px;height:20px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bd)}
+.spin{width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--pri);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ico.done{color:var(--ok)}.ico.failed{color:var(--bad)}.ico.skipped{color:var(--mut)}
+.detail{display:none;padding:6px 10px 10px;border-top:1px solid var(--bd)}
+.step.open .detail{display:block}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--bd);padding:4px 6px;word-break:break-word}
+th{color:var(--mut);font-weight:600;white-space:nowrap}
+td.k{color:var(--mut);white-space:nowrap;width:1%}
+pre,.pane{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;background:var(--code);border-radius:6px;padding:8px;margin:4px 0;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:340px}
+.pane{min-height:120px;max-height:420px}
+.chip{display:inline-block;margin:2px 4px 2px 0;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--bd);background:var(--code)}
+.chip.RAW{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
+.chip.TRANSFORMED{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.chip.INTERNAL{background:var(--code);color:var(--mut)}
+.alias{background:var(--alias);color:var(--aliasfg);border-radius:3px;padding:0 2px;cursor:help}
+.redact{background:var(--redact);color:var(--redactfg);border-radius:3px;padding:0 2px}
+.errcard{background:var(--badbg);border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:10px 12px;margin-bottom:14px}
+.errcard.safe{background:var(--okbg);border-color:var(--ok);color:var(--ok)}
+.errcard b{font-size:15px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--bd);margin-bottom:6px}
+.tab{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;padding:6px 10px}
+.tab.on{border-bottom-color:var(--pri);font-weight:700}
+.legend{font-size:12px;color:var(--mut);margin-top:6px}
+.tot{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.tot div{background:var(--code);border-radius:6px;padding:4px 10px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Privacy Gateway — Live Inspector</h1>
+  <div class="banner">Synthetic data only — do not paste real employee data</div>
+  <div id="statusbar"><span class="badge gray">loading status…</span></div>
+</header>
+<main>
+<section id="left">
+  <div class="card">
+    <h2>Scenario</h2>
+    <select id="scenario"></select>
+    <div id="scdesc" class="desc hidden"></div>
+    <label for="purpose">Purpose</label>
+    <select id="purpose"></select>
+    <label id="msglabel">Message</label>
+    <div id="msgs"></div>
+    <label for="subjects">Declared subjects (JSON, or empty for none)</label>
+    <textarea id="subjects" rows="4" spellcheck="false"></textarea>
+    <div id="suberr" class="err"></div>
+    <label for="convid">Conversation id (optional)</label>
+    <input id="convid" placeholder="auto for multi-turn">
+    <div class="btns"><button id="run" class="primary">Run</button><button id="reset">Reset</button></div>
+  </div>
+</section>
+<section id="right">
+  <div id="errbox"></div>
+  <div class="card">
+    <h2>Timeline</h2>
+    <ul id="timeline" class="timeline"></ul>
+    <div class="mut small" id="tlhint">Click Run to watch each step of the request.</div>
+  </div>
+  <div class="card">
+    <h2>Checks</h2>
+    <div id="totals" class="tot"></div>
+    <div id="checks" class="mut small">No run yet.</div>
+    <div id="mtbox" class="hidden" style="margin-top:8px"><button id="cont" class="primary" style="font-size:14px;padding:6px 12px;width:auto">Continue conversation</button></div>
+  </div>
+  <div class="card">
+    <h2>What each side saw</h2>
+    <div class="tabs" id="tabs"></div>
+    <div id="pane" class="pane"></div>
+    <div id="legend" class="legend hidden"><span class="alias">[ALIAS_ABC123]</span> alias and <span class="redact">[PAN]</span> redaction: this value never left; the gateway restores it on the way back. Hover an alias to see the original.</div>
+  </div>
+  <div class="card">
+    <h2>Alias map</h2>
+    <div class="mut small" style="margin-bottom:4px">Visible only on this local machine — the LLM never sees these original values.</div>
+    <div id="aliasmap" class="mut small">Empty.</div>
+  </div>
+</section>
+</main>
+<script>
+(function(){
+'use strict';
+var STEPS=[["request","Request received"],["auth","Authentication"],["contract","Purpose contract"],["subjects","Subjects"],["route","Routing"],["local_compute","Local compute"],["protect","Protect (detect and replace)"],["egress","Egress check"],["send","Send to LLM"],["provider","Provider response"],["restore","Restore originals"],["audit","Audit decision"],["final","Final result"]];
+var ALIAS_RE=/\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]|\[(?:BANK_ACCOUNT|UPI_ID|AADHAAR|PAN|CARD|SECRET)\]/g;
+var ALIAS_ONLY=/^\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]$/;
+var TABS=[["app_input","App input"],["outbound","Sent to LLM (exact)"],["provider_raw","LLM raw response"],["answer","Restored answer"]];
+var $=function(id){return document.getElementById(id)};
+var S={contracts:[],scenarios:[],cur:null,rows:[],running:false,summary:null,errEv:null,steps:{},stepOrder:[],tab:"app_input",plainMsg:null,origContent:null,prettied:false};
+
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined&&text!==null)e.textContent=String(text);return e}
+function clear(n){while(n.firstChild)n.removeChild(n.firstChild)}
+function str(v){if(v===null||v===undefined)return "";if(typeof v==="string")return v;try{return JSON.stringify(v,null,2)}catch(e){return String(v)}}
+function fmtMs(v){return (typeof v==="number")?(v<1000?v.toFixed(v<10?1:0)+" ms":(v/1000).toFixed(2)+" s"):""}
+function rid(){return "conv-"+Math.random().toString(36).slice(2,10)}
+
+/* ---------- status ---------- */
+function loadStatus(){
+  fetch("/api/status").then(function(r){return r.json()}).then(function(s){
+    var b=$("statusbar");clear(b);
+    var real=s.provider==="groq";
+    b.appendChild(el("span","badge "+(real?"ok":"warn"),"provider: "+s.provider+" / "+(s.model||"?")));
+    if(s.provider_note)b.appendChild(el("span","mut",s.provider_note));
+    b.appendChild(el("span","badge gray","NER: "+(s.ner||"?")));
+    b.appendChild(el("span","badge gray","integrity: "+(s.integrity||"?")));
+    if(s.private_route)b.appendChild(el("span","badge gray","private route: "+s.private_route));
+    (s.warnings||[]).forEach(function(w){b.appendChild(el("span","badge bad","⚠ "+w))});
+    S.contracts=s.contracts||[];fillPurposes();
+  }).catch(function(e){var b=$("statusbar");clear(b);b.appendChild(el("span","badge bad","status unavailable: "+e))});
+}
+function fillPurposes(){
+  var p=$("purpose"),cur=p.value;clear(p);
+  var seen={};
+  S.contracts.forEach(function(c){if(seen[c.purpose])return;seen[c.purpose]=1;
+    var o=el("option",null,c.purpose+(c.route?" ["+c.route+(c.task_type?", "+c.task_type:"")+"]":""));o.value=c.purpose;p.appendChild(o)});
+  if(S.cur&&S.cur.purpose)p.value=S.cur.purpose;else if(cur)p.value=cur;
+  if(S.cur&&S.cur.purpose&&p.value!==S.cur.purpose){var o=el("option",null,S.cur.purpose);o.value=S.cur.purpose;p.appendChild(o);p.value=S.cur.purpose}
+}
+
+/* ---------- scenarios ---------- */
+var KINDS={A:"A — external LLM with protection",B:"B — local compute",C4:"C4 — private route",MT:"MT — multi-turn"};
+function loadScenarios(){
+  fetch("/api/scenarios").then(function(r){return r.json()}).then(function(list){
+    S.scenarios=list||[];var sel=$("scenario");clear(sel);
+    var c=el("option","","— custom —");c.value="";sel.appendChild(c);
+    ["A","B","C4","MT"].forEach(function(k){
+      var items=S.scenarios.filter(function(s){return s.kind===k});if(!items.length)return;
+      var g=document.createElement("optgroup");g.label=KINDS[k];
+      items.forEach(function(s){var o=el("option",null,s.title);o.value=s.id;g.appendChild(o)});sel.appendChild(g)});
+    if(S.scenarios.length){sel.value=S.scenarios[0].id;pick(S.scenarios[0].id)}else pick("");
+  }).catch(function(e){pick("")});
+}
+function pick(id){
+  var sc=S.scenarios.filter(function(s){return s.id===id})[0]||null;S.cur=sc;
+  var d=$("scdesc");
+  if(sc){d.textContent=sc.description||"";d.classList.toggle("hidden",!sc.description)}else d.classList.add("hidden");
+  fillPurposes();
+  if(sc)$("purpose").value=sc.purpose;
+  var msgs=sc?sc.messages.map(function(m){return {role:m.role,content:m.content}}):[{role:"user",content:""}];
+  setMessages(msgs,sc&&sc.kind==="MT");
+  $("subjects").value=sc&&sc.subjects?JSON.stringify(sc.subjects,null,2):"";
+  $("convid").value=sc&&sc.kind==="MT"?rid():"";
+  validateSubjects();clearOutput();
+}
+
+/* ---------- messages editor ---------- */
+function pretty(s){try{return JSON.stringify(JSON.parse(s),null,2)}catch(e){return s}}
+function setMessages(msgs,forceRows){
+  S.rows=msgs;
+  S.plainMsg=(!forceRows&&msgs.length===1&&msgs[0].role==="user");
+  renderMsgs();
+}
+function renderMsgs(){
+  var box=$("msgs");clear(box);
+  $("msglabel").textContent=S.plainMsg?"User message":"Messages";
+  if(S.plainMsg){
+    var m=S.rows[0];var t=el("textarea");t.rows=6;
+    var p=pretty(m.content);S.origContent=m.content;S.prettied=(p!==m.content);
+    t.value=p;t.addEventListener("input",function(){S.rows[0].content=t.value;S.prettied=false});
+    S.rows[0].content=t.value;S.pretty=p;
+    t.dataset.pretty=p;t.dataset.orig=m.content;
+    box.appendChild(t);return;
+  }
+  S.rows.forEach(function(m,i){
+    var r=el("div","row");var sel=el("select");
+    ["system","user","assistant"].forEach(function(x){var o=el("option",null,x);o.value=x;sel.appendChild(o)});
+    sel.value=m.role;sel.addEventListener("change",function(){m.role=sel.value});
+    var t=el("textarea");t.value=m.content;t.addEventListener("input",function(){m.content=t.value});
+    var rm=el("button",null,"remove");rm.addEventListener("click",function(){S.rows.splice(i,1);renderMsgs()});
+    r.appendChild(sel);r.appendChild(t);r.appendChild(rm);box.appendChild(r);
+  });
+  var add=el("button",null,"add message");
+  add.addEventListener("click",function(){S.rows.push({role:S.rows.length&&S.rows[S.rows.length-1].role==="user"?"assistant":"user",content:""});renderMsgs()});
+  box.appendChild(add);
+}
+function currentMessages(){
+  return S.rows.map(function(m,i){
+    var c=m.content;
+    if(S.plainMsg){var t=$("msgs").querySelector("textarea");
+      if(t&&t.value===t.dataset.pretty)c=t.dataset.orig;else if(t)c=t.value}
+    return {role:m.role,content:c}});
+}
+function validateSubjects(){
+  var v=$("subjects").value.trim();$("suberr").textContent="";
+  if(!v)return {ok:true,val:null};
+  try{var o=JSON.parse(v);return {ok:true,val:o}}catch(e){$("suberr").textContent="Invalid JSON: "+e.message;return {ok:false}}
+}
+
+/* ---------- timeline ---------- */
+function icon(status){
+  var i=el("span","ico "+status);
+  if(status==="pending")i.appendChild(el("span","dot"));
+  else if(status==="running")i.appendChild(el("span","spin"));
+  else i.textContent=status==="done"?"✓":status==="failed"?"✗":"–";
+  return i;
+}
+function initTimeline(){
+  S.steps={};S.stepOrder=[];clear($("timeline"));
+  STEPS.forEach(function(s){ensureStep(s[0],s[1])});
+}
+function ensureStep(id,title){
+  if(S.steps[id])return S.steps[id];
+  var li=el("li","step pending");var hd=el("div","hd");var dt=el("div","detail");
+  li.appendChild(hd);li.appendChild(dt);
+  var st={id:id,title:title||id,status:"pending",ms:null,detail:null,li:li,hd:hd,dt:dt,userOpen:null};
+  hd.addEventListener("click",function(){st.userOpen=!li.classList.contains("open");li.classList.toggle("open",st.userOpen)});
+  S.steps[id]=st;S.stepOrder.push(id);$("timeline").appendChild(li);paintStep(st);return st;
+}
+function hasDetail(d){return d&&typeof d==="object"&&Object.keys(d).length>0}
+function paintStep(st){
+  st.li.className="step "+st.status+(st.li.classList.contains("open")?" open":"");
+  clear(st.hd);st.hd.appendChild(icon(st.status));
+  st.hd.appendChild(el("span","ttl",st.title));
+  st.hd.appendChild(el("span","ms",st.ms!==null?fmtMs(st.ms):(st.status==="skipped"?"skipped":"")));
+  clear(st.dt);
+  if(hasDetail(st.detail))st.dt.appendChild(renderDetail(st.detail));else st.dt.appendChild(el("div","mut small","No detail."));
+  var open=st.userOpen!==null?st.userOpen:(st.status==="running"||st.status==="failed");
+  st.li.classList.toggle("open",open);
+}
+function onStep(ev){
+  var st=ensureStep(ev.id,ev.title);
+  if(ev.title)st.title=ev.title;st.status=ev.status;
+  if(typeof ev.ms==="number")st.ms=ev.ms;
+  if(ev.detail&&typeof ev.detail==="object")st.detail=ev.detail;
+  if(ev.status==="failed")st.userOpen=null;
+  paintStep(st);
+}
+
+/* ---------- detail rendering ---------- */
+function kvTable(obj){
+  var t=el("table");
+  Object.keys(obj).forEach(function(k){
+    var v=obj[k];var tr=el("tr");tr.appendChild(el("td","k",k));var td=el("td");
+    td.appendChild(renderValue(k,v));tr.appendChild(td);t.appendChild(tr)});
+  return t;
+}
+function simpleTable(rows,cols){
+  var t=el("table");var h=el("tr");cols.forEach(function(c){h.appendChild(el("th",null,c))});t.appendChild(h);
+  rows.forEach(function(r){var tr=el("tr");cols.forEach(function(c){tr.appendChild(el("td",null,str(r&&r[c])))});t.appendChild(tr)});
+  return t;
+}
+function renderValue(k,v){
+  if((k==="outbound"||k==="raw_text"||k==="answer")&&v!==null&&v!==undefined){return el("pre",null,str(v))}
+  if(k==="entities"&&Array.isArray(v))return v.length?simpleTable(v,["type","action","replacement"]):el("span","mut","none");
+  if(k==="outputs"&&Array.isArray(v)){var w=el("div");v.forEach(function(o){w.appendChild(el("span","chip "+(o&&o.egress),(o&&o.name)+" · "+(o&&o.egress)))});return w}
+  if(k==="classes"&&v&&typeof v==="object"&&!Array.isArray(v)){var w2=el("div");Object.keys(v).forEach(function(c){w2.appendChild(el("span","chip",c+": "+str(v[c])))});return w2}
+  if(k==="checks"&&Array.isArray(v))return checksList(v);
+  if(v===null||v===undefined)return el("span","mut","—");
+  if(typeof v==="object"){
+    if(Array.isArray(v)&&v.length&&v.every(function(x){return x&&typeof x==="object"&&!Array.isArray(x)})){
+      var cols=[];v.forEach(function(x){Object.keys(x).forEach(function(c){if(cols.indexOf(c)<0)cols.push(c)})});
+      return simpleTable(v,cols)}
+    if(Array.isArray(v)&&v.every(function(x){return typeof x!=="object"||x===null}))return el("span",null,v.map(str).join(", "));
+    return el("pre",null,str(v));
+  }
+  return el("span",null,str(v));
+}
+function renderDetail(d){var w=el("div");w.appendChild(kvTable(d));return w}
+function checksList(list){
+  var t=el("table");
+  list.forEach(function(c){var tr=el("tr");
+    var m=c.ok===true?"✓":c.ok===false?"✗":"–";
+    var i=el("td","k",m);i.style.color=c.ok===true?"var(--ok)":c.ok===false?"var(--bad)":"var(--mut)";i.style.fontWeight="700";
+    tr.appendChild(i);tr.appendChild(el("td",null,c.name));tr.appendChild(el("td","mut",c.note||""));t.appendChild(tr)});
+  return t;
+}
+
+/* ---------- output panes ---------- */
+function aliasLookup(){var m={};((S.summary&&S.summary.alias_map)||[]).forEach(function(a){m[a.alias]=a});return m}
+function highlight(text){
+  var f=document.createDocumentFragment();var map=aliasLookup();var last=0,m;
+  ALIAS_RE.lastIndex=0;
+  while((m=ALIAS_RE.exec(text))!==null){
+    if(m.index>last)f.appendChild(document.createTextNode(text.slice(last,m.index)));
+    var tok=m[0];var isAlias=ALIAS_ONLY.test(tok);
+    var s=el("span",isAlias?"alias":"redact",tok);
+    if(isAlias){var a=map[tok];s.title=a?("type: "+a.type+"\noriginal: "+a.value+"\n(never left this machine)"):"alias token (original not in alias map)"}
+    else s.title="redacted: the original value is not sent and not restorable";
+    f.appendChild(s);last=m.index+tok.length;
+  }
+  if(last<text.length)f.appendChild(document.createTextNode(text.slice(last)));
+  return f;
+}
+function renderTabs(){
+  var tb=$("tabs");clear(tb);
+  TABS.forEach(function(t){var b=el("button","tab"+(S.tab===t[0]?" on":""),t[1]);
+    b.addEventListener("click",function(){S.tab=t[0];renderTabs();renderPane()});tb.appendChild(b)});
+}
+function renderPane(){
+  var p=$("pane");clear(p);var panes=(S.summary&&S.summary.panes)||{};var txt=panes[S.tab];
+  var hl=(S.tab==="outbound"||S.tab==="provider_raw");
+  $("legend").classList.toggle("hidden",!hl);
+  if(txt===undefined||txt===null||txt===""){
+    p.appendChild(el("span","mut",S.tab==="outbound"&&S.summary?"(empty — nothing was sent to the LLM)":"(nothing yet)"));return}
+  if(hl)p.appendChild(highlight(String(txt)));else p.appendChild(document.createTextNode(String(txt)));
+}
+function renderSummary(){
+  var s=S.summary;if(!s)return;
+  var t=$("totals");clear(t);
+  [["HTTP",s.http_status],["Total",fmtMs(s.total_ms)],["Gateway",fmtMs(s.gateway_ms)],["Provider",fmtMs(s.provider_ms)]].forEach(function(x){
+    var d=el("div");d.appendChild(el("span","mut",x[0]+": "));d.appendChild(el("b",null,x[1]));t.appendChild(d)});
+  var c=$("checks");clear(c);
+  if(s.checks&&s.checks.length){c.classList.remove("mut");c.appendChild(checksList(s.checks))}else c.textContent="No checks reported.";
+  var am=$("aliasmap");clear(am);
+  if(s.alias_map&&s.alias_map.length){am.classList.remove("mut");am.appendChild(simpleTable(s.alias_map,["alias","type","value","action"]))}else{am.classList.add("mut");am.textContent="No aliases in this run."}
+  renderPane();renderErr();
+  var mt=S.cur&&S.cur.kind==="MT"&&s.http_status>=200&&s.http_status<300&&!S.errEv&&s.panes&&s.panes.answer;
+  $("mtbox").classList.toggle("hidden",!mt);
+}
+function renderErr(){
+  var b=$("errbox");clear(b);var e=S.errEv;if(!e)return;
+  var outEmpty=!(S.summary&&S.summary.panes&&S.summary.panes.outbound);
+  var refused=e.status>=400&&outEmpty;
+  var c=el("div","errcard"+(refused?" safe":""));
+  if(refused){c.appendChild(el("b",null,"Request refused — nothing was sent to the LLM"));c.appendChild(el("div","small","The gateway failed closed. This is the safety mechanism working as intended."))}
+  else c.appendChild(el("b",null,"Error"));
+  c.appendChild(el("div",null,"HTTP "+e.status+" · "+e.error_type));
+  c.appendChild(el("div",null,e.message));
+  b.appendChild(c);
+}
+function clearOutput(){
+  S.summary=null;S.errEv=null;clear($("errbox"));initTimeline();
+  clear($("totals"));$("checks").textContent="No run yet.";$("checks").classList.add("mut");
+  $("aliasmap").textContent="Empty.";$("aliasmap").classList.add("mut");
+  $("mtbox").classList.add("hidden");$("tlhint").classList.remove("hidden");
+  renderTabs();renderPane();
+}
+
+/* ---------- run ---------- */
+function onEvent(ev){
+  if(ev.type==="step")onStep(ev);
+  else if(ev.type==="error"){
+    S.errEv=ev;
+    var ids=S.stepOrder.filter(function(i){return S.steps[i].status==="running"});
+    if(!ids.length){var p=S.stepOrder.filter(function(i){return S.steps[i].status==="pending"});if(p.length)ids=[p[0]]}
+    ids.forEach(function(i){var st=S.steps[i];st.status="failed";st.userOpen=null;
+      st.detail=st.detail||{};st.detail.error=ev.error_type+": "+ev.message;paintStep(st)});
+    renderErr();
+  }else if(ev.type==="summary"){S.summary=ev;renderSummary()}
+}
+function setRunning(r){S.running=r;$("run").disabled=r;$("run").textContent=r?"Running…":"Run"}
+async function run(){
+  var sub=validateSubjects();if(!sub.ok)return;
+  var payload={purpose:$("purpose").value,messages:currentMessages(),subjects:sub.val,conversation_id:$("convid").value.trim()||null};
+  clearOutput();$("tlhint").classList.add("hidden");setRunning(true);
+  try{
+    var resp=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    var ct=resp.headers.get("content-type")||"";
+    if(!resp.body||ct.indexOf("text/event-stream")<0){
+      var txt=await resp.text();var j=null;try{j=JSON.parse(txt)}catch(e){}
+      var er=(j&&j.error)||j||{};
+      onEvent({type:"error",status:resp.status,error_type:er.type||er.error_type||"http_error",message:er.message||(j&&j.detail)||txt.slice(0,500)||resp.statusText});
+      return;
+    }
+    var rd=resp.body.getReader(),dec=new TextDecoder(),buf="";
+    for(;;){
+      var r=await rd.read();if(r.done)break;
+      buf+=dec.decode(r.value,{stream:true});
+      var idx;
+      while((idx=buf.search(/\r?\n\r?\n/))>=0){
+        var chunk=buf.slice(0,idx);buf=buf.slice(idx).replace(/^\r?\n\r?\n/,"");
+        handleChunk(chunk);
+      }
+    }
+    if(buf.trim())handleChunk(buf);
+  }catch(e){onEvent({type:"error",status:0,error_type:"network_error",message:String(e&&e.message||e)})}
+  finally{setRunning(false)}
+}
+function handleChunk(chunk){
+  chunk.split(/\r?\n/).forEach(function(line){
+    if(line.indexOf("data:")!==0)return;
+    var j=line.slice(5).trim();if(!j)return;
+    try{onEvent(JSON.parse(j))}catch(e){console.warn("bad event",j,e)}
+  });
+}
+
+/* ---------- wiring ---------- */
+$("run").addEventListener("click",run);
+$("reset").addEventListener("click",function(){pick($("scenario").value)});
+$("scenario").addEventListener("change",function(){pick($("scenario").value)});
+$("subjects").addEventListener("input",validateSubjects);
+$("cont").addEventListener("click",function(){
+  var a=S.summary&&S.summary.panes&&S.summary.panes.answer;if(!a)return;
+  var msgs=currentMessages();msgs.push({role:"assistant",content:a});msgs.push({role:"user",content:""});
+  if(!$("convid").value.trim())$("convid").value=rid();
+  var keep=$("convid").value;setMessages(msgs,true);$("convid").value=keep;
+  clearOutput();
+});
+loadStatus();loadScenarios();initTimeline();renderTabs();renderPane();
+})();
+</script>
+</body>
+</html>
