@@ -28,7 +28,7 @@ import httpx
 import yaml
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +53,78 @@ TITLES = {"request": "App request received", "auth": "App authenticated, purpose
           "restore": "Restoration & output gate", "audit": "Audit ledger row written", "final": "Answer returned to app"}
 NEXT = {"auth": "contract", "contract": "subjects", "subjects": "route", "local_compute": "protect",
         "protect": "egress", "egress": "send", "send": "provider", "provider": "restore", "restore": "audit"}
+MAX_RUN_BODY = 64 * 1024     # bytes accepted by /api/run (the gateway applies its own limits after this)
+MAX_RUN_MESSAGES = 20
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' "
+                               "'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
+                               "base-uri 'none'; form-action 'none'",
+    "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store"}
+PRIVATE_TITLES = {"send": "Sent to in-boundary extractive stand-in (not an LLM; never leaves the boundary)",
+                  "provider": "In-boundary stand-in responded (extractive, not an LLM)",
+                  "restore": "Output gate on the stand-in's answer (C3 and long digit runs withheld)"}
+_LONG_DIGITS = re.compile(r"(?<!\d)\d(?:[\s\-./]?\d){8,}(?!\d)")
+
+
+def git_commit() -> str:
+    try:
+        import subprocess
+        sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True,  # noqa: S603,S607 fixed args
+                             text=True, timeout=5).stdout.strip()
+        dirty = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=no"],  # noqa: S603,S607
+                               capture_output=True, text=True, timeout=5).stdout.strip()
+        return (sha or "unknown") + ("+uncommitted changes" if dirty else "")
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+class LocalOnly:
+    """ASGI guard for a localhost tool that can spend the configured provider key.
+
+    * Host must be the exact local address and port (blocks DNS-rebinding pages that resolve to 127.0.0.1).
+    * POST /api/run must come from this page: exact same-origin Origin header, `X-PGW-UI: 1` and
+      `Content-Type: application/json`. The custom header and JSON type force a CORS preflight for any other
+      origin, and the server never answers preflights with CORS headers, so cross-origin pages cannot call it;
+      plain HTML forms cannot set the header or the JSON type.
+    * Every response carries a strict CSP, no framing, no-sniff and no-referrer.
+    """
+
+    def __init__(self, app, port: int):
+        self.app = app
+        self.hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        self.origins = {f"http://{h}" for h in self.hosts}
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        h = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        deny = None
+        if h.get("host") not in self.hosts:
+            deny = (421, "unexpected Host header: this tool only answers on its local address")
+        elif scope["method"] == "OPTIONS":
+            deny = (403, "cross-origin requests are not supported")
+        elif scope["method"] == "POST":
+            if h.get("origin") not in self.origins:
+                deny = (403, "cross-origin or Origin-less POST refused")
+            elif h.get("x-pgw-ui") != "1":
+                deny = (403, "missing X-PGW-UI header")
+            elif not h.get("content-type", "").startswith("application/json"):
+                deny = (415, "application/json required")
+        if deny:
+            resp = JSONResponse({"error": deny[1]}, status_code=deny[0], headers=SECURITY_HEADERS)
+            return await resp(scope, receive, send)
+
+        async def send_with_headers(msg):
+            if msg["type"] == "http.response.start":
+                hdrs = [(k, v) for k, v in msg.get("headers", []) if k.decode().lower() not in
+                        {x.lower() for x in SECURITY_HEADERS}]
+                hdrs += [(k.lower().encode(), v.encode()) for k, v in SECURITY_HEADERS.items()]
+                msg = {**msg, "headers": hdrs}
+            await send(msg)
+        return await self.app(scope, receive, send_with_headers)
+
+
 CONTRACTS = ["ticket_summary", "hr_case_explanation", "hr_email_draft", "salary_comparison", "esi_letter",
              "band_position", "ticket_summary_any_script"]
 
@@ -125,12 +197,14 @@ def scenarios() -> list[dict]:
 
 # --- web app ---------------------------------------------------------------------------------------------------
 
-def make_ui(groq_key: str | None) -> Starlette:
+def make_ui(groq_key: str | None, port: int = 8765):
     runs = Runs()
     tmp = Path(tempfile.mkdtemp(prefix="pgw-ui-"))
     gw, model, provider, ner, settings = build(groq_key, tmp, runs)
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=gw), base_url="http://gateway", timeout=180)
     scen = scenarios()
+    commit = git_commit()
+    one_run = asyncio.Semaphore(1)   # at most one provider-spending run at a time
 
     async def index(_):
         return FileResponse(ROOT / "demo/ui/index.html")
@@ -147,7 +221,7 @@ def make_ui(groq_key: str | None) -> Starlette:
         if provider == "groq":
             warnings.append("Provider data terms (retention/region) are not attested for this demo key.")
         return JSONResponse({
-            "provider": provider, "model": model,
+            "provider": provider, "model": model, "commit": commit,
             "provider_note": "real LLM (Groq)" if provider == "groq" else
             "no GROQ_API_KEY: deterministic mock LLM (answers are templated, not real)",
             "ner": f"{ner} (in-process)" if ner else "off (en_core_web_lg not installed)",
@@ -162,14 +236,38 @@ def make_ui(groq_key: str | None) -> Starlette:
         return JSONResponse(scen)
 
     async def run(request: Request):
+        cl = request.headers.get("content-length")
+        if cl is not None and (not cl.isdigit() or int(cl) > MAX_RUN_BODY):
+            return JSONResponse({"error": "request too large"}, status_code=413)
+        raw, n = [], 0
+        async for chunk in request.stream():
+            n += len(chunk)
+            if n > MAX_RUN_BODY:
+                return JSONResponse({"error": "request too large"}, status_code=413)
+            raw.append(chunk)
         try:
-            req = await request.json()
+            req = json.loads(b"".join(raw))
             purpose, messages = str(req["purpose"]), req["messages"]
             subj, conv = req.get("subjects"), req.get("conversation_id") or None
+            if (not isinstance(messages, list) or not 1 <= len(messages) <= MAX_RUN_MESSAGES
+                    or not all(isinstance(m, dict) for m in messages)
+                    or (subj is not None and not isinstance(subj, dict))
+                    or (conv is not None and (not isinstance(conv, str) or len(conv) > 128))):
+                raise ValueError
         except Exception:  # noqa: BLE001
             return JSONResponse({"error": "bad request"}, status_code=400)
+        if one_run.locked():
+            return JSONResponse({"error": "another run is in progress"}, status_code=429)
+        await one_run.acquire()
 
         async def gen():
+            try:
+                async for chunk in _gen():
+                    yield chunk
+            finally:
+                one_run.release()
+
+        async def _gen():
             rid = uuid.uuid4().hex
             q: asyncio.Queue = asyncio.Queue()
             runs.queues[rid] = q
@@ -182,8 +280,10 @@ def make_ui(groq_key: str | None) -> Starlette:
 
             def step(sid, status_, detail=None):
                 seen[sid] = {"status": status_}
-                return ev({"type": "step", "id": sid, "title": TITLES.get(sid, sid), "status": status_,
-                           "ms": round((time.perf_counter() - t0) * 1000, 1), "detail": detail or {}})
+                title = (PRIVATE_TITLES.get(sid) if state.get("route") == "PRIVATE_LOCAL" else None) or TITLES.get(sid, sid)
+                return ev({"type": "step", "id": sid, "title": title, "status": status_,
+                           "ms": None if status_ == "skipped" else round((time.perf_counter() - t0) * 1000, 1),
+                           "detail": detail or ({"note": "N/A on this route"} if status_ == "skipped" else {})})
 
             n_chars = sum(len(m.get("content") or "") for m in messages if isinstance(m, dict))
             yield step("request", "done", {"purpose": purpose, "messages": len(messages), "characters": n_chars,
@@ -216,6 +316,8 @@ def make_ui(groq_key: str | None) -> Starlette:
                                                      for e in state["entities"]]}
                     if stage == "send":
                         state["outbound"] = data.get("outbound") or ""
+                        state["outbound_sha256"] = data.get("sha256")
+                        state["outbound_bytes"] = data.get("bytes")
                         try:
                             data = {**data, "outbound": json.dumps(json.loads(state["outbound"]), indent=1,
                                                                    ensure_ascii=False)}
@@ -276,30 +378,66 @@ def make_ui(groq_key: str | None) -> Starlette:
             c3 = {e["value"] for e in state["entities"] if e.get("action") == "REDACT"}
             sent = bool(state["outbound"])
             private = state.get("route") == "PRIVATE_LOCAL"   # in-boundary: unprotected by design
+            def chk(cid, name, ok, note, na_reason=None):
+                status_ = "n/a" if ok is None else ("pass" if ok else "fail")
+                return {"id": cid, "name": name, "ok": ok, "status": status_,
+                        "note": na_reason if (ok is None and na_reason) else note}
+
+            na_private = "N/A on the private route: in-boundary only, unprotected by design, nothing sent externally"
+            # Private route: sensitive values the input contains that must be withheld from the answer (C3 found
+            # by the deterministic recognisers, and long digit runs, which the private output gate masks).
+            from pgw.detect.recognizers import detect_d2
+            from pgw.product.contracts import CLASS_OF, DataClass
+            in_text = "\n".join(m.get("content") or "" for m in messages if isinstance(m, dict)
+                                and isinstance(m.get("content"), str))
+            must_withhold = {in_text[d.start:d.end] for d in detect_d2(in_text) if CLASS_OF.get(d.type) is DataClass.C3}
+            must_withhold |= {m.group(0) for m in _LONG_DIGITS.finditer(in_text)}
             checks = [
-                {"name": "Private route: content stayed inside the boundary (no external call)",
-                 "ok": True if private and sent else None, "note": "C4 content goes to the in-boundary model only"},
-                {"name": "Protected values absent from what left the gateway",
-                 "ok": (not any(v.lower() in outbound for v in sensitive)) if sent and not private else None,
-                 "note": f"{len(sensitive)} values checked" if sent else "nothing was sent"},
-                {"name": "Declared subjects absent from outbound",
-                 "ok": (not any(v.lower() in outbound for v in declared)) if sent and declared and not private
-                 else None, "note": f"{len(declared)} declared values" if declared else "none declared"},
-                {"name": "Egress invariant passed before sending", "ok": None if private else True if seen.get("egress", {}).get("status") == "done" else
-                 (None if not sent else False), "note": "checked on the exact bytes"},
-                {"name": "Every alias restored in the answer", "ok": (not ALIAS.search(answer)) if answer else None,
-                 "note": f"{len(ALIAS.findall(state['raw']))} alias uses by the LLM"},
-                {"name": "Redacted (C3) values never returned", "ok": (not any(v in answer for v in c3))
-                 if answer else None, "note": f"{len(c3)} redacted values"},
-                {"name": "Fail-closed: refused requests sent nothing", "ok": (not sent) if state["error"] else None,
-                 "note": (state["error"] or {}).get("error_type", "request was not refused")},
+                chk("private_boundary", "Private route: no call to the external provider",
+                    (sent and not state["error"]) if private else None, "content went only to the in-boundary endpoint",
+                    "N/A: not the private route"),
+                chk("private_withheld",
+                    "Private route: answer withholds sensitive values found in the input (C3, long digit runs)",
+                    (not any(v in answer for v in must_withhold)) if private and answer else None,
+                    f"{len(must_withhold)} values that must be withheld", "N/A: not the private route"),
+                chk("known_values_absent",
+                    "Values detected or declared in THIS request are absent from the provider request "
+                    "(cannot show that undetected personal data did not leak)",
+                    None if (private or not sent) else not any(v.lower() in outbound for v in sensitive),
+                    f"{len(sensitive)} detected/declared values checked",
+                    na_private if private else "N/A: nothing was sent"),
+                chk("declared_absent", "Declared subjects absent from the provider request",
+                    None if (private or not sent or not declared) else not any(v.lower() in outbound for v in declared),
+                    f"{len(declared)} declared values",
+                    na_private if private else ("N/A: nothing was sent" if not sent else "N/A: none declared")),
+                chk("egress", "Egress invariant ran on the serialized request before sending",
+                    None if (private or not sent) else seen.get("egress", {}).get("status") == "done",
+                    "checked on the serialized request body", na_private if private else "N/A: nothing was sent"),
+                chk("aliases_restored", "Every alias the LLM used was restored",
+                    None if (private or not answer) else not ALIAS.search(answer),
+                    f"{len(ALIAS.findall(state['raw']))} alias uses by the LLM",
+                    na_private if private else "N/A: no answer"),
+                chk("c3_not_returned", "Redacted (C3) values never returned",
+                    None if (private or not answer) else not any(v in answer for v in c3),
+                    f"{len(c3)} redacted values", "N/A: see the private-route check" if private else "N/A: no answer"),
+                chk("fail_closed", "Fail-closed: a refused request sent nothing",
+                    (not sent) if state["error"] else None, (state["error"] or {}).get("error_type", ""),
+                    "N/A: request was not refused"),
             ]
             app_input = json.dumps({"messages": messages, "pgw_subjects": subj}, indent=1, ensure_ascii=False)
             try:
                 outbound_pretty = json.dumps(json.loads(state["outbound"]), indent=1, ensure_ascii=False)
             except ValueError:
                 outbound_pretty = state["outbound"]
+            route_desc = ("the in-boundary extractive stand-in (not an LLM)" if private else f"the provider ({provider})")
             yield ev({"type": "summary", "http_status": resp.status_code, "total_ms": round(total, 1),
+                      "route": state.get("route"),
+                      "outbound_sha256": state.get("outbound_sha256"), "outbound_bytes": state.get("outbound_bytes"),
+                      "outbound_caption": (f"Request body sent to {route_desc}, shown as PRETTY-PRINTED JSON for "
+                                           "reading. It is not a byte-for-byte rendering of the HTTP exchange "
+                                           "(headers, framing and whitespace differ). The serialized body that was "
+                                           f"sent: {state.get('outbound_bytes')} bytes, SHA-256 "
+                                           f"{state.get('outbound_sha256')}.") if sent else "",
                       "provider_ms": state["provider_ms"], "gateway_ms": round(total - state["provider_ms"], 1),
                       "checks": checks,
                       "panes": {"app_input": app_input, "outbound": outbound_pretty, "provider_raw": state["raw"],
@@ -310,12 +448,12 @@ def make_ui(groq_key: str | None) -> Starlette:
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
 
     async def favicon(_):
-        from starlette.responses import Response
         return Response(status_code=204)
 
-    return Starlette(routes=[Route("/", index), Route("/favicon.ico", favicon),
-                             Route("/api/status", status), Route("/api/scenarios", scen_list),
-                             Route("/api/run", run, methods=["POST"])])
+    app = Starlette(routes=[Route("/", index), Route("/favicon.ico", favicon),
+                            Route("/api/status", status), Route("/api/scenarios", scen_list),
+                            Route("/api/run", run, methods=["POST"])])
+    return LocalOnly(app, port)
 
 
 def main() -> None:
@@ -326,7 +464,7 @@ def main() -> None:
     a = ap.parse_args()
     key = os.environ.get("GROQ_API_KEY") or (Path(a.groq_key_file).read_text().strip() if a.groq_key_file else None)
     print(f"Privacy Gateway Live Inspector on http://127.0.0.1:{a.port}  (LLM: {'Groq' if key else 'mock'})")
-    uvicorn.run(make_ui(key), host="127.0.0.1", port=a.port, log_level="warning")
+    uvicorn.run(make_ui(key, a.port), host="127.0.0.1", port=a.port, log_level="warning")
 
 
 if __name__ == "__main__":

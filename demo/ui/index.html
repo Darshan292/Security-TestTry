@@ -132,7 +132,7 @@ pre,.pane{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-
 var STEPS=[["request","Request received"],["auth","Authentication"],["contract","Purpose contract"],["subjects","Subjects"],["route","Routing"],["local_compute","Local compute"],["protect","Protect (detect and replace)"],["egress","Egress check"],["send","Send to LLM"],["provider","Provider response"],["restore","Restore originals"],["audit","Audit decision"],["final","Final result"]];
 var ALIAS_RE=/\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]|\[(?:BANK_ACCOUNT|UPI_ID|AADHAAR|PAN|CARD|SECRET)\]/g;
 var ALIAS_ONLY=/^\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]$/;
-var TABS=[["app_input","App input"],["outbound","Sent to LLM (exact)"],["provider_raw","LLM raw response"],["answer","Restored answer"]];
+var TABS=[["app_input","App input"],["outbound","Provider request (pretty-printed)"],["provider_raw","Provider raw response"],["answer","Restored answer"]];
 var $=function(id){return document.getElementById(id)};
 var S={contracts:[],scenarios:[],cur:null,rows:[],running:false,summary:null,errEv:null,steps:{},stepOrder:[],tab:"app_input",plainMsg:null,origContent:null,prettied:false};
 
@@ -151,6 +151,7 @@ function loadStatus(){
     if(s.provider_note)b.appendChild(el("span","mut",s.provider_note));
     b.appendChild(el("span","badge gray","NER: "+(s.ner||"?")));
     b.appendChild(el("span","badge gray","integrity: "+(s.integrity||"?")));
+    b.appendChild(el("span","badge gray","code: "+(s.commit||"?")));
     if(s.private_route)b.appendChild(el("span","badge gray","private route: "+s.private_route));
     (s.warnings||[]).forEach(function(w){b.appendChild(el("span","badge bad","⚠ "+w))});
     S.contracts=s.contracts||[];fillPurposes();
@@ -259,7 +260,7 @@ function paintStep(st){
   st.li.className="step "+st.status+(st.li.classList.contains("open")?" open":"");
   clear(st.hd);st.hd.appendChild(icon(st.status));
   st.hd.appendChild(el("span","ttl",st.title));
-  st.hd.appendChild(el("span","ms",st.ms!==null?fmtMs(st.ms):(st.status==="skipped"?"skipped":"")));
+  st.hd.appendChild(el("span","ms",st.status==="skipped"?"N/A":(st.ms!==null&&st.ms!==undefined?fmtMs(st.ms):"")));
   clear(st.dt);
   if(hasDetail(st.detail))st.dt.appendChild(renderDetail(st.detail));else st.dt.appendChild(el("div","mut small","No detail."));
   var open=st.userOpen!==null?st.userOpen:(st.status==="running"||st.status==="failed");
@@ -307,8 +308,10 @@ function renderDetail(d){var w=el("div");w.appendChild(kvTable(d));return w}
 function checksList(list){
   var t=el("table");
   list.forEach(function(c){var tr=el("tr");
-    var m=c.ok===true?"✓":c.ok===false?"✗":"–";
-    var i=el("td","k",m);i.style.color=c.ok===true?"var(--ok)":c.ok===false?"var(--bad)":"var(--mut)";i.style.fontWeight="700";
+    var st=c.status||(c.ok===true?"pass":c.ok===false?"fail":"n/a");
+    var m=st==="pass"?"✓":st==="fail"?"✗":"N/A";
+    var i=el("td","k",m);i.style.color=st==="pass"?"var(--ok)":st==="fail"?"var(--bad)":"var(--mut)";i.style.fontWeight="700";
+    i.setAttribute("data-status",st);
     tr.appendChild(i);tr.appendChild(el("td",null,c.name));tr.appendChild(el("td","mut",c.note||""));t.appendChild(tr)});
   return t;
 }
@@ -340,6 +343,9 @@ function renderPane(){
   $("legend").classList.toggle("hidden",!hl);
   if(txt===undefined||txt===null||txt===""){
     p.appendChild(el("span","mut",S.tab==="outbound"&&S.summary?"(empty — nothing was sent to the LLM)":"(nothing yet)"));return}
+  if(S.tab==="outbound"&&S.summary&&S.summary.outbound_caption){
+    var cap=el("div","mut small",S.summary.outbound_caption);cap.id="outcap";cap.style.marginBottom="8px";
+    cap.style.fontFamily="system-ui,sans-serif";cap.style.whiteSpace="normal";p.appendChild(cap)}
   if(hl)p.appendChild(highlight(String(txt)));else p.appendChild(document.createTextNode(String(txt)));
 }
 function renderSummary(){
@@ -392,7 +398,7 @@ async function run(){
   var payload={purpose:$("purpose").value,messages:currentMessages(),subjects:sub.val,conversation_id:$("convid").value.trim()||null};
   clearOutput();$("tlhint").classList.add("hidden");setRunning(true);
   try{
-    var resp=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    var resp=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json","X-PGW-UI":"1"},body:JSON.stringify(payload)});
     var ct=resp.headers.get("content-type")||"";
     if(!resp.body||ct.indexOf("text/event-stream")<0){
       var txt=await resp.text();var j=null;try{j=JSON.parse(txt)}catch(e){}

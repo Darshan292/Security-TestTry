@@ -573,8 +573,10 @@ def create_app(settings: Settings) -> Starlette:
         p_body = {k: v for k, v in body.items() if not k.startswith("pgw_") and k not in ("tools", "tool_choice")}
         p_body["model"] = settings.private_model
         _tr("route", route="PRIVATE_LOCAL", reason="content the gateway cannot read reliably (C4): in-boundary model only")
-        _tr("send", provider="private (in-boundary)", model=settings.private_model,
-            outbound=json.dumps(p_body, ensure_ascii=False), note="unprotected, but never leaves the boundary")
+        p_wire = private.wire_bytes(p_body)
+        _tr("send", provider="private (in-boundary)", model=settings.private_model, bytes=len(p_wire),
+            sha256=hashlib.sha256(p_wire).hexdigest(), outbound=p_wire.decode("utf-8", "replace"),
+            note="unprotected, but never leaves the boundary")
         ms = (time.perf_counter() - t0) * 1000
         ledger_line(rid, app, purpose, model, hashlib.sha256(private.wire_bytes(p_body)).hexdigest(), {},
                     "SENT_PRIVATE", ms, "content_class_C4", dataclasses.replace(contract, route="PRIVATE_LOCAL"))
