@@ -282,6 +282,8 @@ def main() -> int:
     ap.add_argument("--provider", choices=["anthropic", "groq", "mock"], default="groq")
     ap.add_argument("--out", default=f"/home/user/pilot_captures/{time.strftime('%Y%m%d-%H%M%S')}")
     args = ap.parse_args()
+    from demo.envfile import load_env
+    load_env()
     out = Path(args.out).resolve()
     if out == ROOT or ROOT in out.parents:
         raise SystemExit("captures contain synthetic raw values: write them outside the repository")

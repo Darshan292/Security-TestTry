@@ -12,7 +12,9 @@ pip install uvicorn==0.54.0
 pip install --require-hashes -r requirements/ner.txt
 pip install -r requirements/ner-model.txt
 
-export GROQ_API_KEY=...            # real LLM; without it a clearly-labelled mock LLM is used
+cp .env.example .env && chmod 600 .env   # then put your key in .env: GROQ_API_KEY=gsk_...
+                                   # (.env is git-ignored; an exported var or Codespaces secret wins)
+                                   # without a key a clearly-labelled mock LLM is used
 python -m demo.ui_server           # open http://127.0.0.1:8765
 ```
 

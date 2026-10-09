@@ -513,6 +513,12 @@ def main() -> None:
     ap.add_argument("--allow-origin", action="append", default=[],
                     help="exact extra origin allowed to use the UI, e.g. a port-forwarding URL (repeatable)")
     a = ap.parse_args()
+    from demo.envfile import load_env, permission_warning
+    loaded = load_env()
+    if loaded:
+        print(f"Loaded from .env: {', '.join(loaded)}")
+    if (w := permission_warning()):
+        print(f"WARNING: {w}")
     key = (os.environ.get("GROQ_API_KEY") or (Path(a.groq_key_file).read_text() if a.groq_key_file else "")).strip()
     key = key.strip("'\"") or None              # tolerate KEY="..." pasted with quotes
     origins = list(a.allow_origin)
