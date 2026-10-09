@@ -135,3 +135,36 @@ def test_security_headers_on_every_response(client):
     assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
     assert r.headers["x-frame-options"] == "DENY" and r.headers["referrer-policy"] == "no-referrer"
     assert client.get("/api/status").headers["x-content-type-options"] == "nosniff"
+
+
+# --- provider failure diagnostics and forwarded (Codespaces) origins -------------------------------------------
+
+def test_provider_failure_shows_cause_and_hint_without_blaming_other_steps(client, monkeypatch):
+    from pgw.gateway.upstream import MockLLMUpstream, UpstreamError
+
+    async def boom(self, body):
+        raise UpstreamError("upstream status 401")
+    monkeypatch.setattr(MockLLMUpstream, "complete", boom)
+    ev, steps, checks = run(client, "A1")
+    assert steps["provider"]["status"] == "failed"
+    assert steps["provider"]["detail"]["cause"] == "upstream status 401"
+    assert "API key" in steps["provider"]["detail"]["hint"]
+    assert steps["auth"]["status"] == "done" and steps["send"]["status"] == "done"
+    err = next(e for e in ev if e["type"] == "error")
+    assert err["status"] == 502 and "upstream status 401" in err["message"] and "API key" in err["message"]
+    assert ev[-1]["panes"]["answer"] == ""
+
+
+def test_codespaces_forwarded_origin_is_allowed_exactly():
+    from demo.ui_server import codespaces_origin
+    o = codespaces_origin(8765, {"CODESPACE_NAME": "my-space-abc123",
+                                 "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN": "app.github.dev"})
+    assert o == "https://my-space-abc123-8765.app.github.dev"
+    assert codespaces_origin(8765, {}) is None
+    assert codespaces_origin(8765, {"CODESPACE_NAME": "x/../evil", "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN": "a"}) is None
+    with TestClient(make_ui(None, 8765, (o,)), base_url=o) as c:
+        assert c.get("/api/status").status_code == 200
+        ok = c.post("/api/run", json=BODY, headers={"Origin": o, "X-PGW-UI": "1"})
+        assert ok.status_code == 200
+        bad = c.post("/api/run", json=BODY, headers={"Origin": "https://other-8765.app.github.dev", "X-PGW-UI": "1"})
+        assert bad.status_code == 403

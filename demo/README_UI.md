@@ -68,3 +68,23 @@ The UI can spend the configured provider key, so it accepts only local, same-pag
 - **Response headers:** a strict CSP (`frame-ancestors 'none'`, `connect-src 'self'`), `X-Frame-Options: DENY`, `nosniff` and `no-referrer`.
 
 None of this makes the inspector safe to expose on a network. It shows original values next to aliases by design.
+
+## GitHub Codespaces
+
+- Run the same commands in the Codespace terminal and open the forwarded port 8765.
+- The server detects the Codespace (`CODESPACE_NAME`, `GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`) and allows **exactly** that forwarded origin (`https://<codespace>-8765.app.github.dev`). Nothing broader is allowed.
+- Keep the port's visibility **Private**: forwarded Public ports are reachable by anyone with the URL.
+- For any other port-forwarding URL, pass it explicitly: `--allow-origin https://exact.host`.
+
+## Troubleshooting a 502 "upstream provider error"
+
+The gateway fails closed, so the app gets no content. The timeline's **LLM responded** step, and the status bar, show the cause and a hint:
+
+| Cause | Meaning |
+|---|---|
+| `upstream status 401/403` | The key was rejected. In the terminal that starts the server, run `echo ${#GROQ_API_KEY}` to check the key is set; a Groq key is about 56 characters. Make sure it is current (not rotated), with no quotes or spaces. |
+| `upstream status 429` | Rate limit |
+| `upstream status 400/404` | The model or parameters were not accepted for this key |
+| `transport error` | The provider cannot be reached from this machine |
+
+At startup the server checks the key once and prints `Groq key check: verified` or the reason it failed.

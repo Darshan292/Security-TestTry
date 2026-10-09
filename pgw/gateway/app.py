@@ -618,6 +618,8 @@ def create_app(settings: Settings) -> Starlette:
                 raw_text=((data.get("choices") or [{}])[0].get("message") or {}).get("content"))
         except Exception as e:   # provider failure: nothing is returned to the app
             _log(logging.ERROR, event="upstream_failed", request_id=rid, error_type=type(e).__name__)
+            # demo trace only: UpstreamError messages are content-free by design ("upstream status 401", ...)
+            _tr("provider_error", cause=str(e)[:120] if isinstance(e, UpstreamError) else type(e).__name__)
             raise _Reject(502, "upstream_error", "upstream provider error") from None
         try:
             restored: list = []

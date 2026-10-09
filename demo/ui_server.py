@@ -49,10 +49,27 @@ TITLES = {"request": "App request received", "auth": "App authenticated, purpose
           "contract": "Data contract selected", "subjects": "Declared subjects validated",
           "route": "Route decided", "local_compute": "Local computation (exact values stay inside)",
           "protect": "Detection & protection (aliases, redaction)", "egress": "Egress invariant checked",
-          "send": "Sent to LLM (exact bytes)", "provider": "LLM responded",
+          "send": "Sent to LLM (serialized request body; size and SHA-256 below)", "provider": "LLM responded",
           "restore": "Restoration & output gate", "audit": "Audit ledger row written", "final": "Answer returned to app"}
 NEXT = {"auth": "contract", "contract": "subjects", "subjects": "route", "local_compute": "protect",
         "protect": "egress", "egress": "send", "send": "provider", "provider": "restore", "restore": "audit"}
+def provider_hint(cause: str) -> str:
+    """Plain-English reason for a provider failure (the cause itself is content-free)."""
+    c = cause.lower()
+    if "status 401" in c or "status 403" in c:
+        return ("The provider rejected the API key. Check GROQ_API_KEY in the terminal that started the server: "
+                "set, current (not rotated), no quotes or spaces.")
+    if "status 429" in c:
+        return "Rate limited by the provider. Wait a minute and retry."
+    if "status 400" in c or "status 404" in c or "status 422" in c:
+        return "The provider did not accept the model or parameters for this key."
+    if "status 5" in c:
+        return "The provider had a server error. Retry later."
+    if "transport" in c or "connect" in c or "timeout" in c:
+        return "The server could not reach the provider (network, proxy or firewall)."
+    return "See the cause; nothing was returned to the app (fail-closed)."
+
+
 MAX_RUN_BODY = 64 * 1024     # bytes accepted by /api/run (the gateway applies its own limits after this)
 MAX_RUN_MESSAGES = 20
 SECURITY_HEADERS = {
@@ -90,10 +107,13 @@ class LocalOnly:
     * Every response carries a strict CSP, no framing, no-sniff and no-referrer.
     """
 
-    def __init__(self, app, port: int):
+    def __init__(self, app, port: int, extra_origins: tuple[str, ...] = ()):
         self.app = app
         self.hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
         self.origins = {f"http://{h}" for h in self.hosts}
+        for o in extra_origins:   # exact forwarded origins only (e.g. this Codespace's port URL), never wildcards
+            self.origins.add(o.rstrip("/"))
+            self.hosts.add(o.split("://", 1)[1].rstrip("/"))
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -197,7 +217,25 @@ def scenarios() -> list[dict]:
 
 # --- web app ---------------------------------------------------------------------------------------------------
 
-def make_ui(groq_key: str | None, port: int = 8765):
+def codespaces_origin(port: int, env=None) -> str | None:
+    """The forwarded URL GitHub Codespaces gives this port, if running in a Codespace."""
+    e = os.environ if env is None else env
+    name, dom = e.get("CODESPACE_NAME"), e.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+    if name and dom and re.fullmatch(r"[A-Za-z0-9-]+", name) and re.fullmatch(r"[A-Za-z0-9.-]+", dom):
+        return f"https://{name}-{port}.{dom}"
+    return None
+
+
+def check_key(key: str) -> str:
+    """One cheap authenticated call at startup so a bad key shows up in the status bar, not as a run failure."""
+    try:
+        r = httpx.get(GROQ_URL + "/models", headers={"Authorization": f"Bearer {key}"}, timeout=15)
+        return "verified" if r.status_code == 200 else f"REJECTED (HTTP {r.status_code}): {provider_hint(f'status {r.status_code}')}"
+    except httpx.HTTPError as e:
+        return f"UNREACHABLE ({type(e).__name__}): {provider_hint('transport')}"
+
+
+def make_ui(groq_key: str | None, port: int = 8765, extra_origins: tuple[str, ...] = (), key_status: str = ""):
     runs = Runs()
     tmp = Path(tempfile.mkdtemp(prefix="pgw-ui-"))
     gw, model, provider, ner, settings = build(groq_key, tmp, runs)
@@ -221,8 +259,9 @@ def make_ui(groq_key: str | None, port: int = 8765):
         if provider == "groq":
             warnings.append("Provider data terms (retention/region) are not attested for this demo key.")
         return JSONResponse({
-            "provider": provider, "model": model, "commit": commit,
-            "provider_note": "real LLM (Groq)" if provider == "groq" else
+            "provider": provider, "model": model, "commit": commit, "key_status": key_status,
+            "provider_note": (f"real LLM (Groq); key {key_status}" if key_status else "real LLM (Groq)")
+            if provider == "groq" else
             "no GROQ_API_KEY: deterministic mock LLM (answers are templated, not real)",
             "ner": f"{ner} (in-process)" if ner else "off (en_core_web_lg not installed)",
             "contracts": [{"purpose": p, "ref": (c := load_contract(ROOT / f"contracts/{p}.yaml")).ref,
@@ -303,12 +342,22 @@ def make_ui(groq_key: str | None, port: int = 8765):
                         stage, data = await asyncio.wait_for(q.get(), 0.1)
                     except asyncio.TimeoutError:
                         continue
+                    if stage == "provider_error":
+                        cause = str(data.get("cause") or "")
+                        state["provider_cause"] = cause
+                        yield step("provider", "failed", {"cause": cause, "hint": provider_hint(cause),
+                                                          "note": "fail-closed: nothing was returned to the app"})
+                        continue
                     if stage == "error":
                         state["error"] = data
-                        running = next((s for s, v in seen.items() if v["status"] == "running"), "auth")
-                        yield step(running, "failed", data)
+                        running = next((s for s, v in seen.items() if v["status"] == "running"), None)
+                        if running:
+                            yield step(running, "failed", data)
+                        msg = data.get("message")
+                        if state.get("provider_cause"):
+                            msg = f"{msg} — {state['provider_cause']}. {provider_hint(state['provider_cause'])}"
                         yield ev({"type": "error", "status": data.get("status"), "error_type": data.get("error_type"),
-                                  "message": data.get("message")})
+                                  "message": msg})
                         continue
                     if stage == "protect":
                         state["entities"] = data.get("entities") or []
@@ -453,7 +502,7 @@ def make_ui(groq_key: str | None, port: int = 8765):
     app = Starlette(routes=[Route("/", index), Route("/favicon.ico", favicon),
                             Route("/api/status", status), Route("/api/scenarios", scen_list),
                             Route("/api/run", run, methods=["POST"])])
-    return LocalOnly(app, port)
+    return LocalOnly(app, port, extra_origins)
 
 
 def main() -> None:
@@ -461,10 +510,22 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--groq-key-file", default=None, help="file containing a Groq API key (else $GROQ_API_KEY)")
+    ap.add_argument("--allow-origin", action="append", default=[],
+                    help="exact extra origin allowed to use the UI, e.g. a port-forwarding URL (repeatable)")
     a = ap.parse_args()
-    key = os.environ.get("GROQ_API_KEY") or (Path(a.groq_key_file).read_text().strip() if a.groq_key_file else None)
+    key = (os.environ.get("GROQ_API_KEY") or (Path(a.groq_key_file).read_text() if a.groq_key_file else "")).strip()
+    key = key.strip("'\"") or None              # tolerate KEY="..." pasted with quotes
+    origins = list(a.allow_origin)
+    cs = codespaces_origin(a.port)
+    if cs:
+        origins.append(cs)
+    key_status = check_key(key) if key else ""
     print(f"Privacy Gateway Live Inspector on http://127.0.0.1:{a.port}  (LLM: {'Groq' if key else 'mock'})")
-    uvicorn.run(make_ui(key, a.port), host="127.0.0.1", port=a.port, log_level="warning")
+    if key:
+        print(f"Groq key check: {key_status}")
+    for o in origins:
+        print(f"Also allowed (exact origin): {o}")
+    uvicorn.run(make_ui(key, a.port, tuple(origins), key_status), host="127.0.0.1", port=a.port, log_level="warning")
 
 
 if __name__ == "__main__":
