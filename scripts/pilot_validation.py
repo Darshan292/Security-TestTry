@@ -343,7 +343,7 @@ def main() -> int:
                        "provider_status": [e.get("status") for e in ex], "restored_response": restored,
                        "app_response": body}
                 records.append(rec)
-                (out / f"{sc.purpose}.json").write_text(json.dumps(rec, indent=1, ensure_ascii=False))
+                (out / f"{sc.name.split()[0]}_{sc.purpose}.json").write_text(json.dumps(rec, indent=1, ensure_ascii=False))
 
                 sent_text = outbound + "\n" + payload_strings(outbound)
                 leaked = [v for v in sc.raw if v in sent_text]

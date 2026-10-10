@@ -1,0 +1,39 @@
+# Human-reviewed reference rubric for context-dependent judgements the deterministic checks cannot make.
+# The evaluator never auto-passes these: each item is reported as PENDING until a named HR/payroll reviewer records
+# a judgement (pass/fail + note) for a specific run. `reference` describes what a good answer does; it was drafted
+# by engineering from the first-pass review and MUST be confirmed or corrected by the HR reviewer.
+version: 1
+reviewer_role: HR/payroll subject-matter expert (not the engineering team)
+items:
+  - case: A1
+    id: summary_useful_for_payroll_review
+    question: Would a payroll lead understand the ticket's cause, resolution and outcome from these three lines alone?
+    reference: States why TDS was over-deducted (late rent receipts, HRA not applied), what was done (declaration re-opened with approval) and the outcome (refund in the November payroll).
+  - case: A2
+    id: hypotheses_plausible_not_overreaching
+    question: Are the listed possible causes plausible for an Indian F&F leave-encashment process, and is none presented as the confirmed cause?
+    reference: At most three causes, each phrased as something to verify (e.g. approval not yet captured in the system, encashment excluded from the F&F run, an exception hold); no invented system names or timelines.
+  - case: A2
+    id: next_steps_actionable_and_safe
+    question: Can HR Operations carry out each next step with normal access, and does no step change the settlement before the discrepancy is investigated and authorised?
+    reference: Check approval status, the F&F calculation log and the settlement exception report; escalate with evidence; any correction only through the authorised payroll change process.
+  - case: A3
+    id: email_tone_and_clarity
+    question: Is the email professional, unambiguous about which account receives salary from the October 2026 payroll, and safe to send after a human check?
+    reference: Polite, short, refers to the new account without the number, says the UPI ID will not be used for payroll, gives HR's own contact details, no request for sensitive information.
+  - case: B1
+    id: comparison_neutral
+    question: Is the note neutral and appropriate for an HR manager (states the facts, no judgement about fairness or pay action)?
+    reference: Two lines with who earns more, the difference and the percentage; nothing else.
+  - case: B2
+    id: esi_explanation_correct_for_employee
+    question: Is the explanation correct and understandable for the employee, without implying facts the gateway did not supply (wage, contribution amounts)?
+    reference: Names the employee, says they are covered by ESI because their monthly wage is within the ₹21,000 ceiling.
+  - case: B3
+    id: band_position_not_overstated
+    question: Does the answer describe the position at the precision supplied (a third of the band) without implying an exact salary or a pay action?
+    reference: P3, ₹18,00,000–₹26,00,000, middle third; no midpoint/percentile claims.
+  - case: M3
+    id: thread_summary_attribution
+    question: Does the one-line thread summary attribute each action to the right person, with names spelled as the HRIS records them?
+    reference: Imran reported, Payroll Ops to involve Tejaswini Kulkarni, Nandini re-ran the file; payment in October.
