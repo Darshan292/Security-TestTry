@@ -74,8 +74,20 @@ def check_destination(url: str, allowlist) -> None:
     raise ValueError(f"egress destination not allowlisted: {host}:{port}")
 
 
+MODES = ("production", "development")
+
+
 @dataclass
 class Settings:
+    # Deployment mode. "production" (the default, and the env default) requires a manifest signed with the trusted
+    # config key, refuses uncontracted purposes and cannot enable any development-only switch. "development" is an
+    # explicit opt-in for tests/demos on synthetic data: unsigned manifests are accepted (with a warning) and the
+    # legacy uncontracted path may be enabled. Env: PGW_MODE. The gateway cannot detect a deployment that declares
+    # itself "development" falsely; the mode is logged at startup, recorded on every audit line and on /healthz.
+    mode: str = "production"
+    # DEVELOPMENT ONLY: serve purposes that have no data contract through the generic policy pack (the pre-contract
+    # path). Never read from the environment; create_app refuses it unless mode == "development".
+    legacy_uncontracted: bool = False
     policy_path: str = "policies/hris-default.yaml"
     registry_path: str = "registry/apps.yaml"
     roster_path: str | None = None            # optional JSONL of employees
@@ -108,9 +120,12 @@ class Settings:
     max_messages: int = 200
     protect_timeout_s: float = 10.0        # detection + local compute, per request
     max_concurrent_protect: int = 8        # worker slots; a timed-out worker keeps its slot until it really ends
-    # Policy/contract integrity (pgw.product.integrity). None disables the check (tests with throwaway contracts).
+    # Registry/policy/contract integrity (pgw.product.integrity). None disables the check: development mode only.
     integrity_manifest: str | None = DEFAULT_MANIFEST
-    policy_signing_key: str = field(default="", repr=False)   # hex; if set, the manifest signature must verify
+    # Ed25519 public key (64 hex chars) that must have signed the manifest. Required in production. It must come
+    # from deployment configuration the config authors cannot write (secret store / image), not from the repo.
+    trusted_config_pubkey: str | None = None
+    policy_signing_key: str = field(default="", repr=False)   # legacy HMAC key (hex); if set, its MAC must verify
     require_signed_policy: bool = False
     # Private (C4) route: one in-boundary OpenAI-compatible endpoint. None = no private route (contracts that
     # need it then stop startup).
@@ -125,6 +140,8 @@ class Settings:
     def from_env(cls, env: dict | None = None) -> "Settings":
         e = os.environ if env is None else env
         return cls(
+            mode=e.get("PGW_MODE", "production").strip().lower(),
+            # legacy_uncontracted is deliberately not read from the environment.
             policy_path=e.get("PGW_POLICY", cls.policy_path),
             registry_path=e.get("PGW_REGISTRY", cls.registry_path),
             roster_path=e.get("PGW_ROSTER") or None,
@@ -151,6 +168,7 @@ class Settings:
             protect_timeout_s=float(e.get("PGW_PROTECT_TIMEOUT_S", cls.protect_timeout_s)),
             max_concurrent_protect=int(e.get("PGW_MAX_CONCURRENT_PROTECT", cls.max_concurrent_protect)),
             integrity_manifest=e.get("PGW_INTEGRITY_MANIFEST", cls.integrity_manifest),   # no off switch in env
+            trusted_config_pubkey=e.get("PGW_TRUSTED_CONFIG_PUBKEY") or None,
             policy_signing_key=e.get("PGW_POLICY_SIGNING_KEY", ""),
             require_signed_policy=e.get("PGW_REQUIRE_SIGNED_POLICY", "") == "1",
             private_upstream_url=e.get("PGW_PRIVATE_UPSTREAM_URL") or None,

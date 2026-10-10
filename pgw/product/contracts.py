@@ -12,6 +12,7 @@ Derived values are NOT assumed safe. Every LOCAL_COMPUTE output must declare its
 """
 from __future__ import annotations
 
+import re
 import string
 from dataclasses import dataclass, field
 from enum import Enum
@@ -54,13 +55,26 @@ EGRESS = {"RAW", "TRANSFORMED", "INTERNAL"}
 # current detectors cannot recognise them, so every contract must state its stance on each one explicitly.
 PURPOSE_DEPENDENT = ("leave_balance", "attendance", "performance_rating", "health_or_leave_reason",
                      "disciplinary_outcome", "eligibility_result", "derived_compensation")
+# The stances are DECLARATIONS, validated for completeness but not detected or removed at runtime: the gateway has
+# no detector for these attributes in free text. What the gateway enforces is the input boundary below
+# (ExternalInput): free text crosses only if the app attests it came from an allowlisted source-side sanitizer.
 STANCES = {"PSEUDONYMISED_RAW",   # may cross raw only next to aliased identities (still personal data)
-           "NOT_EXPECTED",        # the app must not send it for this purpose (undetectable: an app obligation)
+           "NOT_EXPECTED",        # the source must not send it for this purpose (not detected by the gateway)
            "LOCAL_ONLY"}          # only through LOCAL_COMPUTE inputs/outputs under their egress rules
+_SANITIZER_ID = re.compile(r"[a-z0-9][a-z0-9._@-]{0,63}")
 
 
 class ContractError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class ExternalInput:
+    """Source-side boundary for free text that reaches an external model (SECURITY_BOUNDARY.md §4).
+    sanitizers: ids of the source-side exports/sanitizers whose output this purpose accepts (X-PGW-Input-Source).
+    unattested: REFUSE (422, nothing sent) or PRIVATE (in-boundary model only; EXT_PSEUDO contracts)."""
+    sanitizers: frozenset
+    unattested: str = "REFUSE"
 
 
 @dataclass(frozen=True)
@@ -99,6 +113,7 @@ class Contract:
     guidance: str | None = None                   # task guidance for the model (system message, sealed)
     org_contacts: tuple[str, ...] = ()            # organisational C0 contacts (role mailbox, helpdesk number)
     redaction_text: dict = field(default_factory=dict)   # C3 type -> words shown instead of a "[TYPE]" marker
+    external_input: ExternalInput = ExternalInput(frozenset())   # required in every contract file
 
     @property
     def ref(self) -> str:
@@ -179,8 +194,24 @@ def _parse_redaction_text(raw) -> dict:
     return out
 
 
-def load_contract(path: str | Path) -> Contract:
-    raw = yaml.safe_load(Path(path).read_text())
+def _parse_external_input(raw) -> ExternalInput:
+    if not isinstance(raw, dict):
+        raise ContractError("contract must declare external_input (source-side sanitizers for free text that reaches "
+                            "an external model; NOT_EXPECTED attributes are not detected by the gateway)")
+    ids = raw.get("sanitizers")
+    if not isinstance(ids, list) or not ids or len(ids) > 10 or not all(
+            isinstance(x, str) and _SANITIZER_ID.fullmatch(x) for x in ids):
+        raise ContractError("external_input.sanitizers: 1-10 ids ([a-z0-9._@-], at most 64 chars)")
+    un = str(raw.get("unattested", "REFUSE")).upper()
+    if un not in ("REFUSE", "PRIVATE"):
+        raise ContractError("external_input.unattested must be REFUSE or PRIVATE")
+    if set(raw) - {"sanitizers", "unattested"}:
+        raise ContractError("external_input: unknown keys")
+    return ExternalInput(frozenset(ids), un)
+
+
+def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
+    raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
     try:
         route = raw["route"]
         if route not in ROUTES:
@@ -222,11 +253,14 @@ def load_contract(path: str | Path) -> Contract:
                      subjects=_parse_subjects(raw.get("declared_subjects")),
                      guidance=_parse_guidance(raw.get("guidance")),
                      org_contacts=tuple(_parse_org_contacts(raw.get("org_contacts"))),
-                     redaction_text=_parse_redaction_text(raw.get("redaction_text")))
+                     redaction_text=_parse_redaction_text(raw.get("redaction_text")),
+                     external_input=_parse_external_input(raw.get("external_input")))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:
         raise ContractError(f"malformed contract: {type(e).__name__} {e}") from None
+    if c.external_input.unattested == "PRIVATE" and c.route != "EXT_PSEUDO":
+        raise ContractError("external_input.unattested: PRIVATE applies to EXT_PSEUDO contracts only")
     if c.classes[DataClass.C4] == "PRIVATE" and c.route != "EXT_PSEUDO":
         raise ContractError("C4: PRIVATE applies to EXT_PSEUDO contracts only")
     if c.subjects is not None and (c.route != "EXT_PSEUDO" or c.classes[DataClass.C1] == "REFUSE"):

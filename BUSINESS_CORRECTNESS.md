@@ -60,3 +60,11 @@ Two side findings:
 - Still open (utility, not security): in multi-turn, a value the detectors find in the model's reply can be propagated back into earlier turn text (a ticket ID became `[COMPENSATION …]`).
 
 Human HR/payroll sign-off is still required. This review is the engineering first pass.
+
+## Fixed-scenario acceptance suite (`eval/business`)
+
+`python -m eval.business.run --captures <dir>` is the regression suite for the ten fixed pilot scenarios. Business
+checks are deterministic. Privacy checks cover the **declared or expected canary values of each scenario**, not
+every possible personal value. Privacy is NOT_EVALUABLE (never PASS) when any outbound exchange is missing, empty
+or not parseable. The LLM judge is a secondary signal only. See SECURITY_BOUNDARY.md §5.
+

@@ -10,7 +10,7 @@ Status updated 2026-10-02 after the hardening pass; see PILOT_READINESS.md for t
 
 | Piece | Where |
 |---|---|
-| App registration: purposes bound to data contracts (task type, route); uncontracted purposes refused | `registry/apps.yaml` (`hr-helpdesk-pilot`), `pgw/gateway/app.py: load_registry, load_contracts` |
+| App registration: every purpose bound to a data contract (task type, route). An uncontracted purpose stops startup, and a request for one is a 403 before the body is read | `registry/apps.yaml` (`hr-helpdesk-pilot`), `pgw/gateway/app.py: load_registry, load_contracts` |
 | Data contracts, validated at startup (unsafe contract = gateway does not start) | `contracts/ticket_summary.yaml`, `contracts/salary_comparison.yaml`, `pgw/product/contracts.py` |
 | C0–C4 data classes and routing (EXT_PSEUDO / LOCAL_COMPUTE; C4 content refused) | `pgw/product/contracts.py`, `pgw/product/content.py` |
 | Redact unneeded C3 identifiers instead of blocking | Contract `C3: REDACT` mapped onto the existing pipeline |
@@ -25,7 +25,7 @@ Status updated 2026-10-02 after the hardening pass; see PILOT_READINESS.md for t
 | **Added:** existing local NER (`en_core_web_lg`) wired for contracted purposes; a model that fails to load stops startup (it is a secondary net, not full coverage; it can be switched off by env, which logs a warning); contracted purposes forced to buffered output | `pgw/gateway/app.py`, `pgw/detect/ner.py`, `tests/test_gateway_hardening.py` |
 | **Added:** hash-locked requirements | `requirements/`, `INSTALL.md`, `tests/test_requirements_lock.py` |
 | **Added:** egress destination allowlist in code (https, exact host, checked at startup) and in deploy configs (compose internal network, k8s default-deny). The network configs are written but **not exercised** | `pgw/gateway/settings.py`, `deploy/`, `tests/test_egress_allowlist.py` |
-| **Added:** sealed, versioned policy and contracts; the manifest digest is in each ledger row | `policies/MANIFEST.json`, `pgw/product/integrity.py` |
+| **Added:** sealed, versioned registry, policy and contracts. Production requires an Ed25519 signature under the trusted key. The manifest digest and the mode are in each ledger row (SECURITY_BOUNDARY.md) | `policies/MANIFEST.json`, `pgw/product/integrity.py` |
 | **Added:** real-provider validation harness. Run so far against the real endpoint without a valid key: outbound bytes and fail-closed behaviour checked; no real model answer seen yet | `scripts/pilot_validation.py`, `eval/results/pilot_validation_*.md` |
 
 ## Proven by tests (`tests/test_product_slice.py`), each reading the exact bytes the upstream received
@@ -33,11 +33,11 @@ Status updated 2026-10-02 after the hardening pass; see PILOT_READINESS.md for t
 | Property | Test |
 |---|---|
 | Raw C1/C3 values (name, employee ID, email, PAN, bank account) never in the outbound request; C0 (ticket ID, dates) unchanged | `test_path_a_raw_values_never_leave_and_high_ids_do_not_block` |
-| Unneeded HIGH identifiers do not block: the same ticket is 422 under the legacy rule and 200 under the contract | `…high_ids_do_not_block`, `…blocked_by_the_legacy_presence_rule` |
+| Unneeded HIGH identifiers do not block: the same ticket is 422 under the legacy rule (development-only comparison) and 200 under the contract | `…high_ids_do_not_block`, `…blocked_by_the_legacy_presence_rule` |
 | Aliases restored for the authorised app; C3 never returned; the gateway's own note never reads as an alias | `test_path_a_identities_restored_c3_never_returned` |
 | Exact salaries (6 formats) never leave; the LLM gets aliased identities, an aliased derived difference and a derived percentage only | `test_path_b_exact_salaries_stay_inside_and_only_derived_result_is_sent` |
 | Restoration puts names and the exact difference (₹2,70,000) into the answer; inputs never echoed | `test_path_b_answer_restores_names_and_exact_difference` |
-| **Fail closed:** malformed payload 400; compute error 503; detector error 503; buggy compute that leaks a salary is caught by the egress invariant (500); upstream down 502; uncontracted purpose 403; non-Latin script 422. **Nothing is sent and no values are echoed** | the remaining tests |
+| **Fail closed:** malformed payload 400; compute error 503; detector error 503; buggy compute that leaks a salary is caught by the egress invariant (500); upstream down 502; uncontracted purpose 403; non-Latin script 422; input without a source-sanitizer attestation 422. **Nothing is sent and no values are echoed** | the remaining tests |
 | Unsafe contracts (C1 ALLOW, C3 ALIAS, C3 restore, unknown route, missing class, overriding an existing policy purpose) stop startup | `test_unsafe_contracts_…`, `test_contract_cannot_override_…` |
 
 ## Report
@@ -60,7 +60,7 @@ Status updated 2026-10-02 after the hardening pass; see PILOT_READINESS.md for t
 - **Local-compute catalogue is two functions** (`salary_difference`, `esi_eligibility`), not derived from real ESU tasks.
 - **NER is a secondary net, not complete coverage** (done: wired, see D). Names it misses still leave raw.
 - **Network egress configs are not exercised** (the code allowlist is tested).
-- **Still absent:** SQLite ledger (no PostgreSQL), single shared roster key (no per-tenant keys), no contract-change governance process beyond the sealed manifest (signature is optional).
+- **Still absent:** SQLite ledger (no PostgreSQL), single shared roster key (no per-tenant keys), no contract-change governance process beyond the signed manifest (who signs, and how changes are reviewed, is organisational). No tenant-specific contracts (one purpose means one contract).
 - **No evaluation on real ESU tasks inside the boundary,** and no owner review of the E-UTIL cases yet.
 - **Declared subjects for Path A: implemented** (`pgw/product/subjects.py`, `tests/test_declared_subjects.py`). Undeclared people still depend on detection.
 

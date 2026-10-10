@@ -181,11 +181,21 @@ def build(groq_key: str | None, tmp: Path, runs: Runs):
         ner = "en_core_web_lg" if spacy.util.is_package("en_core_web_lg") else None
     except ImportError:
         ner = None
-    s = Settings(registry_path=str(reg), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+    # Development mode (the trace hook is development-only and refused in production). The throwaway registry is
+    # not sealed, so the gateway's integrity check is off here; /api/status still verifies the shipped policy and
+    # contracts against policies/MANIFEST.json and shows the result.
+    s = Settings(mode="development", integrity_manifest=None, registry_path=str(reg), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                  ledger_db_path=str(tmp / "restore.sqlite"), egress_ledger_path=str(tmp / "audit.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=upstream, private_upstream=private, ner_model=ner,
                  trace=runs.observe)
     return create_app(s), model, provider, ner, s
+
+
+def input_source(purpose: str) -> dict:
+    """The demo plays the source app: its fixed synthetic scenarios stand for the contract's allowlisted export."""
+    from pgw.product.contracts import load_contract
+    ids = sorted(load_contract(ROOT / f"contracts/{purpose}.yaml").external_input.sanitizers)
+    return {"X-PGW-Input-Source": ids[0]}
 
 
 def scenarios() -> list[dict]:
@@ -252,7 +262,7 @@ def make_ui(groq_key: str | None, port: int = 8765, extra_origins: tuple[str, ..
         try:
             from pgw.product import integrity as I
             integrity = I.verify([settings.policy_path] + [str(ROOT / f"contracts/{p}.yaml") for p in CONTRACTS],
-                                 settings.integrity_manifest)
+                                 I.DEFAULT_MANIFEST) + " (unsigned: development only)"
         except Exception as e:  # noqa: BLE001 - shown to the local user only
             integrity = f"FAILED: {type(e).__name__}"
         warnings = ["Synthetic data only. The inspector shows original values next to aliases on this machine."]
@@ -332,7 +342,8 @@ def make_ui(groq_key: str | None, port: int = 8765, extra_origins: tuple[str, ..
             body = {"model": model, "max_tokens": 2048, "messages": messages}
             if subj:
                 body["pgw_subjects"] = subj
-            headers = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, "X-PGW-Trace": rid}
+            headers = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, "X-PGW-Trace": rid,
+                       **input_source(purpose)}
             if conv:
                 headers["X-PGW-Conversation-Id"] = conv
             task = asyncio.create_task(client.post("/v1/chat/completions", json=body, headers=headers))

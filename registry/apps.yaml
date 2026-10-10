@@ -1,15 +1,10 @@
 # App registry (ADR-0004): who may call, for which declared purposes, on which models.
-# key_sha256 = sha256 of the app's bearer key. The demo key below is "demo-app-key-change-me"; replace it.
+# key_sha256 = sha256 of the app's bearer key. Sealed in policies/MANIFEST.json like policies and contracts: any edit
+# (an added purpose or model, a key hash) needs a re-seal, and production needs that seal signed (SECURITY_BOUNDARY.md).
+# Every purpose MUST be bound to a data contract under `tasks`; an uncontracted purpose stops startup.
+version: 2
 apps:
-  - app_id: hr-assistant
-    tenant: acme
-    key_sha256: 7dd315a9dbd5d1a31d7e2d196495cdc4874275b9e37456699116f8059c781a47
-    purposes: [hr_case_summary, email_draft, ticket_classification, comp_band_analysis]
-    restore_output: true
-    models: [mock-1, gpt-4o-mini]
-
-  # PILOT (product slice): every purpose is bound to a data contract; uncontracted purposes are refused.
-  # The demo key below is "pilot-hr-helpdesk-key-change-me"; replace it.
+  # PILOT (product slice). The demo key below is "pilot-hr-helpdesk-key-change-me"; replace it.
   - app_id: hr-helpdesk-pilot
     tenant: acme
     key_sha256: 3254cb5f99c34b1023cdda3f71688bf2e5ee5dd23cbdf557c8a8549ac10f6206

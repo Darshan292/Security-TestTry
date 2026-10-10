@@ -139,3 +139,44 @@ def test_judge_is_secondary_and_failures_are_reported_not_fatal(monkeypatch):
     assert judge("t", "a", [{"id": "r1", "question": "q"}], key="k", client=down)["r1"]["verdict"] == "unavailable"
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     assert judge("t", "a", [{"id": "r1", "question": "q"}], key=None) == {}      # no key: no judge, no verdict
+
+
+# --- capture handling: privacy never passes on a missing, unsupported or partial capture ------------------------
+
+OK_EX = json.dumps({"messages": [{"role": "user", "content": "[PERSON_1ABCDE] asked"}]})
+LEAK_EX = json.dumps({"messages": [{"role": "user", "content": "Imran Ansari asked again"}]})
+
+
+def outbound_status(outbound, answer="Imran asked."):
+    return {r.check: r.status for r in C.check_privacy(outbound, answer, ["Imran Ansari"], [])}
+
+
+def test_privacy_is_not_evaluable_unless_every_exchange_is_inspected():
+    assert outbound_status(None)["outbound:raw_values_absent"] == "NOT_EVALUABLE"
+    assert outbound_status([])["outbound:raw_values_absent"] == "NOT_EVALUABLE"
+    assert outbound_status("")["outbound:raw_values_absent"] == "NOT_EVALUABLE"
+    assert outbound_status("Imran-free plain text, not JSON")["outbound:raw_values_absent"] == "NOT_EVALUABLE"
+    assert outbound_status(json.dumps({"prompt": "x"}))["outbound:raw_values_absent"] == "NOT_EVALUABLE"
+    assert outbound_status([OK_EX, None])["outbound:raw_values_absent"] == "NOT_EVALUABLE"
+    assert outbound_status([OK_EX, "garbled"])["outbound:raw_values_absent"] == "NOT_EVALUABLE"
+    assert outbound_status([OK_EX, OK_EX])["outbound:raw_values_absent"] == "PASS"
+
+
+def test_a_leak_in_a_later_exchange_fails():
+    assert outbound_status([OK_EX, LEAK_EX])["outbound:raw_values_absent"] == "FAIL"
+
+
+def test_empty_answer_is_not_evaluable_not_a_privacy_pass():
+    rs = outbound_status([OK_EX], answer="")
+    assert rs["answer:captured"] == "NOT_EVALUABLE" and "answer:no_unrestored_alias" not in rs
+
+
+def test_load_captures_keeps_every_outbound_exchange(tmp_path):
+    rec = {"scenario": "A1 ticket summary", "restored_response": "ok", "outbound_http": [OK_EX, LEAK_EX],
+           "inbound_http": [None, None]}
+    (tmp_path / "A1_ticket_summary.json").write_text(json.dumps(rec))
+    cap = load_captures(tmp_path)["A1 ticket summary"]
+    assert cap["outbound"] == [OK_EX, LEAK_EX]
+    rep = evaluate(SPEC["A1"], cap)
+    priv = {r.check: r.status for r in rep.results if r.category == "PRIVACY"}
+    assert priv["outbound:raw_values_absent"] == "FAIL"        # the leak is only in the second exchange

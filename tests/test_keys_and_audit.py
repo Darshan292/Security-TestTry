@@ -11,6 +11,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw import audit
+from tests.sealed import legacy_dev
 from pgw import keys as K
 from pgw.detect.edm import RestoreLedger
 from pgw.gateway import Settings, create_app
@@ -148,9 +149,9 @@ def _gateway(tmp_path, doc, mock):
          "restore_output": True, "models": ["mock-1"]},
         {"app_id": "nokey", "tenant": "initech", "key_sha256": sha(NOKEY_APP_KEY), "purposes": ["email_draft"],
          "restore_output": True, "models": ["mock-1"]}]}))
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
+    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), **legacy_dev(reg),   # legacy path, dev only
                  ledger_db_path=str(tmp_path / "ledger.sqlite"), egress_ledger_path=str(tmp_path / "egress.jsonl"),
-                 tenant_keys_file=str(kf), upstream=mock, integrity_manifest=None)
+                 tenant_keys_file=str(kf), upstream=mock)
     return TestClient(create_app(s)), kf
 
 
@@ -179,9 +180,9 @@ def test_gateway_refuses_to_start_on_broken_chain(tmp_path):
     log = tmp_path / "egress.jsonl"
     lines = log.read_text().splitlines()
     log.write_text(lines[1] + "\n")    # first row deleted
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(tmp_path / "apps.yaml"),
+    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), **legacy_dev(tmp_path / "apps.yaml"),
                  ledger_db_path=str(tmp_path / "ledger.sqlite"), egress_ledger_path=str(log),
-                 tenant_keys_file=str(kf), upstream=mock, integrity_manifest=None)
+                 tenant_keys_file=str(kf), upstream=mock)
     with pytest.raises(audit.AuditChainError):
         create_app(s)
 

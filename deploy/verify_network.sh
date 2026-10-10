@@ -5,7 +5,7 @@
 # sandbox egress re-terminates TLS; on a normal host drop that mount and the CA arg.
 set -u
 cd "$(dirname "$0")"
-export ANTHROPIC_API_KEY=dummy-not-a-real-key PGW_MASTER_KEY=dummy-master-key
+export ANTHROPIC_API_KEY=dummy-not-a-real-key PGW_MASTER_KEY=dummy-master-key PGW_TRUSTED_CONFIG_PUBKEY=dummy-topology-test-only
 export COMPOSE_PROJECT_NAME=pgwverify
 DC=(docker compose -f docker-compose.yml -f docker-compose.verify.yml)
 FAILS=0

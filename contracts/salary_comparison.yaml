@@ -2,7 +2,7 @@
 # Exact CTC values arrive as structured C2 fields, are used only inside the gateway, and never leave it.
 # Every computed output has an explicit egress rule; anything unlisted is INTERNAL.
 contract: salary_comparison
-version: 2
+version: 3
 task_type: salary_comparison
 route: LOCAL_COMPUTE
 compute: salary_difference
@@ -49,3 +49,10 @@ prompt_template: |
   - {higher_name} has the higher annual CTC.
   - The difference is {difference} per year, which is {pct_of_lower} of the lower CTC.
   Write the answer for the HR manager using only these facts.
+# Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
+# gateway. Free text reaches the external model only if the calling app sends X-PGW-Input-Source naming one of these
+# source-side sanitizers/exports (an attestation by the app owner, recorded in the audit ledger; the gateway does not
+# verify the content). Without it: refused (422), nothing sent.
+external_input:
+  sanitizers: [comp-review-form@1]
+  unattested: REFUSE

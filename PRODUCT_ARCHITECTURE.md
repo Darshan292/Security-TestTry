@@ -52,7 +52,7 @@ C2 values (compensation, DOB) are never sent exact. Some attributes cannot be de
 | Stance | Meaning |
 |---|---|
 | **PSEUDONYMISED_RAW** | May cross raw, only next to aliased identities. Still personal data |
-| **NOT_EXPECTED** | The app must not send it for this purpose. An app obligation; not enforced by detection |
+| **NOT_EXPECTED** | The source must not send it for this purpose. **Not detected or removed by the gateway.** What is enforced: free text goes to an external model only when the app attests (`X-PGW-Input-Source`) that it came from a sanitizer or export the contract allowlists; otherwise it is refused or sent to the in-boundary model. The attestation is recorded, not verified (SECURITY_BOUNDARY.md §4) |
 | **LOCAL_ONLY** | Only via LOCAL-COMPUTE inputs and outputs, under the egress rules |
 
 Stances chosen by the shipped contracts:
@@ -81,7 +81,7 @@ Stances chosen by the shipped contracts:
 
 ### Versioning and integrity
 
-Contracts and the policy pack are versioned and sealed in `policies/MANIFEST.json` (sha256 and version per file, optional HMAC signature). The gateway refuses to start on any unreviewed change. After a reviewed change, reseal with `python -m pgw.product.integrity seal`.
+The app registry, the policy pack and the contracts are versioned and sealed in `policies/MANIFEST.json` (sha256 and version per file). Production requires an Ed25519 signature that verifies under the deployment's trusted public key. The gateway refuses to start on any unreviewed change. After a reviewed change, re-seal and sign with `python -m pgw.product.integrity seal --sign-key KEYFILE`. Contracts are resolved globally by purpose: one purpose means one contract (byte-identical) for every tenant, and tenant-specific contracts are not supported (SECURITY_BOUNDARY.md §2–3).
 
 ### Task routing (declared by the app per purpose, enforced by the gateway; extends ADR-0004)
 
@@ -163,7 +163,7 @@ The aim is product validation, not more leakage benchmarks.
 
 ## 6. Known gaps in what exists today (not to be hidden)
 
-1. **NER is only a secondary net.** Updated 2026-10-02: wired for contracted purposes only; the legacy gateway path and any purpose without a contract still have none, and names NER misses leave raw (`demo/demo_gateway.py`, scene 2).
+1. **NER is only a secondary net.** Updated 2026-10-02: wired for contracted purposes only. Since 2026-10-10 every production purpose is contracted. The legacy path survives only in an explicit development mode (`demo/demo_gateway.py`, scene 2), which production refuses. Names that NER misses still cross raw on contracted purposes unless they were declared as subjects.
 2. **HIGH-identifier presence blocks whole requests** (30 % of E-UTIL tasks).
 3. **Non-personal numbers can be typed as COMPENSATION and masked or generalised** (policy threshold case).
 4. **Quadratic-time paths:** updated 2026-10-02: the three known ones (M-42 and two more) are fixed and input limits exist; unknown slow paths cannot be excluded.

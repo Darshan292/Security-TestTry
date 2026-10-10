@@ -17,8 +17,10 @@ Addresses THREAT_MODEL T13 (apps call providers directly) and ADR-0001 rule 1 (o
 |---|---|---|
 | `PGW_EGRESS_ALLOWLIST` | `api.anthropic.com` | Exact https hosts a real upstream may use; checked at startup |
 | `PGW_ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Passed to the SDK explicitly, so the SDK's own `ANTHROPIC_BASE_URL` cannot redirect egress |
-| `PGW_INTEGRITY_MANIFEST` | `policies/MANIFEST.json` | Policy and contracts must match their sealed sha256 and version, or the gateway does not start. No env switch turns this off |
-| `PGW_POLICY_SIGNING_KEY` / `PGW_REQUIRE_SIGNED_POLICY=1` | unset / off | HMAC-signed manifest. Keep the key out of the app namespaces |
+| `PGW_MODE` | `production` | `production`: signed config required, every purpose contracted, no development switches. `development` is for synthetic-data tests and demos only. The mode is on every audit line and on `/healthz`; check it in deployment review |
+| `PGW_TRUSTED_CONFIG_PUBKEY` | unset (production will not start) | Ed25519 public key that must have signed `policies/MANIFEST.json`. Supply it from a secret store or image the config authors cannot write |
+| `PGW_INTEGRITY_MANIFEST` | `policies/MANIFEST.json` | Registry, policy and contracts must match their sealed sha256 and version, or the gateway does not start. No env switch turns this off |
+| `PGW_POLICY_SIGNING_KEY` / `PGW_REQUIRE_SIGNED_POLICY=1` | unset / off | Older HMAC check, still verified if set. Not a trust anchor (symmetric key) |
 | `PGW_NER_MODEL` | `en_core_web_lg` | Local NER on contracted purposes. A model that does not load stops startup; `none` disables it (logged as a warning) |
 | `PGW_MAX_BODY_BYTES` / `PGW_MAX_CONTENT_CHARS` / `PGW_MAX_MESSAGES` | 262144 / 50000 / 200 | 413, nothing sent |
 | `PGW_PROTECT_TIMEOUT_S` / `PGW_MAX_CONCURRENT_PROTECT` | 10 / 8 | 503 on deadline or when all worker slots are busy. A timed-out worker keeps its slot until it really ends |

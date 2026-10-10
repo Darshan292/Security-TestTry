@@ -1,7 +1,7 @@
 # Data contract: explain an employee's ESI coverage (LOCAL_COMPUTE). The wage stays inside the gateway; the
 # coverage decision is computed locally and, by explicit decision below, crosses next to an aliased identity.
 contract: esi_letter
-version: 2
+version: 3
 task_type: esi_coverage_explanation
 route: LOCAL_COMPUTE
 compute: esi_eligibility
@@ -49,3 +49,10 @@ prompt_template: |
   - Employee: {employee_name} ({employee_id}).
   - Result: the employee is {eligibility}. The statutory monthly wage ceiling for ESI is {threshold}.
   Address the explanation to the employee by name ({employee_name}) and write it for them, using only these facts.
+# Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
+# gateway. Free text reaches the external model only if the calling app sends X-PGW-Input-Source naming one of these
+# source-side sanitizers/exports (an attestation by the app owner, recorded in the audit ledger; the gateway does not
+# verify the content). Without it: refused (422), nothing sent.
+external_input:
+  sanitizers: [esi-coverage-form@1]
+  unattested: REFUSE

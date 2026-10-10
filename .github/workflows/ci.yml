@@ -23,7 +23,7 @@ jobs:
       # Scanners are CI tooling, not shipped dependencies; they are not hash-locked here (pin/lock them if desired).
       - name: Install scanners
         run: pip install bandit pip-audit
-      - name: Policy/contract integrity (policies/MANIFEST.json must match)
+      - name: Registry/policy/contract integrity (policies/MANIFEST.json must match)
         run: |
           python - <<'PY'
           from pathlib import Path

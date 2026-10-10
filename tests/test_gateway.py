@@ -8,6 +8,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway import Settings, create_app
+from tests.sealed import legacy_dev
 from pgw.gateway.upstream import (MockLLMUpstream, from_anthropic_message, to_anthropic_params)
 
 KEY = "test-app-key-" + os.urandom(6).hex()
@@ -38,7 +39,8 @@ def env(tmp_path):
 def make(env, behaviour="summarise", upstream=None):
     tmp, reg = env
     mock = upstream or MockLLMUpstream(behaviour)
-    s = Settings(policy_path="policies/hris-default.yaml", registry_path=str(reg),
+    # The pre-contract (legacy) path: only reachable through the explicit development-only switch (tests/sealed.py).
+    s = Settings(policy_path="policies/hris-default.yaml", **legacy_dev(reg),
                  ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=mock)
     return TestClient(create_app(s)), mock, tmp / "egress.jsonl"
