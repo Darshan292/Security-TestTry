@@ -25,14 +25,61 @@ def verify_headers(*,headers,body,keys,tenant,app_id,purpose,now=None):
  except (TypeError,ValueError,UnicodeEncodeError): return None
  return sid if hmac.compare_digest(expected,sig) else None
 class SQLiteReplayGuard:
- """Atomic one-use nonce storage. Multi-host deployments need a shared transactional store."""
- def __init__(self,path):
-  self.path=str(path); self.lock=threading.Lock(); Path(self.path).parent.mkdir(parents=True,exist_ok=True)
-  with sqlite3.connect(self.path) as db: db.execute("CREATE TABLE IF NOT EXISTS pgw_attestation_nonce (scope_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)")
- def claim(self,*,sanitizer,nonce,tenant,app_id,expires_at,now=None):
-  now=int(time.time()) if now is None else int(now); digest=hashlib.sha256(json.dumps([sanitizer,nonce,tenant,app_id],separators=(",",":")).encode()).hexdigest()
-  try:
-   with self.lock, sqlite3.connect(self.path,timeout=5,isolation_level="IMMEDIATE") as db:
-    db.execute("DELETE FROM pgw_attestation_nonce WHERE expires_at < ?",(now,)); db.execute("INSERT INTO pgw_attestation_nonce VALUES (?,?)",(digest,int(expires_at)))
-   return True
-  except sqlite3.Error: return False
+    """Atomic one-use nonce storage. Multi-host deployments need a shared transactional store."""
+
+    def __init__(self, path, *, busy_timeout_ms=5000):
+        self.path = str(path)
+        self.busy_timeout_ms = int(busy_timeout_ms)
+        self.lock = threading.Lock()
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        db = self._connect()
+        try:
+            with db:
+                db.execute(
+                    "CREATE TABLE IF NOT EXISTS pgw_attestation_nonce "
+                    "(scope_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)"
+                )
+                db.execute(
+                    "CREATE INDEX IF NOT EXISTS pgw_attestation_nonce_expiry "
+                    "ON pgw_attestation_nonce(expires_at)"
+                )
+        finally:
+            db.close()
+
+    def _connect(self):
+        db = sqlite3.connect(
+            self.path,
+            timeout=self.busy_timeout_ms / 1000,
+            isolation_level="IMMEDIATE",
+        )
+        db.execute(f"PRAGMA busy_timeout={self.busy_timeout_ms}")
+        return db
+
+    def claim(self, *, sanitizer, nonce, tenant, app_id, expires_at, now=None):
+        """Atomically consume a nonce. False means replay or replay-store failure."""
+        current = int(time.time()) if now is None else int(now)
+        scope = json.dumps(
+            [sanitizer, nonce, tenant, app_id],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        digest = hashlib.sha256(scope.encode("utf-8")).hexdigest()
+        try:
+            with self.lock:
+                db = self._connect()
+                try:
+                    with db:
+                        db.execute(
+                            "DELETE FROM pgw_attestation_nonce WHERE expires_at < ?",
+                            (current,),
+                        )
+                        db.execute(
+                            "INSERT INTO pgw_attestation_nonce(scope_hash, expires_at) VALUES (?, ?)",
+                            (digest, int(expires_at)),
+                        )
+                finally:
+                    db.close()
+            return True
+        except sqlite3.Error:
+            # Fail closed: a duplicate nonce or unavailable replay store rejects the request.
+            return False
