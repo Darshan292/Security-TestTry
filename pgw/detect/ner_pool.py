@@ -42,7 +42,7 @@ def _worker_main(conn, model: str, min_score: float) -> None:     # runs in the 
         # Report and exit. If even the report fails, the parent never sees "ready" and fails closed (startup error).
         try:
             conn.send(("fatal", f"{type(e).__name__}: {e}"))
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110, S110
             pass
         return
     while True:
@@ -60,7 +60,7 @@ def _worker_main(conn, model: str, min_score: float) -> None:     # runs in the 
         except BaseException as e:  # noqa: BLE001
             try:
                 conn.send((tid, "err", f"{type(e).__name__}: {e}"))
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 return
 
 
@@ -71,15 +71,15 @@ class _Worker:
     def kill(self) -> None:
         try:
             self.proc.kill()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110
             pass
         try:
             self.conn.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110
             pass
         try:
             self.proc.join(2)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110
             pass
 
 
@@ -176,7 +176,7 @@ class NerPool:
         for w in ws:
             try:
                 w.conn.send(None)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
             w.kill()
 
@@ -199,7 +199,7 @@ class NerPool:
         if not self._admit.acquire(blocking=False):
             raise NerUnavailable("NER queue full")
         try:
-            by_text = dict(zip(uniq, self._run(uniq)))
+            by_text = dict(zip(uniq, self._run(uniq), strict=True))
         finally:
             self._admit.release()
         return [list(by_text[t]) for t in texts]

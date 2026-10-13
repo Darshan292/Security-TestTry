@@ -414,7 +414,7 @@ def _bank_file_amounts(text: str) -> list[Cand]:
     if not _IFSC.search(text) or not _DOC_PAY_LOOSE.search(text):
         return out
     seen: set[int] = set()
-    for ls, le, im in _ifsc_lines(text):
+    for ls, le, _im in _ifsc_lines(text):
         if ls in seen or le - ls > 400:
             continue
         seen.add(ls)
@@ -1567,7 +1567,7 @@ def _scan_csv(text: str, out: list, neg: list | None = None) -> None:
                 rcells = rcells[1:-1]
             if len(rcells) == n:
                 matched += 1
-                for (a, b), t, h in zip(rcells, col_types, heads):
+                for (a, b), t, h in zip(rcells, col_types, heads, strict=True):
                     if t is not None and b > a:
                         _emit_typed(out, text, t, a, b, True, bare_name=(_key_words(h) == ["name"]))
                     elif t is None and b > a:
@@ -1843,7 +1843,6 @@ def _scan_sql(text: str, out: list) -> None:
             continue
         for tm in _SQL_TUPLE.finditer(text, m.start("vals"), m.end("vals")):
             body_s, body_e = tm.start() + 1, tm.end() - 1
-            pos, k = body_s, 0
             # split on commas outside quotes
             cells, cur, inq = [], body_s, False
             for idx in range(body_s, body_e):
@@ -1856,7 +1855,7 @@ def _scan_sql(text: str, out: list) -> None:
             cells.append((cur, body_e))
             if len(cells) != len(cols):
                 continue
-            for (a, b), t in zip(cells, types):
+            for (a, b), t in zip(cells, types, strict=True):
                 if t is None:
                     continue
                 while a < b and text[a] in " \t\r\n":

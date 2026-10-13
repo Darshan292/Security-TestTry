@@ -53,9 +53,9 @@ def make(tmp, private=None, url=None, contract="ticket_summary_any_script"):
 
 
 def call(client, text, purpose="ticket_summary_any_script", **extra):
-    return client.post("/v1/chat/completions", json={"model": "mock-1", "pgw_subjects": SUBJ, **extra,
-                       "messages": [{"role": "user", "content": text}]},
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)})
+    body = {"model": "mock-1", "pgw_subjects": SUBJ, **extra, "messages": [{"role": "user", "content": text}]}
+    return client.post("/v1/chat/completions", json=body,
+                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose, body)})
 
 
 def test_c4_content_goes_only_to_the_private_model(tmp_path):
@@ -111,3 +111,21 @@ def test_private_route_rejects_streaming(tmp_path):
 def test_keyless_in_boundary_endpoint_sends_no_authorization_header():
     assert "Authorization" not in OpenAICompatUpstream("http://127.0.0.1:8090/v1", "")._headers
     assert OpenAICompatUpstream("https://api.groq.com/openai/v1", "k")._headers["Authorization"] == "Bearer k"
+
+
+def test_private_output_gate_blocks_known_credential_echo(tmp_path):
+    token = "ghp_TEST_ONLY_PRIVATE_ECHO_000000000000000000"
+    class EchoPrivate(LocalModel):
+        async def complete(self, body):
+            self.received.append(self.wire_bytes(body))
+            text = " ".join(m.get("content", "") for m in body.get("messages", []) if isinstance(m.get("content"), str))
+            return {"id": "private-echo", "object": "chat.completion", "created": 0,
+                    "model": body.get("model", "local"), "choices": [{"index": 0,
+                    "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}]}
+    local = EchoPrivate()
+    client, ext = make(tmp_path, private=local)
+    r = call(client, f"राहुल शर्मा: Authorization: Bearer {token}")
+    assert r.status_code == 200, r.text
+    assert not ext.received
+    assert token in local.received[0].decode(), "private-route test must confirm the input canary was seen locally"
+    assert token not in r.text, "private model echoed an input secret to the caller"

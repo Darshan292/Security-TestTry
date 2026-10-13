@@ -113,8 +113,14 @@ external_input:
   unattested: REFUSE                        # or PRIVATE (EXT_PSEUDO contracts with an in-boundary model)
 ```
 
-Every request for a contracted purpose must carry `X-PGW-Input-Source: <one of those ids>`, on every route. That
-includes LOCAL_COMPUTE, whose `instruction` field is free text that goes to the external model.
+Every request for a contracted purpose must carry four source-attestation headers on every route:
+`X-PGW-Input-Source`, `X-PGW-Input-Timestamp`, `X-PGW-Input-Nonce`, and `X-PGW-Input-Signature`. The HMAC binds
+the canonical request-body hash to sanitizer ID, timestamp, nonce, tenant, app and purpose. A bare header or a body
+modified after signing is not accepted. Each nonce is consumed atomically before any provider call. Production
+requires `PGW_SANITIZER_HMAC_KEYS`, a JSON map of sanitizer IDs to random 32-byte-or-longer hex secrets, and durable
+replay state (`PGW_ATTESTATION_DB_PATH`, defaulting beside the ledger database). Keep each key only in the trusted
+sanitizer/export component and gateway secret store; never expose it to browser clients or generic caller apps.
+LOCAL_COMPUTE is signed too because its instruction can contain free text that later reaches the external model.
 
 - If the header is missing, empty, unknown or names another contract's sanitizer, the input is not sent externally.
   With `REFUSE`, the response is 422 `input_not_source_sanitized`, nothing is sent, and the ledger records
@@ -129,13 +135,16 @@ includes LOCAL_COMPUTE, whose `instruction` field is free text that goes to the 
 
 ### What the attestation is, and what it is not
 
-The header is a **declaration by the authenticated calling app**: "this text came out of our sanitizer or export X".
+The headers are a **signed source attestation** from a trusted sanitizer/export component.
 
-- **What the gateway checks:** that the app made the declaration, that the purpose allowlists it, and that it is
-  recorded on the ledger line.
-- **What the gateway does not check:** whether sanitizer X exists, whether it ran, or whether it removed anything.
+- **What the gateway checks:** configured HMAC key, signature, exact canonical body hash, app/tenant/purpose scope,
+  five-minute timestamp window, one-use nonce, and contract allowlisting. Invalid or replayed attestations are refused
+  or sent only to the in-boundary route before external send.
+- **What the gateway does not prove:** that the sanitizer implementation correctly removed every `NOT_EXPECTED`
+  attribute. The key must be held by a trusted source-side component that sanitizes first and signs only after
+  validation. A compromised or incorrect signer can still attest unsafe content.
 
-The NOT_EXPECTED guarantee therefore rests on the source system. The candidates are:
+The NOT_EXPECTED guarantee therefore still depends on the correctness of the source system. Candidates are:
 
 - an allowlisted export of HRIS fields;
 - a ticket form without free-text medical fields;
@@ -167,11 +176,11 @@ M1–M3). It is not a general evaluator.
 
 1. **The content of free text.** NOT_EXPECTED attributes, and any personal data the detectors miss, cross if the app
    attests the input. Recall is measured in `SECURITY_EVALUATION.md` and is not complete.
-2. **The truth of `X-PGW-Input-Source`.** It is an accountable claim, not a verified fact.
+2. **Sanitizer correctness.** HMAC proves which trusted component signed the exact body; it does not prove that its sanitizer removed every prohibited attribute.
 3. **The trust anchor.** The gateway cannot verify where `PGW_TRUSTED_CONFIG_PUBKEY` came from, or whether
    `PGW_MODE=development` is used outside development.
 4. **Network-level egress.** The app must not be able to reach the provider around the gateway. That is the
    network policy in `deploy/`, not application code.
 5. **Provider behaviour.** Retention and region are attested by the operator (`PGW_PROVIDER_*`), not verified.
 6. **Tenant-specific policy.** Not supported (§3).
-7. **Declared subjects' completeness.** People the app does not declare rely on detection.
+7. **Declared subjects' completeness.** People the app does not declare rely on detection. Production refuses to start contracted free-text protection without the pinned local NER model; NER is still incomplete, so only reviewed inputs and declared subjects can support a strong guarantee.

@@ -2,11 +2,19 @@
 # One-command local check: tests + bug/security lint + static security scan + dependency audit.
 # Usage: scripts/check.sh   (PY defaults to the project venv)
 set -uo pipefail
-PY=${PY:-/tmp/claude-0/venv/bin/python}
 cd "$(dirname "$0")/.."
+if [ -n "${PY:-}" ]; then CHECK_PY="$PY"
+elif [ -x .venv/bin/python ]; then CHECK_PY=".venv/bin/python"
+else CHECK_PY="$(command -v python3 || command -v python || true)"; fi
+if [ -z "$CHECK_PY" ] || ! "$CHECK_PY" -c 'import sys; print(sys.executable)' >/dev/null 2>&1; then
+  echo "ERROR: Python interpreter not found; set PY=/path/to/python or create .venv" >&2; exit 2
+fi
 rc=0
-echo "== pytest";     $PY -m pytest tests -q 2>&1 | tail -1 || rc=1
-echo "== ruff (bugs/security, pgw/)"; $PY -m ruff check pgw demo || rc=1
-echo "== bandit (pgw/, medium+)";      $PY -m bandit -r pgw -q -ll || rc=1
-echo "== pip-audit (installed env)";   $PY -m pip_audit -l --progress-spinner off 2>&1 | grep -v "^$" | tail -15 || true
-exit $rc
+run_check() { name="$1"; shift; echo "== $name"; if ! "$@"; then echo "FAILED: $name" >&2; rc=1; fi; }
+run_check "pytest" "$CHECK_PY" -m pytest tests -q
+run_check "ruff (bugs/security, pgw/)" "$CHECK_PY" -m ruff check pgw demo
+run_check "bandit (pgw/, medium+)" "$CHECK_PY" -m bandit -r pgw -q -ll
+for lock in runtime dev ner; do
+  run_check "pip-audit (locked requirements/$lock.txt)" "$CHECK_PY" -m pip_audit --require-hashes --disable-pip -r "requirements/$lock.txt"
+done
+exit "$rc"

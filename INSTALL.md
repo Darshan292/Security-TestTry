@@ -6,7 +6,7 @@ Python 3.11. All lock files carry exact versions **and sha256 hashes**; install 
 python -m venv .venv && . .venv/bin/activate
 pip install --require-hashes -r requirements/runtime.txt     # gateway + library
 
-# optional NER extra (spaCy + en_core_web_lg)
+# required for production contracted free-text protection; optional only in development/test harnesses
 pip install --require-hashes -r requirements/ner.txt -r requirements/ner-model.txt
 
 # development / tests / eval (on top of runtime)

@@ -144,7 +144,7 @@ class NerDetector:
             try:
                 chunks = [c for _, _, c in jobs]
                 docs = nlp.pipe(chunks, batch_size=16) if hasattr(nlp, "pipe") else map(nlp, chunks)
-                for (key, off, chunk), doc in zip(jobs, docs):
+                for (key, off, chunk), doc in zip(jobs, docs, strict=True):
                     for ent in doc.ents:
                         if ent.label_ not in _PERSON_LABELS:
                             continue

@@ -30,6 +30,8 @@ from ..detect.edm import RestoreLedger, RosterIndex
 from ..detect.recognizers import detect_d2
 from ..egress import check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
+from ..pd13.protector import PD13Protector
+from ..product.attestation import MAX_CLOCK_SKEW_SECONDS, NONCE_HEADER, TIMESTAMP_HEADER, SQLiteReplayGuard, verify_headers
 from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer
 from ..product import integrity, local_compute, subjects
@@ -277,6 +279,12 @@ def create_app(settings: Settings) -> Starlette:
     from ..keys import build_keys   # per-tenant key file if configured, else the single master key
     keys: Keys = build_keys(settings, registry)   # or pgw.keys.TenantKeyring: same interface
     contracts, policy = load_contracts(registry, policy, snapshot)
+    if prod:
+        required = {sid for c in contracts.values() for sid in c.external_input.sanitizers}
+        missing = sorted(required - set(settings.sanitizer_hmac_keys))
+        if missing: raise ValueError("production requires PGW_SANITIZER_HMAC_KEYS for every contract sanitizer; missing " + ", ".join(missing))
+        if contracts and not settings.ner_model and settings.ner_detector_override is None: raise ValueError("production requires a local NER model for contracted free-text protection")
+    replay = SQLiteReplayGuard(settings.attestation_db_path or settings.ledger_db_path + ".attestations.sqlite3")
     for p in contracts:   # contracted (RESTRICTED-by-default) purposes never stream unrestored text
         if policy.stream_mode(p) != "buffered":
             raise ContractError(f"purpose {p!r}: contracted purposes must use buffered output")
@@ -285,7 +293,7 @@ def create_app(settings: Settings) -> Starlette:
     protector = Protector(policy, keys, roster, ledger)
     # Contracted purposes (Path A and the free-text field of Path B) also get the local NER. A model that does
     # not load stops startup (NerUnavailable); a model that fails at request time fails that request closed.
-    contract_protector = protector
+    contract_protector = PD13Protector(policy, keys, roster, ledger, l3=True)
     if contracts and settings.ner_model:
         from ..detect.ner import NerDetector
         if settings.ner_workers > 0:   # bounded worker processes (fail closed when full/slow); 0 = in-process
@@ -295,7 +303,7 @@ def create_app(settings: Settings) -> Starlette:
         else:
             ner = NerDetector(settings.ner_model)
             ner.warm()
-        contract_protector = Protector(policy, keys, roster, ledger, ner=ner)
+        contract_protector = PD13Protector(policy, keys, roster, ledger, ner=ner, l3=True)
     elif contracts:
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
@@ -488,20 +496,27 @@ def create_app(settings: Settings) -> Starlette:
             # NOT_EXPECTED attributes (medical, disciplinary, ...) are not detected by the gateway. Free text goes
             # to an external model only when the app declares it was produced by a source-side sanitizer/export
             # this contract allowlists; otherwise it is refused or kept in-boundary (SECURITY_BOUNDARY.md §4).
-            input_source = request.headers.get("x-pgw-input-source", "").strip()
+            input_source = verify_headers(headers=request.headers, body=body, keys=settings.sanitizer_hmac_keys,
+                tenant=app.tenant, app_id=app.app_id, purpose=purpose)
+            if input_source is not None:
+                try: signed_at = int(request.headers.get(TIMESTAMP_HEADER.lower(), "0"))
+                except ValueError: signed_at = 0
+                nonce = request.headers.get(NONCE_HEADER.lower(), "")
+                if not replay.claim(sanitizer=input_source, nonce=nonce, tenant=app.tenant, app_id=app.app_id,
+                                    expires_at=signed_at + MAX_CLOCK_SKEW_SECONDS): input_source = None
             if input_source not in contract.external_input.sanitizers:
                 _tr("input_source", attested=bool(input_source), accepted=False,
                     unattested=contract.external_input.unattested)
                 if contract.external_input.unattested == "PRIVATE":
-                    return await _private(rid, app, purpose, model, body, ctx, contract, t0, "input_not_sanitized")
+                    return await _private(rid, app, purpose, model, body, ctx, contract, t0, "input_not_sanitized", private_canaries(body))
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                             "input_not_sanitized", contract)
                 raise _Reject(422, "input_not_source_sanitized",
                               "this purpose only sends input produced by an allowlisted source-side sanitizer "
-                              "(X-PGW-Input-Source); not sent externally")
+                              "(signed X-PGW source attestation); not sent externally")
             _tr("input_source", attested=True, accepted=True, sanitizer=input_source)
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
-                return await _private(rid, app, purpose, model, body, ctx, contract, t0)
+                return await _private(rid, app, purpose, model, body, ctx, contract, t0, known_withheld=private_canaries(body))
             if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                             "content_class_C4", contract)
@@ -632,7 +647,8 @@ def create_app(settings: Settings) -> Starlette:
         def new_restorer() -> Restorer:
             return Restorer(prot.alias_map, restore=app.restore_output, never_restore=never,
                             roster=roster, mode=policy.stream_mode(purpose),
-                            allowed=frozenset(o.lower() for o in (contract.org_contacts if contract else ())))
+                            allowed=frozenset(o.lower() for o in (contract.org_contacts if contract else ())),
+                            known_withheld=tuple(prot.sensitive_values) + tuple(withheld))
 
         def record(items) -> None:
             if ctx.conversation_id:
@@ -642,7 +658,24 @@ def create_app(settings: Settings) -> Starlette:
             return await _non_stream(rid, up_body, new_restorer, record, contract)
         return await _stream(rid, up_body, new_restorer, record, contract)
 
-    async def _private(rid, app, purpose, model, body, ctx, contract, t0, reason="content_class_C4") -> Response:
+    def private_canaries(body: dict) -> tuple[tuple[EntityType, str], ...]:
+        """Extract known high-risk values for the private route's output gate without forwarding them to logs."""
+        out = []
+        for message in body.get("messages", []):
+            if not isinstance(message, dict):
+                continue
+            content = message.get("content")
+            if not isinstance(content, str):
+                continue
+            for detection in detect_d2(content):
+                if CLASS_OF.get(detection.type) is DataClass.C3 or detection.type is EntityType.SECRET:
+                    value = content[detection.start:detection.end]
+                    if len(value.strip()) >= 4:
+                        out.append((detection.type, value))
+        return tuple(out)
+
+    async def _private(rid, app, purpose, model, body, ctx, contract, t0, reason="content_class_C4",
+                       known_withheld: tuple[tuple[EntityType, str], ...] = ()) -> Response:
         """C4 content the gateway cannot protect reliably goes, unprotected, ONLY to the in-boundary model.
         The external upstream is never called. The answer still passes the output gate (raw C3 is masked)."""
         if body.get("stream"):
@@ -677,7 +710,9 @@ def create_app(settings: Settings) -> Starlette:
                 # Detectors cannot read C4 content reliably (that is why it is here): also mask every long digit
                 # run (account / Aadhaar / card lengths, any separators), whatever script surrounds it.
                 out = _LONG_DIGITS.sub("[NUMBER]", out)
-            _tr("restore", restored=0, gate="C3 and long digit runs masked in the in-boundary model's answer",
+                private_gate = Restorer({}, restore=False, mode="buffered", known_withheld=known_withheld)
+                out = private_gate.feed(out) + private_gate.finish()
+            _tr("restore", restored=0, gate="C3, long digit runs and exact input canaries masked in the in-boundary model's answer",
                 answer=out)
         except Exception as e:
             _log(logging.ERROR, event="restore_failed", request_id=rid, error_type=type(e).__name__)

@@ -256,7 +256,7 @@ class Protector:
             if ner_views:
                 many = getattr(self.ner, "detect_many", None)
                 res = many(ner_views) if many is not None else [self.ner.detect(v) for v in dict.fromkeys(ner_views)]
-                ner_res = dict(zip(ner_views if many is not None else dict.fromkeys(ner_views), res))
+                ner_res = dict(zip(ner_views if many is not None else dict.fromkeys(ner_views), res, strict=True))
         for name, view, omap in views:
             dets = recognizers.detect_d2(view) + detect_person_cues(view)
             if self.roster is not None and _abl.get().D3:
@@ -313,7 +313,7 @@ class Protector:
 
         # 2. Known values: everything detected anywhere, plus D1 field values.
         known: dict[tuple[EntityType, str], float] = {}
-        for seg, dets in zip(segs, per_seg):
+        for seg, dets in zip(segs, per_seg, strict=True):
             for d in _resolve(dets):
                 if d.source == "C:declared-subject":   # matchers already cover every variant; propagating each
                     continue                          # surface again would multiply work (DoS) for nothing
@@ -350,7 +350,7 @@ class Protector:
     def _transform(self, messages, segs, per_seg, ctx) -> Protected:
         # 4. Decide.
         entities: dict[tuple[EntityType, str], Entity] = {}
-        for seg, dets in zip(segs, per_seg):
+        for seg, dets in zip(segs, per_seg, strict=True):
             for d in dets:
                 surface = seg.text[d.start:d.end]
                 key = (d.type, canon(d.type, surface))
@@ -368,10 +368,10 @@ class Protector:
         label = f"alias/{ctx.alias_ns}" if ctx.alias_ns else "alias"
         alloc = AliasAllocator(scope_key(self.keys.derive(ctx.tenant, label, self._alias_key_id(ctx)), scope_id))
         prot = Protected(messages, scope_id, entities)
-        for key, ent in entities.items():
+        for _key, ent in entities.items():
             if ent.action is Action.TOKENIZE:
                 ent.alias = alloc.get(ent.type, ent.value)
-        for key, ent in entities.items():  # second pass: collisions may have re-assigned aliases
+        for _key, ent in entities.items():  # second pass: collisions may have re-assigned aliases
             if ent.action is Action.TOKENIZE:
                 ent.alias = alloc.get(ent.type, ent.value)
                 ent.replacement = ent.alias
@@ -381,7 +381,7 @@ class Protector:
             elif ent.action is Action.GENERALIZE:
                 ent.replacement = generalize(ent.type, ent.value)
 
-        for seg, dets in zip(segs, per_seg):
+        for seg, dets in zip(segs, per_seg, strict=True):
             text = seg.text
             for d in sorted(dets, key=lambda d: d.start, reverse=True):
                 ent = entities[(d.type, canon(d.type, text[d.start:d.end]))]

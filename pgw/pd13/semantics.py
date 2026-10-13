@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pgw.detect.recognizers import luhn_valid, verhoeff_valid
 from pgw.types import EntityType as T
 
-from .dictionary import RELEASE_CONCEPTS, TYPE_CONCEPTS, Dictionary
+from .dictionary import RELEASE_CONCEPTS, Dictionary
 from .fieldview import name_shaped_cell
 from .records import Field, Graph, is_placeholder
 from .shapes import Shape

@@ -41,8 +41,12 @@ def post(client, purpose, text=CANARY_TEXT, headers=None, subjects=True):
     body = {"model": "mock-1", "messages": [{"role": "user", "content": text}]}
     if subjects and purpose.startswith("ticket_summary"):
         body["pgw_subjects"] = {"requester": {"name": CANARY}}
-    return client.post("/v1/chat/completions", json=body,
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **(headers or {})})
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose}
+    if headers is None:
+        h.update(source(purpose, body))
+    else:
+        h.update(headers)
+    return client.post("/v1/chat/completions", json=body, headers=h)
 
 
 def ledger(tmp) -> str:
@@ -212,14 +216,14 @@ def test_local_compute_free_text_needs_the_attestation_too(tmp_path):
     payload = {"instruction": "Compare; note one of them is on medical leave.",
                "employees": [{"name": "Amit Trivedi", "employee_id": "KD-10989", "annual_ctc": 2450000},
                              {"name": "Hetal Shah", "employee_id": "KD-11063", "annual_ctc": 2180000}]}
-    r = post(client, "salary_comparison", json.dumps(payload))
+    r = post(client, "salary_comparison", json.dumps(payload), headers={})
     assert r.status_code == 422 and not mock.received
-    assert post(client, "salary_comparison", json.dumps(payload), source("salary_comparison")).status_code == 200
+    assert post(client, "salary_comparison", json.dumps(payload)).status_code == 200
 
 
 def test_attested_input_is_sent_and_recorded(tmp_path):
     client, mock = ticket_client(tmp_path)
-    r = post(client, "ticket_summary", CANARY_TEXT, source("ticket_summary"))
+    r = post(client, "ticket_summary", CANARY_TEXT)
     assert r.status_code == 200 and len(mock.received) == 1
     row = json.loads(ledger(tmp_path).splitlines()[-1])
     assert row["decision"] == "SENT" and row["input_source"] == "helpdesk-ticket-export@1"
@@ -229,7 +233,7 @@ def test_not_expected_content_is_not_removed_when_attested(tmp_path):
     """LIMITATION, asserted so it cannot be claimed away: the gateway does not detect or remove medical or
     disciplinary detail from free text. If the app attests a sanitizer that let it through, it is sent."""
     client, mock = ticket_client(tmp_path)
-    assert post(client, "ticket_summary", MEDICAL, source("ticket_summary")).status_code == 200
+    assert post(client, "ticket_summary", MEDICAL).status_code == 200
     wire = mock.received[-1].decode()
     assert "chemotherapy" in wire and "disciplinary warning" in wire and CANARY not in wire
 
@@ -238,7 +242,7 @@ def test_unattested_input_can_be_kept_in_boundary(tmp_path):
     from tests.test_private_route import LocalModel
     local = LocalModel()
     client, ext = ticket_client(tmp_path, purpose="ticket_summary_any_script", private_upstream=local)
-    r = post(client, "ticket_summary_any_script", MEDICAL)
+    r = post(client, "ticket_summary_any_script", MEDICAL, headers={})
     assert r.status_code == 200 and r.headers["X-PGW-Route"] == "PRIVATE_LOCAL"
     assert ext.received == [] and len(local.received) == 1
     row = json.loads(ledger(tmp_path).splitlines()[-1])

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
 import json
 import logging
@@ -39,6 +40,7 @@ from pgw.gateway.app import build_upstream, create_app  # noqa: E402
 from pgw.gateway.settings import Settings, check_destination  # noqa: E402
 from pgw.gateway.upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream  # noqa: E402
 from pgw.alias import ALIAS_RE as ALIAS_BODY  # noqa: E402
+from pgw.product.attestation import sign_headers  # noqa: E402
 from pgw.product.local_compute import surface_forms  # noqa: E402
 
 MODEL = "claude-opus-5-5"
@@ -97,6 +99,7 @@ class Scenario:
     never_returned: list[str] = field(default_factory=list)   # C3: never in the restored response
     subjects: dict | None = None         # PATH A declared subjects (pgw_subjects)
     ner_misses: list[str] = field(default_factory=list)       # declared names to check NER alone would miss
+    ner_only: list[str] = field(default_factory=list)         # undeclared names whose protection requires NER
     answer_has: list[str] = field(default_factory=list)       # business-correctness (content) checks, case-insens.
     answer_lacks: list[str] = field(default_factory=list)
 
@@ -111,8 +114,8 @@ def _forms(*vals):
 SCENARIOS = [
     Scenario("A1 ticket summary", "ticket_summary", "Summarise this ticket in three lines for the weekly payroll "
              "review.\n---\n" + TICKET,
-             raw=["Imran Ansari", "KD-11914", "ZXWPA3889P", "644748074748", "imran.ansari@kestrel-dyn.in",
-                  "Suresh Menon"],
+             raw=["Imran Ansari", "KD-11914", "ZXWPA3889P", "644748074748", "imran.ansari@kestrel-dyn.in"],
+             ner_only=["Suresh Menon"],
              expect_restored=["Imran Ansari"], never_returned=["ZXWPA3889P", "644748074748"],
              # Suresh Menon is deliberately NOT declared: NER is the safety net for undeclared people.
              subjects={"requester": {"name": "Imran Ansari", "employee_id": "KD-11914",
@@ -245,17 +248,21 @@ def make_settings(out: Path, upstream, **kw) -> Settings:
     return Settings(mode="development", registry_path=str(ROOT / "registry/apps.yaml"),
                     roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                     ledger_db_path=str(out / "restore_ledger.sqlite"), egress_ledger_path=str(out / "egress.jsonl"),
-                    master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream,
+                    master_key=os.urandom(32).hex(), ner_model=None, upstream=upstream,
+                    sanitizer_hmac_keys={sid: hashlib.sha256(("PILOT-ONLY:" + sid).encode()).digest() for sid in
+                        ("band-review-form@1", "esi-coverage-form@1", "hris-case-export@1", "hr-email-composer@1", "comp-review-form@1", "helpdesk-ticket-export@1")},
                     **kw)
 
 
-def input_source(purpose: str) -> dict:
-    """These fixed synthetic inputs stand for the contract's allowlisted source-side export (SECURITY_BOUNDARY.md)."""
+def input_source(purpose: str, body: dict) -> dict:
+    """Sign synthetic harness requests; never use these test keys in production."""
     from pgw.product.contracts import load_contract
     path = ROOT / f"contracts/{purpose}.yaml"
     if not path.exists():   # an unregistered/uncontracted purpose: the gateway refuses it before this matters
         return {}
-    return {"X-PGW-Input-Source": sorted(load_contract(path).external_input.sanitizers)[0]}
+    sid = sorted(load_contract(path).external_input.sanitizers)[0]
+    key = hashlib.sha256(("PILOT-ONLY:" + sid).encode()).digest()
+    return sign_headers(sanitizer=sid, body=body, key=key, tenant="acme", app_id="hr-helpdesk-pilot", purpose=purpose)
 
 
 def post(client, purpose, content, model=MODEL, subjects=None, messages=None, conv=None):
@@ -263,21 +270,34 @@ def post(client, purpose, content, model=MODEL, subjects=None, messages=None, co
             "messages": messages or [{"role": "user", "content": content}]}
     if subjects is not None:
         body["pgw_subjects"] = subjects
-    h = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, **input_source(purpose)}
+    h = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, **input_source(purpose, body)}
     if conv:
         h["X-PGW-Conversation-Id"] = conv
     return client.post("/v1/chat/completions", headers=h, json=body)
 
 
-def ner_alone_finds(text: str, names: list[str]) -> list[str]:
-    """Which of `names` the existing detectors (incl. NER) find without any declaration (local, no LLM call)."""
-    from pgw.detect.ner import NerDetector
-    from pgw.pipeline import Keys, Protector
-    from pgw.policy import PolicyPack
-    p = Protector(PolicyPack.load(str(ROOT / "policies/hris-default.yaml")), Keys(bytes(32)),
-                  ner=NerDetector("en_core_web_lg"))
-    found = " | ".join(text[d.start:d.end] for d in p.detect_text(text)).lower()
-    return [n for n in names if n.lower() in found]
+def available_ner_model() -> str | None:
+    try:
+        import spacy
+        return "en_core_web_lg" if spacy.util.is_package("en_core_web_lg") else None
+    except (ImportError, OSError):
+        return None
+
+
+def ner_alone_finds(text: str, names: list[str]) -> list[str] | None:
+    """Return None rather than claiming coverage when the pinned NER model is absent."""
+    model = available_ner_model()
+    if model is None:
+        return None
+    try:
+        from pgw.detect.ner import NerDetector
+        from pgw.pipeline import Keys, Protector
+        from pgw.policy import PolicyPack
+        p = Protector(PolicyPack.load(str(ROOT / "policies/hris-default.yaml")), Keys(bytes(32)), ner=NerDetector(model))
+        found = " | ".join(text[d.start:d.end] for d in p.detect_text(text)).lower()
+        return [n for n in names if n.lower() in found]
+    except (ImportError, OSError, RuntimeError):
+        return None
 
 
 def ledger_row(out: Path, rid: str) -> dict | None:
@@ -293,6 +313,13 @@ def main() -> int:
     ap.add_argument("--provider", choices=["anthropic", "groq", "mock"], default="groq")
     ap.add_argument("--out", default=f"/home/user/pilot_captures/{time.strftime('%Y%m%d-%H%M%S')}")
     args = ap.parse_args()
+    try:
+        import spacy
+        ner_model = "en_core_web_lg" if spacy.util.is_package("en_core_web_lg") else None
+    except ImportError:
+        ner_model = None
+    if args.provider != "mock" and ner_model is None:
+        raise SystemExit("Install the pinned en_core_web_lg model before provider validation; no provider requests sent.")
     from demo.envfile import load_env
     load_env()
     out = Path(args.out).resolve()
@@ -307,7 +334,7 @@ def main() -> int:
     else:
         key = os.environ.get("ANTHROPIC_API_KEY", "")
     model = MODELS[args.provider]
-    have_answers = args.provider == "mock" or bool(key)
+    have_answers = args.provider != "mock" and bool(key)
     mode = "mock self-test (NOT provider validation)" if args.provider == "mock" else (
         f"real provider ({args.provider}, {model})" if key else "real endpoint, invalid key (answers BLOCKED)")
 
@@ -363,6 +390,12 @@ def main() -> int:
                         else "raw protected value")
                 check(f"{sc.name}: no {what} in outbound bytes", bool(ex) and not leaked,
                       f"{len(sc.raw)} values checked, {len(leaked)} found")
+                if sc.ner_only:
+                    ner_leaked = [v for v in sc.ner_only if v.lower() in sent_text.lower()]
+                    check(f"{sc.name}: undeclared NER-only values are not sent",
+                          None if ner_model is None else bool(ex) and not ner_leaked,
+                          "NER model unavailable; not evaluated" if ner_model is None else
+                          f"{len(sc.ner_only)} values checked, {len(ner_leaked)} found")
                 if sc.must_cross:
                     missing = [v for v in sc.must_cross if v not in sent_text]
                     check(f"{sc.name}: contract RAW/C0 values cross as declared", bool(ex) and not missing,
@@ -375,14 +408,15 @@ def main() -> int:
                       f"subjects={(row or {}).get('declared_subjects')}")
                 if sc.ner_misses:
                     found = ner_alone_finds(sc.content, sc.ner_misses)
-                    check(f"{sc.name}: detectors alone (incl. NER) miss declared names", len(found) < len(sc.ner_misses),
+                    check(f"{sc.name}: detectors alone (incl. NER) miss declared names",
+                          None if found is None else len(found) < len(sc.ner_misses),
+                          "NER model unavailable; not evaluated" if found is None else
                           f"detectors alone find {len(found)}/{len(sc.ner_misses)}")
                     check(f"{sc.name}: declared subjects protected where NER misses them", bool(ex) and not leaked,
                           f"{len(leaked)} leaked after declaration")
-                if not have_answers or r.status_code != 200:
+                if r.status_code != 200:
                     for c in ("aliases survive provider formatting", "restoration", "C3 never returned"):
-                        check(f"{sc.name}: {c}", None if not have_answers else False,
-                              f"gateway status {r.status_code}")
+                        check(f"{sc.name}: {c}", False, f"gateway status {r.status_code}")
                     continue
                 ans = inbound_text(inbound)
                 exact = [a for a in aliases_out if a in ans]
@@ -395,13 +429,19 @@ def main() -> int:
                 check(f"{sc.name}: restoration (every alias the model used came back as the real value)",
                       not left, f"{len(used)} alias uses in the answer, {len(left)} left unrestored")
                 low = restored.lower()
-                for k, v in enumerate(sc.answer_has, 1):   # labels never carry the value (summary is content-free)
-                    check(f"{sc.name}: answer contains required item {k} (business correctness)", v.lower() in low)
+                for k, v in enumerate(sc.answer_has, 1):
+                    check(f"{sc.name}: answer contains required item {k} (business correctness)",
+                          None if not have_answers else v.lower() in low,
+                          "mock provider echoes the prompt; semantic answer not evaluated" if not have_answers else "")
                 for v in sc.answer_lacks:
                     check(f"{sc.name}: answer does not contain a forbidden item (business correctness)",
-                          v.lower() not in low, "ok" if v.lower() not in low else "present")
+                          None if not have_answers else v.lower() not in low,
+                          "mock provider echoes the prompt; semantic answer not evaluated" if not have_answers else
+                          ("ok" if v.lower() not in low else "present"))
                 check(f"{sc.name}: answer names the expected people (content, model-dependent)",
-                      len(got) == len(sc.expect_restored), f"{len(got)}/{len(sc.expect_restored)}")
+                      None if not have_answers else len(got) == len(sc.expect_restored),
+                      "mock provider echoes the prompt; semantic answer not evaluated" if not have_answers else
+                      f"{len(got)}/{len(sc.expect_restored)}")
                 check(f"{sc.name}: C3 never returned", not any(v in restored for v in sc.never_returned),
                       f"{len(sc.never_returned)} checked")
 
@@ -435,7 +475,7 @@ def main() -> int:
                 (out / f"multiturn_{i}.json").write_text(json.dumps(rec, indent=1, ensure_ascii=False))
                 check(f"M turn {i}: no raw value (incl. undeclared-this-turn names) in outbound",
                       bool(ex) and not leaked, f"status {r.status_code}, {len(leaked)} found")
-                if have_answers and r.status_code == 200:
+                if r.status_code == 200:
                     left = [m.group(0) for m in ALIAS_BODY.finditer(restored)]
                     check(f"M turn {i}: restored answer has no aliases left", not left, f"{len(left)} left")
                 mt_out.append(json.loads(ex[0]["outbound"]) if ex else None)

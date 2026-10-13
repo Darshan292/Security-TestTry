@@ -73,7 +73,7 @@ def call(client, purpose, content, key=KEY, subjects=None):
     if purpose == "ticket_summary":
         body["pgw_subjects"] = subjects or REQUESTER
     return client.post("/v1/chat/completions", json=body,
-                       headers={"Authorization": f"Bearer {key}", "X-PGW-Purpose": purpose, **source(purpose)})
+                       headers={"Authorization": f"Bearer {key}", "X-PGW-Purpose": purpose, **source(purpose, body)})
 
 
 def sent(mock) -> str:

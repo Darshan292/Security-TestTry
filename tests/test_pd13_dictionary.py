@@ -1,6 +1,7 @@
 """PD-13 L3 dictionary: schema, provenance, matching."""
 from __future__ import annotations
 
+import gzip
 import json
 import re
 from pathlib import Path
@@ -14,6 +15,14 @@ ENTRIES = json.loads(PATH.read_text())
 _STANDARDS = ("schema.org", "vCard RFC 6350", "SAP HCM PA infotype", "Workday Get_Workers", "SAP SuccessFactors OData",
               "HR Open Standards", "ISO 20022", "EPFO", "ESIC", "Income Tax Form 16")
 DEV3 = Path(__file__).resolve().parents[1] / "eval" / "data3" / "dev3build.jsonl"
+
+
+def dev3_lines() -> list[str]:
+    if DEV3.exists(): return DEV3.read_text(encoding="utf-8").splitlines()
+    compressed = DEV3.with_suffix(DEV3.suffix + ".gz")
+    if compressed.exists():
+        with gzip.open(compressed, "rt", encoding="utf-8") as f: return f.read().splitlines()
+    pytest.skip("sealed dev3build synthetic split is not present in this source archive")
 
 
 def test_every_entry_has_key_concept_and_provenance():
@@ -36,7 +45,7 @@ def test_provenance_is_standard_or_dev3_item():
 
 
 def test_dev3_provenance_ids_exist_in_dev3build_only():
-    ids = {json.loads(l)["id"] for l in DEV3.read_text().splitlines() if l.strip()}
+    ids = {json.loads(l)["id"] for l in dev3_lines() if l.strip()}
     for e in ENTRIES:
         if e["provenance"].startswith("dev3:"):
             assert e["provenance"][5:] in ids, e

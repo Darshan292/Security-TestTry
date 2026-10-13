@@ -31,7 +31,6 @@ SUBJECTS = {"requester": {"name": "Imran Ansari", "employee_id": "KD-11914"},
             "assignee": {"name": "Tejaswini Kulkarni"},
             "mentioned": [{"name": "Nandini"}]}
 
-SRC = source("ticket_summary")
 
 
 def sha(k):
@@ -55,7 +54,7 @@ def call(client, content, subjects=None, purpose="ticket_summary", conv=None):
     body = {"model": "mock-1", "messages": [{"role": "user", "content": content}]}
     if subjects is not None:
         body["pgw_subjects"] = subjects
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose, body)}
     if conv:
         h["X-PGW-Conversation-Id"] = conv
     return client.post("/v1/chat/completions", headers=h, json=body)
@@ -281,7 +280,7 @@ def test_names_inside_tool_arguments_and_list_parts(tmp_path):
             "name": "lookup", "arguments": json.dumps({"who": "Tejaswini Kulkarni", "u": "Jos\u00e9"})}}]},
         {"role": "tool", "tool_call_id": "c1", "content": "found tejaswini"}]}
     r = client.post("/v1/chat/completions", json=body, headers={"Authorization": f"Bearer {KEY}",
-                    "X-PGW-Purpose": "ticket_summary", "X-PGW-Conversation-Id": "conv-tool", **SRC})
+                    "X-PGW-Purpose": "ticket_summary", "X-PGW-Conversation-Id": "conv-tool", **source("ticket_summary", body)})
     assert r.status_code == 200 and "tejaswini" not in mock.received[-1].decode().lower()
 
 
@@ -289,7 +288,7 @@ def test_c4_and_size_limits_cover_list_form_content(tmp_path):
     client, mock = make(tmp_path)
     body = {"model": "mock-1", "pgw_subjects": TK,
             "messages": [{"role": "user", "content": [{"type": "text", "text": "राहुल शर्मा का वेतन"}]}]}
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **source("ticket_summary", body)}
     assert client.post("/v1/chat/completions", json=body, headers=h).status_code == 422
     body["messages"][0]["content"] = [{"type": "text", "text": "x" * 15000}] * 2
     assert client.post("/v1/chat/completions", json=body, headers=h).status_code == 413
@@ -333,7 +332,7 @@ def test_declared_values_in_tools_or_stop_are_a_400(tmp_path):
     body = {"model": "mock-1", "pgw_subjects": TK, "stop": ["Tejaswini"],
             "messages": [{"role": "user", "content": "hello"}]}
     r = client.post("/v1/chat/completions", json=body,
-                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC})
+                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **source("ticket_summary", body)})
     assert r.status_code == 400 and not mock.received and "Tejaswini" not in r.text
 
 
@@ -386,7 +385,7 @@ def test_later_turn_reprotects_names_not_declared_again(tmp_path):
             {"role": "user", "content": "Thanks, please loop in tejaswini kulkarni and NANDINI again."}]
     r = client.post("/v1/chat/completions", json={"model": "mock-1", "messages": hist,
                     "pgw_subjects": {"requester": SUBJECTS["requester"]}},
-                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC,
+                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **source("ticket_summary", {"model":"mock-1", "messages": hist, "pgw_subjects":{"requester": SUBJECTS["requester"]}}),
                              "X-PGW-Conversation-Id": "c-mt"})
     assert r.status_code == 200
     w = wire(mock).lower()

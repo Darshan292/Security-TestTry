@@ -39,8 +39,11 @@ from pgw.gateway.settings import Settings, check_destination  # noqa: E402
 from pgw.gateway.upstream import MockLLMUpstream, OpenAICompatUpstream  # noqa: E402
 from pgw.private_llm import BACKEND as PRIVATE_BACKEND, app as private_app  # noqa: E402
 from pgw.product.contracts import load_contract  # noqa: E402
+from pgw.product.attestation import sign_headers  # noqa: E402
 
 APP_KEY = "ui-demo-key"
+_DEMO_SANITIZER_IDS = ("band-review-form@1", "esi-coverage-form@1", "hris-case-export@1", "hr-email-composer@1", "comp-review-form@1", "helpdesk-ticket-export@1")
+DEMO_SANITIZER_KEYS = {sid: hashlib.sha256(("DEMO-ONLY-SYNTHETIC:" + sid).encode()).digest() for sid in _DEMO_SANITIZER_IDS}
 GROQ_URL, GROQ_MODEL = "https://api.groq.com/openai/v1", "openai/gpt-oss-120b"
 ALIAS = re.compile(r"\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]")
 STEPS = ["request", "auth", "contract", "subjects", "route", "local_compute", "protect", "egress", "send",
@@ -187,15 +190,16 @@ def build(groq_key: str | None, tmp: Path, runs: Runs):
     s = Settings(mode="development", integrity_manifest=None, registry_path=str(reg), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                  ledger_db_path=str(tmp / "restore.sqlite"), egress_ledger_path=str(tmp / "audit.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=upstream, private_upstream=private, ner_model=ner,
-                 trace=runs.observe)
+                 sanitizer_hmac_keys=DEMO_SANITIZER_KEYS, trace=runs.observe)
     return create_app(s), model, provider, ner, s
 
 
-def input_source(purpose: str) -> dict:
-    """The demo plays the source app: its fixed synthetic scenarios stand for the contract's allowlisted export."""
-    from pgw.product.contracts import load_contract
+def input_source(purpose: str, body: dict) -> dict:
+    """Sign fixed synthetic demo scenarios; keys are demo-only and never production secrets."""
     ids = sorted(load_contract(ROOT / f"contracts/{purpose}.yaml").external_input.sanitizers)
-    return {"X-PGW-Input-Source": ids[0]}
+    sid = ids[0]
+    return sign_headers(sanitizer=sid, body=body, key=DEMO_SANITIZER_KEYS[sid],
+                        tenant="demo", app_id="ui-demo", purpose=purpose)
 
 
 def scenarios() -> list[dict]:
@@ -343,7 +347,7 @@ def make_ui(groq_key: str | None, port: int = 8765, extra_origins: tuple[str, ..
             if subj:
                 body["pgw_subjects"] = subj
             headers = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, "X-PGW-Trace": rid,
-                       **input_source(purpose)}
+                       **input_source(purpose, body)}
             if conv:
                 headers["X-PGW-Conversation-Id"] = conv
             task = asyncio.create_task(client.post("/v1/chat/completions", json=body, headers=headers))

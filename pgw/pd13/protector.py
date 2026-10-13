@@ -68,9 +68,9 @@ class PD13Protector(Protector):
         self.semantics = Semantics(dictionary, today) if l3 else None
 
     # D1 (field-context detection) is removed in B and C through the existing ablation switch.
-    def _detect_segments(self, segs, ctx):
+    def _detect_segments(self, segs, ctx, declared=None):
         with _abl.use(_abl.get().without("D1")):
-            return super()._detect_segments(segs, ctx)
+            return super()._detect_segments(segs, ctx, declared)
 
     def detect_text(self, text: str) -> list[Detection]:
         with _abl.use(_abl.get().without("D1")):

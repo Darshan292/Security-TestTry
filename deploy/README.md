@@ -21,7 +21,9 @@ Addresses THREAT_MODEL T13 (apps call providers directly) and ADR-0001 rule 1 (o
 | `PGW_TRUSTED_CONFIG_PUBKEY` | unset (production will not start) | Ed25519 public key that must have signed `policies/MANIFEST.json`. Supply it from a secret store or image the config authors cannot write |
 | `PGW_INTEGRITY_MANIFEST` | `policies/MANIFEST.json` | Registry, policy and contracts must match their sealed sha256 and version, or the gateway does not start. No env switch turns this off |
 | `PGW_POLICY_SIGNING_KEY` / `PGW_REQUIRE_SIGNED_POLICY=1` | unset / off | Older HMAC check, still verified if set. Not a trust anchor (symmetric key) |
-| `PGW_NER_MODEL` | `en_core_web_lg` | Local NER on contracted purposes. A model that does not load stops startup; `none` disables it (logged as a warning) |
+| `PGW_SANITIZER_HMAC_KEYS` | empty (production refuses startup) | JSON map of sanitizer IDs to random 32-byte-or-longer hex secrets; inject through a secret manager into gateway and trusted source sanitizer only |
+| `PGW_ATTESTATION_DB_PATH` | `<PGW_LEDGER_DB>.attestations.sqlite3` | Persistent nonce replay database; multi-host requires shared transactional replay state |
+| `PGW_NER_MODEL` | `en_core_web_lg` | Required local NER on contracted production purposes. Production refuses to start if disabled or missing. Development/test harnesses may disable it only with synthetic data |
 | `PGW_MAX_BODY_BYTES` / `PGW_MAX_CONTENT_CHARS` / `PGW_MAX_MESSAGES` | 262144 / 50000 / 200 | 413, nothing sent |
 | `PGW_PROTECT_TIMEOUT_S` / `PGW_MAX_CONCURRENT_PROTECT` | 10 / 8 | 503 on deadline or when all worker slots are busy. A timed-out worker keeps its slot until it really ends |
 | `PGW_UPSTREAM_TIMEOUT_S` | 60 | Provider timeout; failure is 502 with no content |

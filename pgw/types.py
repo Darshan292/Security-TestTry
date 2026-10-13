@@ -19,7 +19,7 @@ class EntityType(str, Enum):
     IFSC = "IFSC"
     CARD = "CARD"
     UPI_ID = "UPI_ID"
-    SECRET = "SECRET"
+    SECRET = "SECRET"  # noqa: S105 - entity type label, not a credential
     EMPLOYEE_ID = "EMPLOYEE_ID"
     COMPENSATION = "COMPENSATION"
     DATE_OF_BIRTH = "DATE_OF_BIRTH"

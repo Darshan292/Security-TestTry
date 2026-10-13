@@ -13,9 +13,12 @@ from starlette.testclient import TestClient
 from pgw.gateway.app import create_app
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
+from pgw.product.attestation import sign_headers
 
 ROOT = Path(__file__).resolve().parents[1]
 KEY = "pilot-key"
+_SANITIZER_IDS = ("band-review-form@1", "esi-coverage-form@1", "hris-case-export@1", "hr-email-composer@1", "comp-review-form@1", "helpdesk-ticket-export@1")
+SANITIZER_KEYS = {sid: hashlib.sha256(("DEMO-ONLY-SYNTHETIC:" + sid).encode()).digest() for sid in _SANITIZER_IDS}
 TICKET = ("Summarise ticket PAY-88231 in three lines for the weekly payroll review.\n---\n"
           "Ticket PAY-88231 | Raised by: Imran Ansari (KD-11914) | Status: Resolved\n"
           "[28 Sep] Imran Ansari: Extra TDS deduction of Rs 4,500; HRA exemption not applied. PAN ZXWPA3889P.\n"
@@ -37,26 +40,28 @@ def client(tmp):
     s = Settings(mode="development", integrity_manifest=None,
                  policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
                  roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"), ledger_db_path=str(tmp / "l.sqlite"),
-                 egress_ledger_path=str(tmp / "egress.jsonl"), master_key=os.urandom(32).hex(), upstream=mock)
+                 egress_ledger_path=str(tmp / "egress.jsonl"), master_key=os.urandom(32).hex(), upstream=mock, sanitizer_hmac_keys=SANITIZER_KEYS)
     return TestClient(create_app(s)), mock
 
 
-def input_source(purpose: str) -> dict:
-    """These fixed synthetic inputs stand for the contract's allowlisted source-side export (SECURITY_BOUNDARY.md)."""
+def input_source(purpose: str, body: dict) -> dict:
+    """Sign fixed synthetic demo input; these keys must never be reused in production."""
     from pgw.product.contracts import load_contract
     path = ROOT / f"contracts/{purpose}.yaml"
-    if not path.exists():   # an unregistered/uncontracted purpose: the gateway refuses it before this matters
-        return {}
-    return {"X-PGW-Input-Source": sorted(load_contract(path).external_input.sanitizers)[0]}
+    if not path.exists(): return {}
+    sid = sorted(load_contract(path).external_input.sanitizers)[0]
+    return sign_headers(sanitizer=sid, body=body, key=SANITIZER_KEYS[sid], tenant="demo",
+                        app_id="hr-helpdesk-pilot", purpose=purpose)
 
 
 def scene(title, purpose, content, attest=True):
     tmp = Path(tempfile.mkdtemp())
     c, mock = client(tmp)
-    r = c.post("/v1/chat/completions", headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose,
-                                                **(input_source(purpose) if attest else {})},
-               json={"model": "mock-1", "messages": [{"role": "user", "content": content}],
-                     **({"pgw_subjects": {"requester": {"name": "Imran Ansari"}}} if purpose == "ticket_summary" else {})})
+    body = {"model": "mock-1", "messages": [{"role": "user", "content": content}],
+            **({"pgw_subjects": {"requester": {"name": "Imran Ansari"}}} if purpose == "ticket_summary" else {})}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose}
+    if attest: h.update(input_source(purpose, body))
+    r = c.post("/v1/chat/completions", headers=h, json=body)
     print("=" * 100, f"\n{title}\n" + "-" * 100)
     print("APP SENT:\n ", content.replace("\n", "\n  "))
     if mock.received:

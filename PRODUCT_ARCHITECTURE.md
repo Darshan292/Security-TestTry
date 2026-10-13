@@ -52,7 +52,7 @@ C2 values (compensation, DOB) are never sent exact. Some attributes cannot be de
 | Stance | Meaning |
 |---|---|
 | **PSEUDONYMISED_RAW** | May cross raw, only next to aliased identities. Still personal data |
-| **NOT_EXPECTED** | The source must not send it for this purpose. **Not detected or removed by the gateway.** What is enforced: free text goes to an external model only when the app attests (`X-PGW-Input-Source`) that it came from a sanitizer or export the contract allowlists; otherwise it is refused or sent to the in-boundary model. The attestation is recorded, not verified (SECURITY_BOUNDARY.md §4) |
+| **NOT_EXPECTED** | The source must not send it for this purpose. **Not detected or removed by the gateway.** What is enforced: free text goes to an external model only when a trusted source HMAC-signs the canonical body and request context with a fresh one-use nonce; otherwise it is refused or sent to the in-boundary model. Signature provenance is verified and replay-protected, but sanitizer correctness still depends on the trusted source component (SECURITY_BOUNDARY.md §4) |
 | **LOCAL_ONLY** | Only via LOCAL-COMPUTE inputs and outputs, under the egress rules |
 
 Stances chosen by the shipped contracts:

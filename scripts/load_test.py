@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import collections
+import hashlib
 import os
 import statistics
 import sys
@@ -25,8 +26,11 @@ sys.path.insert(0, str(ROOT))
 from pgw.gateway.app import create_app  # noqa: E402
 from pgw.gateway.settings import Settings  # noqa: E402
 from pgw.gateway.upstream import MockLLMUpstream  # noqa: E402
+from pgw.product.attestation import sign_headers  # noqa: E402
 
 KEY = "pilot-hr-helpdesk-key-change-me"
+SANITIZER = "helpdesk-ticket-export@1"
+SANITIZER_KEY = hashlib.sha256(("LOAD-TEST-SYNTHETIC:" + SANITIZER).encode()).digest()
 SUBJECTS = {"requester": {"name": "Imran Ansari", "employee_id": "KD-11914"}}
 FILLER = ("Ticket PAY-90412 | Raised by: Imran Ansari (KD-11914). The August arrears were not credited; "
           "payroll re-ran the file and the amount is still missing from the payslip. Please check the cycle. ")
@@ -48,7 +52,7 @@ async def run_level(ner: str | None, conc: int, n: int, size: int, workers: int 
                      registry_path=str(ROOT / "registry/apps.yaml"), policy_path=str(ROOT / "policies/hris-default.yaml"),
                      roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                      ledger_db_path=f"{tmp}/ledger.sqlite", egress_ledger_path=f"{tmp}/egress.jsonl",
-                     master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"), ner_model=ner, ner_workers=workers)
+                     master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"), ner_model=ner, ner_workers=workers, sanitizer_hmac_keys={SANITIZER: SANITIZER_KEY})
         app = create_app(s)
         sem = asyncio.Semaphore(conc)
         lat: list[float] = []
@@ -58,7 +62,8 @@ async def run_level(ner: str | None, conc: int, n: int, size: int, workers: int 
                 body = {"model": "mock-1", "messages": [{"role": "user", "content": make_ticket(size, i)}],
                         "pgw_subjects": SUBJECTS}
                 h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
-                     "X-PGW-Input-Source": "helpdesk-ticket-export@1"}
+                     **sign_headers(sanitizer=SANITIZER, body=body, key=SANITIZER_KEY, tenant="acme",
+                                    app_id="hr-helpdesk-pilot", purpose="ticket_summary")}
                 async with sem:
                     t = time.perf_counter()
                     r = await c.post("/v1/chat/completions", headers=h, json=body)

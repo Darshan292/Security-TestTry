@@ -1,7 +1,9 @@
 """Gateway configuration. Everything comes from env in production; tests build Settings directly."""
 from __future__ import annotations
 
+import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -110,10 +112,13 @@ class Settings:
     upstream_timeout_s: float = 60.0
     # Local NER (D4) for contracted purposes. None = off (tests/demos); from_env defaults it ON.
     ner_model: str | None = None
+    ner_detector_override: object | None = field(default=None, repr=False)
     # NER worker processes (pgw.detect.ner_pool). 0 = in-process NerDetector (tests); from_env defaults to min(4, cpu).
     ner_workers: int = 0
     ner_queue_max: int = 8                 # requests allowed to wait for a worker; beyond it: fail closed at once
     ner_timeout_s: float = 8.0             # per NER call (queue wait + inference); must stay below protect_timeout_s
+    sanitizer_hmac_keys: dict[str, bytes] = field(default_factory=dict, repr=False)
+    attestation_db_path: str | None = None
     # Resource limits (fail closed with 413/503; nothing is sent).
     max_body_bytes: int = 262_144
     max_content_chars: int = 50_000        # all strings in `messages`, summed
@@ -139,14 +144,20 @@ class Settings:
     @classmethod
     def from_env(cls, env: dict | None = None) -> "Settings":
         e = os.environ if env is None else env
+        mode = e.get("PGW_MODE", "production").strip().lower()
+        ner_model = _off_or(e.get("PGW_NER_MODEL", "en_core_web_lg"))
+        if mode == "production" and ner_model is None:
+            raise ValueError("PGW_NER_MODEL cannot be disabled in production; configure the pinned NER model")
         return cls(
-            mode=e.get("PGW_MODE", "production").strip().lower(),
+            mode=mode,
             # legacy_uncontracted is deliberately not read from the environment.
             policy_path=e.get("PGW_POLICY", cls.policy_path),
             registry_path=e.get("PGW_REGISTRY", cls.registry_path),
             roster_path=e.get("PGW_ROSTER") or None,
             ledger_db_path=e.get("PGW_LEDGER_DB", cls.ledger_db_path),
             egress_ledger_path=e.get("PGW_EGRESS_LEDGER", cls.egress_ledger_path),
+            attestation_db_path=e.get("PGW_ATTESTATION_DB_PATH") or None,
+            sanitizer_hmac_keys=parse_sanitizer_hmac_keys(e.get("PGW_SANITIZER_HMAC_KEYS", "{}")),
             upstream_kind=e.get("PGW_UPSTREAM", "mock"),
             upstream_url=e.get("PGW_UPSTREAM_URL", cls.upstream_url),
             openai_api_key=e.get("OPENAI_API_KEY", ""),
@@ -158,7 +169,7 @@ class Settings:
             egress_allowlist=parse_allowlist(e.get("PGW_EGRESS_ALLOWLIST")),
             anthropic_base_url=e.get("PGW_ANTHROPIC_BASE_URL", cls.anthropic_base_url),
             upstream_timeout_s=float(e.get("PGW_UPSTREAM_TIMEOUT_S", cls.upstream_timeout_s)),
-            ner_model=_off_or(e.get("PGW_NER_MODEL", "en_core_web_lg")),
+            ner_model=ner_model,
             ner_workers=int(e.get("PGW_NER_WORKERS", max(1, min(4, os.cpu_count() or 1)))),
             ner_queue_max=int(e.get("PGW_NER_QUEUE_MAX", cls.ner_queue_max)),
             ner_timeout_s=float(e.get("PGW_NER_TIMEOUT_S", cls.ner_timeout_s)),
@@ -174,3 +185,16 @@ class Settings:
             private_upstream_url=e.get("PGW_PRIVATE_UPSTREAM_URL") or None,
             private_model=e.get("PGW_PRIVATE_MODEL", "local"),
         )
+
+
+def parse_sanitizer_hmac_keys(raw):
+    if not raw: return {}
+    try: obj=json.loads(raw)
+    except (TypeError,ValueError): raise ValueError("PGW_SANITIZER_HMAC_KEYS must be a JSON object") from None
+    if not isinstance(obj,dict): raise ValueError("PGW_SANITIZER_HMAC_KEYS must be a JSON object")
+    out={}
+    for sid,value in obj.items():
+        if not isinstance(sid,str) or not re.fullmatch(r"[a-z0-9][a-z0-9._@-]{0,63}",sid): raise ValueError("invalid sanitizer ID")
+        if not isinstance(value,str) or len(value)<64 or len(value)%2 or not re.fullmatch(r"[0-9a-fA-F]+",value): raise ValueError("sanitizer key must be at least 32 bytes encoded as hex")
+        out[sid]=bytes.fromhex(value)
+    return out

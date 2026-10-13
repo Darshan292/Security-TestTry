@@ -54,7 +54,7 @@ def main():
         try:
             out = r.json()
             msg = out["choices"][0]["message"]["content"] if "choices" in out else json.dumps(out)
-        except Exception:
+        except (ValueError, TypeError, KeyError):
             msg = r.text
         print(f"APP RECEIVED    : HTTP {r.status_code}: {msg}")
     print("=" * 100)

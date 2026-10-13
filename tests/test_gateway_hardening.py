@@ -16,7 +16,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import build_upstream, create_app
-from tests.sealed import production, signing_key, source
+from tests.sealed import TEST_NER, TEST_SANITIZER_KEYS, production, signing_key, source
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product import integrity
@@ -45,20 +45,24 @@ def apps(contracts_dir=ROOT / "contracts"):
 
 def settings(tmp, upstream=None, policy=None, **kw):
     """Production mode over a sealed, signed copy of the config (tests/sealed.py)."""
-    base = dict(**production(tmp, apps(), policy=policy), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+    base = production(tmp, apps(), policy=policy)
+    base.update(roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
-                master_key=os.urandom(32).hex(), upstream=upstream or MockLLMUpstream("summarise"))
+                master_key=os.urandom(32).hex(), upstream=upstream or MockLLMUpstream("summarise"),
+                sanitizer_hmac_keys=TEST_SANITIZER_KEYS, ner_detector_override=TEST_NER)
     base.update(kw)
     return Settings(**base)
 
 
 def call(client, content, purpose="ticket_summary", stream=False, headers=None, raw=None):
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose), **(headers or {})}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose}
     if raw is not None:
+        h.update(source(purpose)); h.update(headers or {})
         return client.post("/v1/chat/completions", headers={**h, "content-type": "application/json"}, content=raw)
     body = {"model": "mock-1", "stream": stream, "messages": [{"role": "user", "content": content}]}
     if purpose == "ticket_summary":   # only the requester is declared; everything else relies on detection
         body["pgw_subjects"] = {"requester": {"name": "Imran Ansari"}}
+    h.update(source(purpose, body)); h.update(headers or {})
     return client.post("/v1/chat/completions", headers=h, json=body)
 
 
@@ -75,6 +79,7 @@ def tree_settings(tmp, manifest, **kw):
     """The repo's own registry (hr-helpdesk-pilot, all six contracts) served from a copied, sealed tree."""
     base = dict(mode="production", trusted_config_pubkey=signing_key()[1], policy_path=str(tmp / "policies/hris-default.yaml"),
                 registry_path=str(tmp / "registry/apps.yaml"), integrity_manifest=str(manifest),
+                sanitizer_hmac_keys=TEST_SANITIZER_KEYS, ner_detector_override=TEST_NER,
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                 master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"))
     base.update(kw)

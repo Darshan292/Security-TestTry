@@ -289,7 +289,7 @@ class MockLLMUpstream:
     def _prepare(self, body: dict) -> random.Random:
         self.received.append(self.wire_bytes(body))
         self._calls += 1
-        return random.Random(self.seed + self._calls)
+        return random.Random(self.seed + self._calls)  # noqa: S311 - deterministic mock only; never used for secrets
 
     async def complete(self, body: dict) -> dict:
         self._prepare(body)

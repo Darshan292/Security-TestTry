@@ -15,8 +15,14 @@ from pathlib import Path
 import yaml
 
 from pgw.product import integrity
+from pgw.product.attestation import sign_headers
 
 ROOT = Path(__file__).resolve().parents[1]
+_SANITIZER_IDS = ("band-review-form@1", "esi-coverage-form@1", "hris-case-export@1", "hr-email-composer@1", "comp-review-form@1", "helpdesk-ticket-export@1")
+TEST_SANITIZER_KEYS = {sid: hashlib.sha256(("NOT_FOR_PRODUCTION:" + sid).encode()).digest() for sid in _SANITIZER_IDS}
+class _NoopNer:
+    def detect(self, text): return []
+TEST_NER = _NoopNer()
 
 
 @lru_cache(maxsize=1)
@@ -55,7 +61,7 @@ def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, si
     priv, pub = signing_key()
     integrity.seal(manifest, sign_key=priv if sign else None)
     return {"mode": "production", "registry_path": str(reg), "policy_path": str(base / "policies" / pol_name),
-            "integrity_manifest": str(manifest), "trusted_config_pubkey": pub}
+            "integrity_manifest": str(manifest), "trusted_config_pubkey": pub, "sanitizer_hmac_keys": TEST_SANITIZER_KEYS, "ner_detector_override": TEST_NER}
 
 
 def legacy_dev(registry_path: str | Path) -> dict:
@@ -64,13 +70,15 @@ def legacy_dev(registry_path: str | Path) -> dict:
             "registry_path": str(registry_path)}
 
 
-def source(purpose: str) -> dict:
-    """The input-source attestation header for a repo contract (first allowlisted sanitizer)."""
+def source(purpose: str, body: dict | None = None, *, app_id="pilot", tenant="acme") -> dict:
+    """Synthetic signed attestation; body-less calls remain unsigned for negative tests."""
     p = ROOT / f"contracts/{purpose}.yaml"
     if not p.exists():
         return {}
     ids = (yaml.safe_load(p.read_text()).get("external_input") or {}).get("sanitizers") or []
-    return {"X-PGW-Input-Source": ids[0]} if ids else {}
+    if not ids or body is None: return {"X-PGW-Input-Source": ids[0]} if ids else {}
+    sid = sorted(ids)[0]
+    return sign_headers(sanitizer=sid, body=body, key=TEST_SANITIZER_KEYS[sid], tenant=tenant, app_id=app_id, purpose=purpose)
 
 
 def sha(k: str) -> str:

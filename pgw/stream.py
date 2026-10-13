@@ -36,7 +36,10 @@ _RISKY_WORD = re.compile(
     r"(?:\d|₹|rs\.?$|inr|lakh|lac|crore|lpa|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\+|@)", re.IGNORECASE)
 _SAFE_DELIMS = set(',;{}[]"\'<>=&|')
 _GATE_TYPES = {EntityType.AADHAAR, EntityType.PAN, EntityType.CARD, EntityType.SECRET,
-               EntityType.BANK_ACCOUNT, EntityType.UPI_ID, EntityType.EMAIL, EntityType.PHONE}
+               EntityType.BANK_ACCOUNT, EntityType.UPI_ID, EntityType.EMAIL, EntityType.PHONE,
+               EntityType.EMPLOYEE_ID, EntityType.COMPENSATION, EntityType.DATE_OF_BIRTH}
+_DIGIT_TYPES = {EntityType.AADHAAR, EntityType.CARD, EntityType.BANK_ACCOUNT, EntityType.PHONE,
+                EntityType.EMPLOYEE_ID, EntityType.COMPENSATION}
 
 
 @dataclass
@@ -53,6 +56,22 @@ class Restorer:
     roster: object | None = None   # RosterIndex, for names the model "knew"
     mode: str = "incremental"      # "incremental" | "buffered"
     allowed: frozenset = frozenset()   # contract org_contacts (C0, lowercase) the model may write in its answer
+    known_withheld: tuple[tuple[EntityType, str], ...] = ()
+    _known_patterns: tuple = field(default=(), init=False, repr=False)
+
+    def __post_init__(self):
+        patterns=[]; seen=set()
+        for typ,value in self.known_withheld:
+            if not isinstance(value,str) or len(value.strip())<4: continue
+            for variant in {value, value.strip(" \t\r\n.,;:!?)]}\"'([{<")}:
+                if len(variant)<4 or (typ,variant) in seen: continue
+                seen.add((typ,variant))
+                if typ in _DIGIT_TYPES:
+                    digits=re.sub(r"\D","",variant)
+                    rx=re.compile(r"(?<!\d)" + r"[\s,._/\-]*".join(re.escape(c) for c in digits) + r"(?!\d)") if len(digits)>=4 else re.compile(re.escape(variant))
+                else: rx=re.compile(re.escape(variant), re.I if typ in {EntityType.PERSON,EntityType.EMAIL,EntityType.UPI_ID} else 0)
+                patterns.append((typ,rx))
+        self._known_patterns=tuple(patterns)
     events: list[GateEvent] = field(default_factory=list)
     restored: list = field(default_factory=list)   # (EntityType, value) actually emitted -> restore ledger
     _buf: str = ""
@@ -97,6 +116,7 @@ class Restorer:
         text = tail + self._buf
         off = len(tail)
         spans = [(d.start, d.end) for d in recognizers.detect_d2(text) if d.type in _GATE_TYPES]
+        spans.extend((m.start(),m.end()) for _,rx in self._known_patterns for m in rx.finditer(text))
         if self.roster is not None:
             spans += [(d.start, d.end) for d in self.roster.detect(text)]
         c = off + cut
@@ -180,6 +200,12 @@ class Restorer:
             if key not in self.alias_map:
                 self.events.append(GateEvent("fabricated_alias", m.group(1).upper()))
                 repl.append((max(m.start(), off), m.end(), f"[unknown {m.group(1).upper()}]"))
+        # Exact per-request values withheld from the provider are gated even if generic recognisers miss context.
+        for typ,rx in self._known_patterns:
+            for m in rx.finditer(text):
+                if m.end() <= off or any(a <= m.start() and m.end() <= b for a,b in alias_spans): continue
+                self.events.append(GateEvent("known_withheld", typ.value))
+                repl.append((max(m.start(),off),m.end(),f"[{typ.value}]"))
         # 2. deterministic recognisers over the whole output so far (context-dependent types need it)
         for d in recognizers.detect_d2(text):
             if d.end <= off or d.type not in _GATE_TYPES:
