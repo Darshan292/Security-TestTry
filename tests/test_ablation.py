@@ -97,3 +97,37 @@ def test_d5_off_no_propagation():
     t = "Dear Quentin Blorptan, hello. Later quentin blorptan and Quentin again."
     on, off = with_cfg(p, t), with_cfg(p, t, D5=True)
     assert len(on) > len(off) >= 1
+
+
+
+def test_scoped_ablation_is_isolated_between_concurrent_threads():
+    """PD13 scopes D1 off; concurrent requests must not inherit that temporary setting."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    barrier = Barrier(2)
+
+    def observe(d1_enabled):
+        cfg = AblationConfig(D1=d1_enabled)
+        with ablation.use(cfg):
+            barrier.wait(timeout=5)
+            observed = ablation.get().D1
+            barrier.wait(timeout=5)
+            return observed
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        disabled = pool.submit(observe, False)
+        enabled = pool.submit(observe, True)
+        assert disabled.result(timeout=10) is False
+        assert enabled.result(timeout=10) is True
+
+
+def test_nested_scoped_ablation_restores_outer_context():
+    outer = AblationConfig(D0=False, D1=True)
+    inner = AblationConfig(D0=True, D1=False)
+    with ablation.use(outer):
+        assert ablation.get() == outer
+        with ablation.use(inner):
+            assert ablation.get() == inner
+        assert ablation.get() == outer
+    assert ablation.get() == ablation.DEFAULT

@@ -7,6 +7,7 @@ Switches are read at call time through get(); use `use(cfg)` to scope a change.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 
 
@@ -25,23 +26,24 @@ class AblationConfig:
 
 
 DEFAULT = AblationConfig()
-_current = DEFAULT
+# Ablation is evaluation-only, but PD13Protector uses scoped overrides in the live request path.
+# A module-global value lets concurrent requests observe each other's temporary detector settings.
+# ContextVar isolates each thread/task and its nested scopes; reset(token) restores the exact prior context.
+_current: ContextVar[AblationConfig] = ContextVar("pgw_ablation_config", default=DEFAULT)
 
 
 def get() -> AblationConfig:
-    return _current
+    return _current.get()
 
 
 def set_config(cfg: AblationConfig) -> None:
-    global _current
-    _current = cfg
+    _current.set(cfg)
 
 
 @contextmanager
 def use(cfg: AblationConfig):
-    prev = get()
-    set_config(cfg)
+    token = _current.set(cfg)
     try:
         yield cfg
     finally:
-        set_config(prev)
+        _current.reset(token)
