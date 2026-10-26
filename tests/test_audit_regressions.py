@@ -168,3 +168,27 @@ def test_swapped_or_unsealed_roster_stops_production_startup(tmp_path):
     Path(cfg["roster_path"]).write_text("")                          # emptied after signing
     with pytest.raises(IntegrityError):
         create_app(Settings(**cfg, **base))
+
+
+# --- C5: salaries and dates are aliased and restored exactly, never shown as bands -------------------------------
+
+def test_compensation_is_aliased_out_and_restored_exactly(tmp_path):
+    mock = MockLLMUpstream("echo")
+    cfg = production(tmp_path, [{"app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY), "restore_output": True,
+                                 "models": ["mock-1"], "purposes": ["hr_email_draft"],
+                                 "tasks": {"hr_email_draft": str(ROOT / "contracts/hr_email_draft.yaml")}}])
+    client = TestClient(create_app(Settings(**cfg, ledger_db_path=str(tmp_path / "l.sqlite"),
+                                            egress_ledger_path=str(tmp_path / "e.jsonl"),
+                                            master_key=os.urandom(32).hex(), upstream=mock)))
+    body = {"model": "mock-1", "pgw_subjects": {"recipient": {"name": "Priya Raghunathan"}},
+            "messages": [{"role": "user", "content": "Draft an email to Priya Raghunathan confirming her revised "
+                          "salary of Rs 21,00,000 per annum and monthly gross of Rs 1,75,000, DOB 14/03/1991."}]}
+    r = client.post("/v1/chat/completions", json=body, headers={"Authorization": f"Bearer {KEY}",
+                    "X-PGW-Purpose": "hr_email_draft", **attest("hr_email_draft", body)})
+    assert r.status_code == 200
+    wire = mock.received[-1].decode()
+    for v in ("21,00,000", "1,75,000", "14/03/1991", "₹"):
+        assert v not in wire                                       # neither the value nor a band leaves
+    assert "[COMPENSATION_" in wire and "[DATE_OF_BIRTH_" in wire
+    out = r.json()["choices"][0]["message"]["content"]
+    assert "Rs 21,00,000" in out and "Rs 1,75,000" in out and "14/03/1991" in out and "[COMPENSATION" not in out

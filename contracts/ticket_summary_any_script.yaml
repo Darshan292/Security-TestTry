@@ -2,15 +2,15 @@
 # Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
 # government/financial identifiers are not needed for a summary, so they are removed, not blocked.
 contract: ticket_summary_any_script
-version: 3
+version: 4
 task_type: hr_ticket_summary
 route: EXT_PSEUDO
 data_classes:
   C1: ALIAS        # names, employee IDs, emails, phones -> scoped aliases
-  C2: GENERALIZE   # salary, DOB -> bands, never exact
+  C2: ALIAS        # salary, DOB -> scoped aliases; the model never sees the value, the reply gets it back
   C3: REDACT       # PAN, Aadhaar, bank account, card, UPI, secrets -> removed
   C4: PRIVATE      # non-Latin-script content: only to the in-boundary model (PRIVATE_LOCAL route)
-restore: [C1]
+restore: [C1, C2]
 # Purpose-dependent personal attributes. Detectors cannot see these; the stance is an obligation on the app
 # and a statement of what the provider may receive next to aliased identities (still personal data).
 purpose_dependent:

@@ -130,7 +130,7 @@ def _edit(path, old, new):
 
 
 @pytest.mark.parametrize("tamper", [
-    lambda t: _edit(t / "contracts/ticket_summary.yaml", "C2: GENERALIZE", "C2: REDACT"),
+    lambda t: _edit(t / "contracts/ticket_summary.yaml", "C2: ALIAS", "C2: REDACT"),
     lambda t: (t / "policies/hris-default.yaml").write_text((t / "policies/hris-default.yaml").read_text() + "\n# x\n"),
     lambda t: (t / "contracts/esi_letter.yaml").unlink() or (t / "contracts/esi_letter.yaml").write_text(
         __import__("re").sub(r"(?m)^version: \d+", "version: 99", (ROOT / "contracts/esi_letter.yaml").read_text(), 1)),

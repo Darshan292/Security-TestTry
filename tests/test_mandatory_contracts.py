@@ -157,7 +157,7 @@ def test_same_purpose_same_ref_different_content_stops_startup(tmp_path):
     variant = tmp_path / "variant" / "ticket_summary.yaml"
     variant.parent.mkdir()
     text = Path(TICKET).read_text()
-    variant.write_text(text.replace("C2: GENERALIZE", "C2: REDACT"))      # same contract name and version string
+    variant.write_text(text.replace("C2: ALIAS", "C2: REDACT"))      # same contract name and version string
     assert load_contract(variant).ref == load_contract(TICKET).ref
     apps = [app_entry(["ticket_summary"], {"ticket_summary": TICKET}),
             app_entry(["ticket_summary"], {"ticket_summary": str(variant)}, key="other", app_id="b", tenant="initech")]

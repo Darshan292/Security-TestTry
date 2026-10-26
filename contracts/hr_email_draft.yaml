@@ -1,15 +1,15 @@
 # Data contract: draft an email from HR to an employee (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. The draft is restored for a human to review and send; it is never auto-sent.
 contract: hr_email_draft
-version: 6
+version: 7
 task_type: hr_email_draft
 route: EXT_PSEUDO
 data_classes:
   C1: ALIAS
-  C2: GENERALIZE
+  C2: ALIAS        # salary, DOB -> scoped aliases; the model never sees the value, the reply gets it back
   C3: REDACT
   C4: REFUSE
-restore: [C1]
+restore: [C1, C2]
 purpose_dependent:
   leave_balance: PSEUDONYMISED_RAW
   attendance: NOT_EXPECTED
@@ -32,8 +32,8 @@ guidance: >-
   present the recipient's own email address, phone number or employee ID as a way to contact HR. Sign the email as
   "HR Operations, Kestrel Dynamics". Do not add template fillers such as [Company Name]. Placeholders carry no
   gender: greet the recipient as "Dear" followed by the placeholder, with no Mr/Ms/Mrs, and use pronouns only if
-  the request itself uses them. A salary shown as a band such as [COMPENSATION ...] is withheld: never copy the
-  band into the email; refer to it in words (e.g. "your revised salary"). Output only the email (subject line and
+  the request itself uses them. Amounts and dates appear as placeholders such as [COMPENSATION_...]; copy
+  them exactly where the amount belongs (they are replaced by the real value after your reply). Output only the email (subject line and
   body), ready to send after human review.
 # Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
 # gateway. Free text reaches the external model only with a valid Ed25519 signature, by the key pinned here, over

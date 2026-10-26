@@ -10,24 +10,24 @@
    "version": 4
   },
   "contracts/hr_case_explanation.yaml": {
-   "sha256": "f83b28f4f6b02e2f90c383af33e432488dd92a48fa6216fa6df346671ba9b271",
-   "version": 5
+   "sha256": "beafdcb59cd44981d34226f4efb24af60c305252f2bd976e66c76df6f66bb89e",
+   "version": 6
   },
   "contracts/hr_email_draft.yaml": {
-   "sha256": "029afd552d0e7f3da709656262454f786058784cc34f622ee79f53ad5e5fbc82",
-   "version": 6
+   "sha256": "416d3e7f7fee9f3d25900591a67612322a3e1fec57e6c6f6be57bdf5811ef34f",
+   "version": 7
   },
   "contracts/salary_comparison.yaml": {
    "sha256": "901eac58d881a4fbe29c46b717fe40604670167bfb6a1a0e332f5de413cd6de9",
    "version": 5
   },
   "contracts/ticket_summary.yaml": {
-   "sha256": "8389cd46f05ac08d727dc977d6e2fc36e6321f3d249d9d6d4a068e7081b98ee1",
-   "version": 5
+   "sha256": "c82226784382ef3c533f8e2efd70fe18a659d99174ce27b47454ffb6dc153721",
+   "version": 6
   },
   "contracts/ticket_summary_any_script.yaml": {
-   "sha256": "4b387c4353909db0ed1c2832bdcb6b0ba06afdecbe6fbe4a90fc809bd368ed7a",
-   "version": 3
+   "sha256": "226ea58d37b4efc8d1b713a7ef7c55c35f94336374f9f74e2dc4ad053a960b79",
+   "version": 4
   },
   "policies/hris-default.yaml": {
    "sha256": "dface432ef2ff1e63990d65d8642dcee46deec47f1d6e2763e8c86404f3ff44a",
