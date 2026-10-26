@@ -51,9 +51,11 @@ def _median(text: str) -> float:
 
 @pytest.mark.parametrize("name", CASES)
 def test_adversarial_input_is_fast(name):
-    # Median of three runs, not one sample: a single timing is at the mercy of the scheduler (this test failed about
-    # one run in three on an idle 4-core machine). The bound itself is unchanged.
-    assert _median(CASES[name](SIZE)) < LIMIT
+    # Fastest of three runs: scheduler noise only ever adds time, so the minimum is the intrinsic cost (the standard
+    # for timing a fixed workload, as test_recognizers' _best_of does). Single samples and medians varied by ±0.4 s
+    # on an idle 4-core machine around a ~1.2 s cost. The bound itself is unchanged; linearity is tested below.
+    text = CASES[name](SIZE)
+    assert min(_time(text) for _ in range(3)) < LIMIT
 
 
 @pytest.mark.parametrize("name", ["digit_run", "no_whitespace", "dots", "uppercase_run", "short_option_run"])
