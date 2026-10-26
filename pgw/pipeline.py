@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from .alias import AliasAllocator, canon, scope_key
-from .detect import recognizers
+from .detect import idshape, recognizers
 from .detect.edm import RestoreLedger, RosterIndex
 from . import ablation as _abl
 from . import normalize as _normalize_mod
@@ -249,6 +249,8 @@ class Protector:
         """
         out = []
         views = list(_views(text))
+        # A subclass with its own detect_text (pgw.pd13: its own L2 shape layer and release rules) owns shape detection.
+        backstop = _abl.get().D2 and type(self).detect_text is Protector.detect_text
         ner_res: dict[str, list[Detection]] = {}
         if self.ner is not None and _abl.get().D4:
             # one batched call over the distinct NER view texts (a pool dedupes/batches; errors propagate)
@@ -259,6 +261,8 @@ class Protector:
                 ner_res = dict(zip(ner_views if many is not None else dict.fromkeys(ner_views), res))
         for name, view, omap in views:
             dets = recognizers.detect_d2(view) + detect_person_cues(view)
+            if name == "base" and backstop:
+                dets += idshape.detect(view)     # number-shaped identifier backstop (lowest score: loses overlaps)
             if self.roster is not None and _abl.get().D3:
                 dets += self.roster.detect(view)
             if name in ("base", "casefold_titled", "despaced") and view in ner_res:
@@ -290,6 +294,9 @@ class Protector:
                          declared: list[tuple] | None = None) -> list[list[Detection]]:
         # 1. Detect per segment (plus contract-declared values, which need no detection).
         per_seg: list[list[Detection]] = [self.detect_text(s.text) for s in segs]
+        bids = getattr(self.policy.purposes.get(ctx.purpose), "business_identifiers", ())
+        if bids:   # company reference formats from the signed contract are not identifiers of a person
+            per_seg = [idshape.exempt_business(s.text, d, bids) for s, d in zip(segs, per_seg, strict=True)]
         for item in declared or ():
             if hasattr(item, "spans"):   # a declared-subject matcher (pgw.product.subjects): spans, any variant
                 for i, seg in enumerate(segs):

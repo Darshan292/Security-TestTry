@@ -208,7 +208,7 @@ def test_ledger_counts_declared_subjects_without_values(tmp_path):
     call(client, TICKET, SUBJECTS)
     text = (tmp_path / "egress.jsonl").read_text()
     row = json.loads(text.splitlines()[-1])
-    assert row["declared_subjects"] == 4 and row["contract"] == "ticket_summary@6"
+    assert row["declared_subjects"] == 4 and row["contract"] == "ticket_summary@7"
     for v in ("Nandini", "Tejaswini", "Imran", "KD-11914"):
         assert v not in text
 

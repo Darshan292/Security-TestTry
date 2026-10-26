@@ -1,7 +1,7 @@
 # Data contract: explain an HR case's status and next steps to the HR operator (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. Same class treatment as ticket summaries; restored output goes to HR staff only.
 contract: hr_case_explanation
-version: 6
+version: 7
 task_type: hr_case_explanation
 route: EXT_PSEUDO
 data_classes:
@@ -28,6 +28,12 @@ guidance: >-
   no access to the payroll or HR systems, so every cause is a hypothesis; label it as such, list at most three, and
   never state one as the conclusion. 3) Next steps: concrete checks HR Operations can make to find the actual cause.
   Do not invent system names, timelines, codes or policies that are not in the case. Keep it under 200 words.
+# Company reference formats (C0) in the app's tickets: ticket, offer, claim, leave and case ids. They cross
+# raw; the identifier-shape backstop withholds every other identifier-shaped value. Anchored and bounded;
+# a pattern that also matches a generic identifier (12-digit run, PAN-like, account-like) stops loading.
+business_identifiers:
+  - '^(?:PAY|OFR|HR|IT|LV|CLM|TKT|REQ)-\d{4,6}$'
+  - '^DC-20\d{2}-\d{3}$'
 # Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
 # gateway. Free text reaches the external model only with a valid Ed25519 signature, by the key pinned here, over
 # this purpose, the source id, a fresh timestamp and the request's messages and pgw_subjects (pgw.product.attest).

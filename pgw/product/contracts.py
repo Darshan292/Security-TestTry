@@ -20,6 +20,7 @@ from pathlib import Path
 
 import yaml
 
+from ..detect import idshape
 from ..types import Action, EntityType as T
 from . import attest
 
@@ -38,6 +39,7 @@ CLASS_OF: dict[T, DataClass] = {
     T.COMPENSATION: DataClass.C2, T.DATE_OF_BIRTH: DataClass.C2,
     T.AADHAAR: DataClass.C3, T.PAN: DataClass.C3, T.BANK_ACCOUNT: DataClass.C3, T.CARD: DataClass.C3,
     T.UPI_ID: DataClass.C3, T.SECRET: DataClass.C3,
+    T.IDENTIFIER: DataClass.C3,   # identifier-shaped value of no recognised scheme (pgw.detect.idshape backstop)
     T.IFSC: DataClass.C0,   # a bank branch, not a person (DESIGN §5.2)
     T.DERIVED: DataClass.D,
 }
@@ -67,6 +69,15 @@ _SANITIZER_ID = re.compile(r"[a-z0-9][a-z0-9._@-]{0,63}")
 
 class ContractError(ValueError):
     pass
+
+
+class PurposeRules(dict):
+    """A contracted purpose's per-entity-type actions (a plain dict for the policy), plus its sealed company
+    reference formats (`business_identifiers`), which the identifier-shape backstop lets cross (pipeline)."""
+
+    def __init__(self, actions=(), business_identifiers: tuple = ()):
+        super().__init__(actions)
+        self.business_identifiers = tuple(business_identifiers)
 
 
 @dataclass(frozen=True)
@@ -119,6 +130,7 @@ class Contract:
     redaction_text: dict = field(default_factory=dict)   # C3 type -> words shown instead of a "[TYPE]" marker
     reference: dict = field(default_factory=dict)         # sealed public tables, e.g. pay_bands (C0)
     external_input: ExternalInput = ExternalInput(frozenset())   # required in every contract file
+    business_identifiers: tuple = ()     # compiled, anchored C0 reference formats exempt from the shape backstop
 
     @property
     def ref(self) -> str:
@@ -128,7 +140,7 @@ class Contract:
         """Per-entity-type actions for the detection pipeline. DERIVED values are only ever aliased."""
         acts = {t: _ACTION[self.classes[c]] for t, c in CLASS_OF.items() if c in self.classes}
         acts[T.DERIVED] = Action.TOKENIZE
-        return acts
+        return PurposeRules(acts, self.business_identifiers)
 
     def restorable(self, t: T) -> bool:
         return CLASS_OF.get(t, DataClass.C0) in self.restore
@@ -251,6 +263,16 @@ def _parse_external_input(raw) -> ExternalInput:
     return ExternalInput(frozenset(ids), un, dict(ids))
 
 
+def _parse_business_identifiers(raw) -> tuple:
+    """Company reference formats (ticket, offer, claim ids: C0) as anchored, length-limited patterns, compiled here.
+    A pattern that also matches a generic identifier (a 12-digit run, a PAN-like code, a 9-digit account, ...) is
+    refused, so this list cannot switch the backstop off (pgw.detect.idshape.compile_business_identifiers)."""
+    try:
+        return idshape.compile_business_identifiers(raw)
+    except idshape.BusinessPatternError as e:
+        raise ContractError(str(e)) from None
+
+
 def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
     raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
     try:
@@ -296,7 +318,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      guidance=_parse_guidance(raw.get("guidance")),
                      org_contacts=tuple(_parse_org_contacts(raw.get("org_contacts"))),
                      redaction_text=_parse_redaction_text(raw.get("redaction_text")),
-                     external_input=_parse_external_input(raw.get("external_input")), reference=reference)
+                     external_input=_parse_external_input(raw.get("external_input")), reference=reference,
+                     business_identifiers=_parse_business_identifiers(raw.get("business_identifiers")))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:

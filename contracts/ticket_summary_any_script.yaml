@@ -2,7 +2,7 @@
 # Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
 # government/financial identifiers are not needed for a summary, so they are removed, not blocked.
 contract: ticket_summary_any_script
-version: 4
+version: 5
 task_type: hr_ticket_summary
 route: EXT_PSEUDO
 data_classes:
@@ -26,6 +26,12 @@ declared_subjects:          # people the app knows are involved; protected witho
   required: [requester]
   roles: {requester: 1, assignee: 1, mentioned: 20, other: 10}
   fields: {name: PERSON, employee_id: EMPLOYEE_ID, email: EMAIL, phone: PHONE}
+# Company reference formats (C0) in the app's tickets: ticket, offer, claim, leave and case ids. They cross
+# raw; the identifier-shape backstop withholds every other identifier-shaped value. Anchored and bounded;
+# a pattern that also matches a generic identifier (12-digit run, PAN-like, account-like) stops loading.
+business_identifiers:
+  - '^(?:PAY|OFR|HR|IT|LV|CLM|TKT|REQ)-\d{4,6}$'
+  - '^DC-20\d{2}-\d{3}$'
 # Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
 # gateway. Free text reaches the external model only with a valid Ed25519 signature, by the key pinned here, over
 # this purpose, the source id, a fresh timestamp and the request's messages and pgw_subjects (pgw.product.attest).

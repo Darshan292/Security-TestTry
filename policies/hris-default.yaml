@@ -1,7 +1,7 @@
 # Policy pack: per-entity actions by purpose (ADR-0006).
 # Slice note: pack signing is not implemented yet; packs are loaded from the repo.
 pack: hris-default
-version: 1
+version: 2
 
 defaults:
   AADHAAR: BLOCK_REQUEST
@@ -17,6 +17,7 @@ defaults:
   EMPLOYEE_ID: TOKENIZE
   COMPENSATION: TOKENIZE
   DATE_OF_BIRTH: GENERALIZE
+  IDENTIFIER: REDACT       # identifier-shaped value of no known scheme (shape backstop): removed, never restored
   DERIVED: TOKENIZE        # LOCAL_COMPUTE outputs; contracts decide per output (PRODUCT_ARCHITECTURE §2)
 
 purposes:
@@ -41,6 +42,7 @@ purposes:
     SECRET: TOKENIZE
     IFSC: TOKENIZE
     DATE_OF_BIRTH: TOKENIZE
+    IDENTIFIER: TOKENIZE
 
 never_restore: [SECRET]
 
