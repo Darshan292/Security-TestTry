@@ -261,7 +261,7 @@ def input_source(purpose: str, body: dict) -> dict:
     if not path.exists():   # an unregistered/uncontracted purpose: the gateway refuses it before this matters
         return {}
     sid = sorted(load_contract(path).external_input.sanitizers)[0]
-    return attest.sign_body(attest.load_demo_keys()[sid], purpose, sid, body)
+    return attest.sign_body(attest.load_demo_keys()[sid], purpose, sid, body, app_id="hr-helpdesk-pilot")
 
 
 def post(client, purpose, content, model=MODEL, subjects=None, messages=None, conv=None):

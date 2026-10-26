@@ -61,7 +61,8 @@ async def run_level(ner: str | None, conc: int, n: int, size: int, workers: int 
                 body = {"model": "mock-1", "messages": [{"role": "user", "content": make_ticket(size, i)}],
                         "pgw_subjects": SUBJECTS}
                 h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
-                     **attest.sign_body(demo_key, "ticket_summary", "helpdesk-ticket-export@1", body)}
+                     **attest.sign_body(demo_key, "ticket_summary", "helpdesk-ticket-export@1", body,
+                                      app_id="hr-helpdesk-pilot")}
                 async with sem:
                     t = time.perf_counter()
                     r = await c.post("/v1/chat/completions", headers=h, json=body)

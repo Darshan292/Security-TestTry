@@ -198,7 +198,7 @@ def input_source(purpose: str, body: dict) -> dict:
     from pgw.product import attest
     from pgw.product.contracts import load_contract
     sid = sorted(load_contract(ROOT / f"contracts/{purpose}.yaml").external_input.sanitizers)[0]
-    return attest.sign_body(attest.load_demo_keys()[sid], purpose, sid, body)
+    return attest.sign_body(attest.load_demo_keys()[sid], purpose, sid, body, app_id="ui-demo")
 
 
 def scenarios() -> list[dict]:

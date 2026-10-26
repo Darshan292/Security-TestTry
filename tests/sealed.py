@@ -3,7 +3,7 @@
 production(): a throwaway registry inside a sealed, Ed25519-signed copy of the repo configuration, so gateway tests
 run in PRODUCTION mode (signed manifest, mandatory contracts) instead of switching integrity off.
 legacy_dev(): the ONLY way tests reach the pre-contract path: explicit development mode + legacy flag + no manifest.
-attest(): the signed source-attestation headers (X-PGW-Input-Source/-Timestamp/-Signature) for a request body.
+attest(): the signed source-attestation headers (Source/Timestamp/Nonce/Signature) for a body and app.
 
 Source keys: the repo contracts pin DEMO source keys, which production refuses. production() therefore rewrites
 every demo key in the contracts it places to this test run's own source key (source_key(); generated per run, never
@@ -111,9 +111,11 @@ def legacy_dev(registry_path: str | Path) -> dict:
 
 
 def attest(purpose: str, body: dict, *, contract: str | None = None, demo: bool = False, key: str | None = None,
-           source: str | None = None, ts: int | None = None, sign_purpose: str | None = None) -> dict:
+           source: str | None = None, ts: int | None = None, sign_purpose: str | None = None,
+           app_id: str = "pilot") -> dict:
     """Signed source-attestation headers for `body` sent to `purpose` (repo contract `contract` or `purpose`).
     Signs as that contract's first sanitizer with this run's test key (demo=True: the committed demo key).
+    app_id is the calling app the signature is bound to (most tests register "pilot").
     key/source/ts/sign_purpose override what is signed, for negative tests."""
     p = ROOT / f"contracts/{contract or purpose}.yaml"
     if not p.exists():
@@ -123,7 +125,8 @@ def attest(purpose: str, body: dict, *, contract: str | None = None, demo: bool 
         return {}
     sid = source or ids[0]
     priv = key or (_attest.load_demo_keys()[ids[0]] if demo else source_key()[0])
-    return _attest.sign(priv, sign_purpose or purpose, sid, body.get("messages"), body.get("pgw_subjects"), ts)
+    return _attest.sign(priv, sign_purpose or purpose, sid, body.get("messages"), body.get("pgw_subjects"), ts,
+                        app_id=app_id)
 
 
 def sha(k: str) -> str:

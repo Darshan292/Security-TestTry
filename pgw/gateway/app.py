@@ -459,6 +459,7 @@ def create_app(settings: Settings) -> Starlette:
 
     if settings.trace is not None:
         _log(logging.WARNING, event="trace_hook_enabled_demo_only")
+    replay_cache = attest.ReplayCache(attest.REPLAY_CACHE_MAX)   # per process (SECURITY_BOUNDARY.md §4)
 
     async def chat(request: Request) -> Response:
         rid = "req_" + uuid.uuid4().hex[:24]
@@ -574,7 +575,11 @@ def create_app(settings: Settings) -> Starlette:
                                              h.get("x-pgw-input-source", "").strip(),
                                              h.get("x-pgw-input-timestamp", "").strip(),
                                              h.get("x-pgw-input-signature", "").strip(),
-                                             body["messages"], body.get("pgw_subjects"))
+                                             body["messages"], body.get("pgw_subjects"), app_id=app.app_id,
+                                             nonce=h.get("x-pgw-input-nonce", "").strip(), replay=replay_cache)
+            except attest.ReplayCacheFull:
+                _log(logging.ERROR, event="attestation_replay_cache_full", request_id=rid)
+                raise _Reject(503, "gateway_busy", "attestation replay cache full; request not sent") from None
             except attest.AttestationError as e:
                 _tr("input_source", attested=bool(h.get("x-pgw-input-source")), accepted=False,
                     reason=e.reason, unattested=contract.external_input.unattested)
@@ -585,7 +590,7 @@ def create_app(settings: Settings) -> Starlette:
                             "input_not_sanitized", contract, attestation=e.reason)
                 raise _Reject(422, "input_not_source_sanitized",
                               "this purpose only sends input signed by an allowlisted source-side sanitizer "
-                              "(X-PGW-Input-Source/-Timestamp/-Signature); not sent externally",
+                              "(X-PGW-Input-Source/-Timestamp/-Nonce/-Signature); not sent externally",
                               attestation=e.reason) from None
             _tr("input_source", attested=True, accepted=True, verified=True, sanitizer=input_source)
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):

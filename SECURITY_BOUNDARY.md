@@ -130,12 +130,14 @@ external_input:
 The contract is sealed and signed with the rest of the config, so the pinned keys are as trusted as the config.
 The source system holds the private key. The calling app and the gateway never do.
 
-Every request for a contracted purpose must carry three headers, on every route. That includes LOCAL_COMPUTE, whose
+Every request for a contracted purpose must carry four headers, on every route. That includes LOCAL_COMPUTE, whose
 `instruction` field is free text that goes to the external model.
 
-- `X-PGW-Input-Source: <id>`, `X-PGW-Input-Timestamp: <unix seconds>`, `X-PGW-Input-Signature: <hex>`.
-- The signature is Ed25519 over `pgw-input-attestation/v1` + newline + the JSON array
-  `[purpose, source id, timestamp, sha256]` (`pgw.product.attest.canonical_message`).
+- `X-PGW-Input-Source: <id>`, `X-PGW-Input-Timestamp: <unix seconds>`, `X-PGW-Input-Nonce: <32-64 hex>`,
+  `X-PGW-Input-Signature: <hex>`.
+- The signature is Ed25519 over `pgw-input-attestation/v2` + newline + the JSON array
+  `[app id, purpose, source id, timestamp, nonce, sha256]` (`pgw.product.attest.canonical_message`). The app id is
+  the authenticated calling app, so one app cannot use an attestation signed for another.
 - The hash is over the canonical JSON (sorted keys, no whitespace, ASCII escapes, no NaN or Infinity) of
   `{"messages": ..., "pgw_subjects": ... or null}`, as the gateway parsed the body. It therefore covers every
   message, including assistant history, tool calls and list-form content parts, plus their order and count, and the
@@ -143,7 +145,14 @@ Every request for a contracted purpose must carry three headers, on every route.
 - The gateway verifies before any send and before anything rewrites the messages. It rejects:
   - an unknown or missing source id, or a missing signature;
   - a timestamp more than 300 s from the gateway clock, either way (`MAX_SKEW_S`);
-  - a signature by another key, for another purpose, for another source id, or over other content.
+  - a signature by another key, for another app, purpose or source id, or over other content;
+  - a message already accepted once (`replayed`). Each verified message is remembered until its timestamp leaves
+    the window, in a bounded cache (`REPLAY_CACHE_MAX`, 100 000). When the cache is full of live entries the gateway
+    answers 503 and sends nothing; it never evicts an entry that could still be replayed. Only verified messages
+    enter the cache, so forgeries cannot fill it.
+- **The replay cache is per process.** With several gateway replicas (or workers), each has its own cache and a
+  captured request can be replayed once per replica within the window. Multi-replica deployments need a shared
+  store (for example an atomic set-if-absent with expiry) before this guarantee holds across the fleet.
 - On failure the contract's `unattested` action applies:
   - `REFUSE`: the response is 422 `input_not_source_sanitized` with a content-free `attestation` reason, nothing is
     sent, and the ledger records `BLOCKED`, reason `input_not_sanitized` and `input_attestation`.
@@ -164,15 +173,17 @@ Every request for a contracted purpose must carry three headers, on every route.
 ### What the attestation proves, and what it does not
 
 - **Verified:** the holder of the source's private key signed exactly this content (messages and declared subjects)
-  for this purpose and source id within the last five minutes. Knowing the public id is no longer enough. The calling
-  app cannot add, alter, reorder or replay content under another request's signature.
+  for this calling app, purpose and source id within the last five minutes, and the gateway process has not
+  accepted it before. Knowing the public id is no longer enough. The calling app cannot add, alter or reorder
+  content, reuse another request's or another app's signature, or resend the same signed request.
 - **Not verified:** whether the source's sanitizer actually removed NOT_EXPECTED content. A signed ticket that still
   says "chemotherapy" is sent (`test_not_expected_content_is_not_removed_when_attested`).
 - **Not verified: key custody at the source.** If the calling app, or anyone else, holds the source key, the
   guarantee reduces to that party's word. The gateway cannot tell.
-- **Replay of identical content.** Within the 300 s window, a captured request can be re-sent unchanged by any app
-  authorised for the purpose. The signature does not bind the calling app, the conversation id or a nonce. Re-sending
-  identical, already-signed content discloses nothing new to the provider, but it is not prevented.
+- **Replay across replicas.** See the per-process note above. The conversation id is not signed; it is a routing
+  hint for alias restore, not content.
+- **Small-order keys.** Public keys that are small-order points (all eight, in any encoding) or non-canonically
+  encoded are refused when the contract loads.
 - **Interoperability.** A source implementation in another language must reproduce the canonical JSON exactly,
   including number formatting and `\uXXXX` escapes. A mismatch fails closed (refused or in-boundary), not open.
 
@@ -233,7 +244,7 @@ that commit (mock provider, synthetic data). The auditor's own scripts were not 
 |---|---|---|---|
 | S1 | Request parameters (`temperature`, `max_tokens`, `top_p`, `stream_options`, `tool_choice`, …) carried data to the provider unchecked | Confirmed | **Fixed.** Every parameter now has a strict type and range. The outgoing request is built from an explicit allowlist. Contracted purposes refuse `tools`, `tool_choice` and `stop`, which are free text (`check_parameters`, `tests/test_audit_regressions.py`) |
 | S2 | `band_position`: the band name and limits were caller-supplied and crossed raw, so any text, or an exact salary to ₹1, could leave | Confirmed | **Fixed.** Pay bands are a sealed `reference` table in the signed contract; the caller only names a band. Contracts are refused if a C0 input is not a key of a sealed table, and table ranges must be at least 20% wide |
-| S3 | `X-PGW-Input-Source` is a public constant; any caller passes | Confirmed (already documented, §4) | **Fixed for provenance.** The source signs (Ed25519, key pinned in the signed contract) the purpose, source id, a timestamp within ±300 s and a hash of all messages and declared subjects. The bare id, other keys, other purposes or ids, edited, reordered or extended content and stale timestamps are rejected before any send. Unverified input is refused or, by default on EXT_PSEUDO, kept in-boundary. Production refuses the shipped demo keys. **Still open:** whether the source's sanitizer removed NOT_EXPECTED content, key custody at the source, and identical replay within the window (§4) |
+| S3 | `X-PGW-Input-Source` is a public constant; any caller passes | Confirmed (already documented, §4) | **Fixed for provenance.** The source signs (Ed25519, key pinned in the signed contract; small-order keys refused) the calling app, purpose, source id, a timestamp within ±300 s, a nonce and a hash of all messages and declared subjects. The bare id, other keys, other apps, purposes or ids, edited, reordered or extended content, stale timestamps and resends of an accepted message are rejected before any send. Unverified input is refused or, by default on EXT_PSEUDO, kept in-boundary. Production refuses the shipped demo keys. **Still open:** whether the source's sanitizer removed NOT_EXPECTED content, key custody at the source, and replay across replicas (the replay cache is per process, §4) |
 | S4 | The roster was not sealed; an emptied roster disabled name matching | Confirmed | **Fixed for the roster.** Production seals it with the config. The NER and env settings remain open (§6.8) |
 | S5 | Free-text leaks on realistic tickets (auditor 13/36; our re-check 8/11) | Confirmed | **Open, structural.** Lowercase or undeclared names, UAN, passport, voter ID, address and plain-digit salaries leak. Declaring people as subjects removed the name leaks |
 | S6 | ID formats missed (auditor 11/15; our re-check 5/18: bare Aadhaar, spaced PAN, uncued account number, phone in words, IFSC by policy) | Partly confirmed | **Open.** No detector tuning in this round |

@@ -27,9 +27,13 @@ Each contract's `external_input.sanitizers` maps a source id to that source's Ed
   never overwritten). The private key stays in the source system: not in the calling app, the gateway, the
   repository or CI. Put the printed public key in the contract (quoted), bump the contract `version`, and reseal and
   sign the config as for any contract change.
-- **Signing.** The source signs each request with `pgw.product.attest.sign` (or an equivalent implementation of
-  `canonical_message`). The calling app forwards the three headers unchanged. The app must not hold the key: an app
+- **Signing.** The source signs each request for the calling app's id with `pgw.product.attest.sign` (or an
+  equivalent implementation of `canonical_message`, with a fresh random nonce per request). The calling app forwards
+  the four headers unchanged. Each signature is accepted once: a retry needs a new signature. The app must not hold the key: an app
   that can sign can attest anything, and the guarantee reduces to the old unverified claim.
+- **Replicas.** The replay cache is in-process. Running several replicas or workers lets a captured request be
+  replayed once per replica within the window until a shared store is added (SECURITY_BOUNDARY.md §4). A cache full
+  of live entries (100 000) answers 503 (`gateway_busy`) and logs `attestation_replay_cache_full`.
 - **Clocks.** The signed timestamp must be within ±300 s of the gateway clock (`MAX_SKEW_S`). Run NTP on both sides.
   Refusals carry a content-free `attestation` reason (`stale_timestamp`, `bad_signature`, ...), also written to the
   ledger as `input_attestation`.

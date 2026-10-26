@@ -22,6 +22,7 @@ from pgw.product.contracts import ContractError, load_contract
 from tests.sealed import ROOT, attest, production, sha, source_key
 
 KEY = "attest-app-key"
+APP = "pilot"
 CANARY = "Zorawar Pemberton-Okafor"   # synthetic
 TEXT = f"Ticket for {CANARY}: payroll arrears missing; employee mentioned chemotherapy."
 TICKET = ROOT / "contracts/ticket_summary.yaml"
@@ -37,7 +38,7 @@ def refusing(tmp: Path, src: Path = TICKET) -> str:
 
 def make(tmp, tasks, private=None, **kw):
     ext = MockLLMUpstream("summarise")
-    cfg = production(tmp, [{"app_id": "a", "tenant": "acme", "key_sha256": sha(KEY), "restore_output": True,
+    cfg = production(tmp, [{"app_id": APP, "tenant": "acme", "key_sha256": sha(KEY), "restore_output": True,
                              "models": ["mock-1"], "purposes": sorted(tasks), "tasks": tasks}],
                      private_upstream=private, **kw)
     s = Settings(**cfg, ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
@@ -202,12 +203,13 @@ def test_signature_for_another_purpose_or_source_is_refused(tmp_path):
     other_purpose = attest("ticket_summary", b, sign_purpose="hr_case_explanation")
     assert_refused_before_send(post(client, b, other_purpose), ext, tmp_path, "bad_signature")
     # key of source A presented as source B (both allowlisted): the signature binds the id
-    swapped = A.sign(source_key()[0], "ticket_summary", "hr-portal-form@1", b["messages"], b["pgw_subjects"])
+    swapped = A.sign(source_key()[0], "ticket_summary", "hr-portal-form@1", b["messages"], b["pgw_subjects"],
+                     app_id=APP)
     assert_refused_before_send(post(client, b, swapped), ext, tmp_path, "bad_signature")
     relabelled = {**attest("ticket_summary", b), "X-PGW-Input-Source": "hr-portal-form@1"}
     assert_refused_before_send(post(client, b, relabelled), ext, tmp_path, "bad_signature")
     # each allowlisted source signs with its own key
-    ok = A.sign(second_priv, "ticket_summary", "hr-portal-form@1", b["messages"], b["pgw_subjects"])
+    ok = A.sign(second_priv, "ticket_summary", "hr-portal-form@1", b["messages"], b["pgw_subjects"], app_id=APP)
     assert post(client, b, ok).status_code == 200 and ledger(tmp_path)[-1]["input_source"] == "hr-portal-form@1"
 
 
@@ -277,9 +279,9 @@ def test_shipped_contracts_carry_only_demo_keys_matching_the_fixture():
     for p in sorted((ROOT / "contracts").glob("*.yaml")):
         for sid, pub in load_contract(p).external_input.keys.items():
             assert pub in A.DEMO_PUBKEYS, p.name
-            signed = A.sign(demo[sid], "x", sid, [{"role": "user", "content": "t"}])
+            signed = A.sign(demo[sid], "x", sid, [{"role": "user", "content": "t"}], app_id=APP)
             A.verify({sid: pub}, "x", sid, signed[A.H_TIMESTAMP], signed[A.H_SIGNATURE],
-                     [{"role": "user", "content": "t"}])
+                     [{"role": "user", "content": "t"}], app_id=APP, nonce=signed[A.H_NONCE])
 
 
 def test_production_refuses_demo_keys_development_accepts_them(tmp_path):
@@ -287,7 +289,7 @@ def test_production_refuses_demo_keys_development_accepts_them(tmp_path):
     with pytest.raises(ContractError, match="DEMO keys"):
         make(tmp_path / "p", tasks, demo_keys=True)
     ext = MockLLMUpstream("summarise")
-    cfg = production(tmp_path / "d", [{"app_id": "a", "tenant": "acme", "key_sha256": sha(KEY), "models": ["mock-1"],
+    cfg = production(tmp_path / "d", [{"app_id": APP, "tenant": "acme", "key_sha256": sha(KEY), "models": ["mock-1"],
                                        "purposes": ["ticket_summary"], "tasks": tasks}], demo_keys=True)
     s = Settings(**{**cfg, "mode": "development"}, ledger_db_path=str(tmp_path / "l.sqlite"),
                  egress_ledger_path=str(tmp_path / "e.jsonl"), master_key=os.urandom(32).hex(), upstream=ext)
@@ -322,9 +324,11 @@ def test_list_form_without_keys_stops_loading(tmp_path):
 
 def test_canonical_message_is_domain_separated_and_unambiguous():
     d = A.content_digest([{"role": "user", "content": "x"}])
-    m = A.canonical_message("p", "s@1", 1, d)
-    assert m.startswith(A.DOMAIN + b"\n")
-    assert A.canonical_message("p\",\"s", "1", 1, d) != A.canonical_message("p", "s\",\"1", 1, d)
+    m = A.canonical_message(APP, "p", "s@1", 1, "ab" * 16, d)
+    assert m.startswith(A.DOMAIN + b"\n") and A.DOMAIN.endswith(b"/v2")
+    assert A.canonical_message(APP, "p\",\"s", "1", 1, "ab" * 16, d) != \
+        A.canonical_message(APP, "p", "s\",\"1", 1, "ab" * 16, d)
+    assert A.canonical_message("a", "p", "s", 1, "ab" * 16, d) != A.canonical_message("b", "p", "s", 1, "ab" * 16, d)
     assert A.content_digest([{"a": 1, "b": 2}]) == A.content_digest([{"b": 2, "a": 1}])   # key order irrelevant
     assert A.content_digest([{"role": "user", "content": "x"}], None) != \
         A.content_digest([{"role": "user", "content": "x"}], {})
@@ -349,8 +353,127 @@ def test_keygen_cli_writes_a_private_key_file(tmp_path):
     pub = out.split('"')[1]
     assert (tmp_path / "src.key").stat().st_mode & 0o777 == 0o600
     assert A.parse_public_key(pub) and pub not in A.DEMO_PUBKEYS
-    h = A.sign(priv, "p", "s@1", [{"role": "user", "content": "t"}])
+    h = A.sign(priv, "p", "s@1", [{"role": "user", "content": "t"}], app_id=APP)
     assert A.verify({"s@1": pub}, "p", "s@1", h[A.H_TIMESTAMP], h[A.H_SIGNATURE],
-                    [{"role": "user", "content": "t"}]) == "s@1"
+                    [{"role": "user", "content": "t"}], app_id=APP, nonce=h[A.H_NONCE]) == "s@1"
     with pytest.raises(SystemExit):
         A._main(["keygen", str(tmp_path / "src.key")])                # never overwrites
+
+
+# --- single use: replay cache and app binding ---------------------------------------------------------------------
+
+def test_identical_resend_is_rejected(refuse):
+    client, ext, tmp = refuse
+    b = body()
+    h = attest("ticket_summary", b)
+    assert post(client, b, h).status_code == 200 and len(ext.received) == 1
+    _fresh(ext)
+    assert_refused_before_send(post(client, b, h), ext, tmp, "replayed")
+    assert post(client, b, attest("ticket_summary", b)).status_code == 200   # a fresh signature (new nonce) passes
+
+
+def test_attestation_for_another_app_is_rejected(tmp_path):
+    other_key = "other-app-key"
+    ext = MockLLMUpstream("summarise")
+    tasks = {"ticket_summary": refusing(tmp_path)}
+    cfg = production(tmp_path, [
+        {"app_id": APP, "tenant": "acme", "key_sha256": sha(KEY), "models": ["mock-1"],
+         "purposes": ["ticket_summary"], "tasks": tasks},
+        {"app_id": "other", "tenant": "acme", "key_sha256": sha(other_key), "models": ["mock-1"],
+         "purposes": ["ticket_summary"], "tasks": tasks}], private_upstream=None)
+    client = TestClient(create_app(Settings(**cfg, ledger_db_path=str(tmp_path / "l.sqlite"),
+                                            egress_ledger_path=str(tmp_path / "e.jsonl"),
+                                            master_key=os.urandom(32).hex(), upstream=ext)))
+    b = body()
+    h = attest("ticket_summary", b)                    # signed for APP
+    r = client.post("/v1/chat/completions", json=b, headers={"Authorization": f"Bearer {other_key}",
+                                                             "X-PGW-Purpose": "ticket_summary", **h})
+    assert_refused_before_send(r, ext, tmp_path, "bad_signature")
+    assert post(client, b, h).status_code == 200       # the app it was signed for (not consumed by the failure)
+    ok = attest("ticket_summary", b, app_id="other")
+    r = client.post("/v1/chat/completions", json=b, headers={"Authorization": f"Bearer {other_key}",
+                                                             "X-PGW-Purpose": "ticket_summary", **ok})
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("nonce", [None, "", "xyz", "ab" * 8, "AB" * 16, "ab" * 33],
+                         ids=["absent", "empty", "not-hex", "short", "uppercase", "long"])
+def test_missing_or_malformed_nonce_is_refused(refuse, nonce):
+    client, ext, tmp = refuse
+    b = body()
+    h = attest("ticket_summary", b)
+    if nonce is None:
+        h.pop(A.H_NONCE)
+    else:
+        h[A.H_NONCE] = nonce
+    assert_refused_before_send(post(client, b, h), ext, tmp, "bad_nonce")
+
+
+def test_replay_cache_evicts_expired_entries():
+    c = A.ReplayCache(max_entries=2, max_skew=300)
+    c.add(b"a", 1000, now=1000)
+    c.add(b"b", 1100, now=1100)
+    with pytest.raises(A.AttestationError, match="replayed"):
+        c.add(b"a", 1000, now=1299)
+    with pytest.raises(A.ReplayCacheFull):                 # both still inside the window: no eviction
+        c.add(b"c", 1299, now=1299)
+    c.add(b"c", 1301, now=1301)                            # a's window (until 1300) has passed: evicted
+    assert len(c) == 2
+    with pytest.raises(A.ReplayCacheFull):
+        c.add(b"d", 1301, now=1301)
+
+
+def test_full_replay_cache_fails_closed(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(A, "REPLAY_CACHE_MAX", 2)
+    client, ext = make(tmp_path, {"ticket_summary": refusing(tmp_path)})
+    for _ in range(2):
+        b = body()
+        assert post(client, b, attest("ticket_summary", b)).status_code == 200
+    _fresh(ext)
+    b = body()
+    r = post(client, b, attest("ticket_summary", b))
+    assert r.status_code == 503 and r.json()["error"]["type"] == "gateway_busy"
+    assert ext.received == [] and CANARY not in r.text and "chemotherapy" not in r.text
+    r = post(client, b, {"X-PGW-Input-Source": SID})       # forgeries are refused without touching the cache
+    assert r.status_code == 422
+
+
+# --- small-order public keys ---------------------------------------------------------------------------------------
+
+_P = 2 ** 255 - 19
+_ORDER8 = ["26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+           "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"]
+
+
+def _enc(y: int, sign: int = 0) -> str:
+    return (y | (sign << 255)).to_bytes(32, "little").hex()
+
+
+SMALL_ORDER = {
+    "identity": _enc(1), "order2": _enc(_P - 1), "order4+": _enc(0), "order4-": _enc(0, 1),
+    "order8a": _ORDER8[0], "order8b": _ORDER8[1],
+    "order8a-neg": _enc(int.from_bytes(bytes.fromhex(_ORDER8[0]), "little"), 1),
+    "order8b-neg": _enc(int.from_bytes(bytes.fromhex(_ORDER8[1]), "little"), 1),
+    # non-canonical encodings of the same points (y >= p, or a sign bit on x = 0)
+    "identity-signbit": _enc(1, 1), "order2-signbit": _enc(_P - 1, 1), "zero-as-p": _enc(_P),
+    "zero-as-p-signbit": _enc(_P, 1), "identity-as-p+1": _enc(_P + 1), "identity-as-p+1-signbit": _enc(_P + 1, 1),
+}
+
+
+@pytest.mark.parametrize("hexkey", list(SMALL_ORDER.values()), ids=list(SMALL_ORDER))
+def test_small_order_public_keys_are_refused(tmp_path, hexkey):
+    with pytest.raises(ValueError):
+        A.parse_public_key(hexkey)
+    c = yaml.safe_load(TICKET.read_text())
+    c["external_input"]["sanitizers"] = {SID: hexkey}
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(c))
+    with pytest.raises(ContractError, match="public key"):
+        load_contract(p)
+
+
+def test_ordinary_keys_still_load():
+    for _ in range(20):
+        assert len(A.parse_public_key(A.generate_key()[1])) == 32
+    for pub in A.DEMO_PUBKEYS:
+        A.parse_public_key(pub)
