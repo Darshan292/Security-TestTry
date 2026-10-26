@@ -16,8 +16,8 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import build_upstream, create_app
-from tests.sealed import production, signing_key, source
-from pgw.gateway.settings import Settings
+from tests.sealed import production, signing_key, source, write_profile
+from pgw.gateway.settings import PROFILE_FIELDS, Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product import integrity
 from pgw.product.contracts import ContractError
@@ -44,8 +44,11 @@ def apps(contracts_dir=ROOT / "contracts"):
 
 
 def settings(tmp, upstream=None, policy=None, **kw):
-    """Production mode over a sealed, signed copy of the config (tests/sealed.py)."""
-    base = dict(**production(tmp, apps(), policy=policy, roster=ROOT / "tests/fixtures/slice_roster.jsonl"),
+    """Production mode over a sealed, signed copy of the config (tests/sealed.py). Security-relevant kwargs
+    (limits, NER, egress) go into the signed deployment profile, the only place production takes them from."""
+    dep = {k: kw.pop(k) for k in list(kw) if k in PROFILE_FIELDS}
+    base = dict(**production(tmp, apps(), policy=policy, roster=ROOT / "tests/fixtures/slice_roster.jsonl",
+                             deployment=dep),
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                 master_key=os.urandom(32).hex(), upstream=upstream or MockLLMUpstream("summarise"))
     base.update(kw)
@@ -68,6 +71,7 @@ def sealed_tree(tmp):
     """A copy of registry/, policies/ and contracts/ with its own manifest (base = manifest's grandparent)."""
     for d in ("registry", "policies", "contracts"):
         shutil.copytree(ROOT / d, tmp / d, ignore=shutil.ignore_patterns("MANIFEST.json"))
+    write_profile(tmp)   # the test profile (NER off, signed justification) instead of the shipped one
     return tmp / "policies" / "MANIFEST.json"
 
 

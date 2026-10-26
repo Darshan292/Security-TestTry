@@ -153,6 +153,7 @@ def test_contracts_refuse_unchecked_public_inputs(tmp_path, mutate, match):
 # --- S4: the roster is sealed in production -------------------------------------------------------------------------
 
 def test_swapped_or_unsealed_roster_stops_production_startup(tmp_path):
+    from pgw.gateway.settings import ProfileError
     from pgw.product.integrity import IntegrityError
     roster = ROOT / "tests/fixtures/slice_roster.jsonl"
     cfg = production(tmp_path, [{"app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY), "models": ["mock-1"],
@@ -162,7 +163,7 @@ def test_swapped_or_unsealed_roster_stops_production_startup(tmp_path):
     base = dict(ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e.jsonl"),
                 master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"))
     create_app(Settings(**cfg, **base))                              # sealed roster starts
-    with pytest.raises(IntegrityError):                              # a roster outside the sealed config
+    with pytest.raises((IntegrityError, ProfileError)):              # a roster outside the sealed config
         create_app(Settings(**{**cfg, "roster_path": str(roster)}, **base))
     Path(cfg["roster_path"]).write_text("")                          # emptied after signing
     with pytest.raises(IntegrityError):

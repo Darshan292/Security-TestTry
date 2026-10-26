@@ -43,14 +43,18 @@ Deployment review must check it.
 
 ## 2. Sealed, signed configuration
 
-The registry, the policy pack and every data contract are sealed in `policies/MANIFEST.json`, with the sha256 and
-version of each file.
+The registry, the policy pack, every data contract, the roster (production) and the deployment profile are sealed
+in `policies/MANIFEST.json`, with the sha256 and version of each file.
 
 | Property | Enforced by | Test |
 |---|---|---|
 | The registry (`registry/*.yaml`) is sealed with the policies and contracts. Adding a purpose or a model, rebinding a task, or replacing a key hash without re-sealing stops startup | `integrity.SEALED_GLOBS`, `_sealed_paths` | `test_unreviewed_change_stops_startup[registry *]` |
 | Production requires an **Ed25519** signature over the manifest that verifies under `PGW_TRUSTED_CONFIG_PUBKEY`. The following are all refused: a missing key, an unsigned manifest, an attacker's re-seal (unsigned or under another key), and a manifest edited after signing | `integrity.verify(require_trusted=True)` | `test_resealing_without_the_trusted_key_does_not_help`, `test_repo_manifest_seals_the_shipped_registry_policy_and_contracts` |
 | Unsigned configuration and a missing manifest are accepted only in development | `check_startup_mode` | `test_unsigned_config_is_development_only` |
+| **Deployment profile.** In production every security-relevant setting (sealed file paths, provider kind and URLs, egress and private allowlists, provider-terms attestation and region, NER model/workers/queue/timeout, every size, time and concurrency limit) is taken from the signed `registry/deployment.yaml`. A differing environment or Settings value stops startup, naming the setting but not its value; unset or equal values are fine. Every Settings field is classified (profile / code-only / operational) in `pgw/gateway/settings.py` | `apply_deployment_profile`, `create_app` | `tests/test_deployment_profile.py`: `test_a_settings_value_differing_from_the_profile_stops_production[*]`, `test_an_environment_value_differing_from_the_profile_stops_production[*]`, `test_from_env_in_production_cannot_weaken_the_signed_profile[*]`, `test_every_settings_field_is_classified` |
+| An edited, missing or unsigned profile, or a signed manifest that omits it, stops production | `integrity.verify`, `apply_deployment_profile` | `test_an_edited_profile_without_re_signing_stops_startup`, `test_a_missing_or_unsealed_profile_stops_production`, `test_malformed_profiles_are_refused[*]` |
+| NER off in production is a signed decision: `ner_model: null` needs `ner_off_justification` (at least 20 characters) in the profile. A model that does not load still stops startup | `apply_deployment_profile` | `test_ner_off_without_a_signed_justification_stops_production[*]`, `test_ner_off_with_a_signed_justification_starts`, `test_ner_model_that_does_not_load_stops_startup` |
+| In development the profile is optional; differences are logged as warnings and the Settings value is used | `apply_deployment_profile` | `test_development_tolerates_differences_with_warnings`, `test_development_without_a_profile_starts` |
 
 **Workflow:**
 
@@ -189,8 +193,13 @@ M1–M3). It is not a general evaluator.
 5. **Provider behaviour.** Retention and region are attested by the operator (`PGW_PROVIDER_*`), not verified.
 6. **Tenant-specific policy.** Not supported (§3).
 7. **Declared subjects' completeness.** People the app does not declare rely on detection.
-8. **Gateway settings outside the manifest.** The NER model, the egress allowlist and timeouts come from the
-   environment, not from the signed config. Production with NER switched off starts with only a warning.
+8. **Gateway settings outside the signed profile.** Since the deployment profile, every security-relevant setting
+   is signed and the environment can only repeat it. What still comes from the environment is operational: the
+   mode (6.3), the trust anchor (6.3), the manifest path (any manifest it names must verify; rollback limit in §2),
+   secrets and key files, ledger and audit-log locations, and the private model name. Code-only fields (injected
+   upstreams, development switches) are never read from the environment. The gateway also cannot tell whether the
+   signed values are right for the deployment (e.g. that the profile's allowlist matches the network policy, or that
+   a provider attestation is true): that is review before signing.
 9. **Values that cannot be declared.** Declared subjects cover name, employee ID, email and phone. A UAN, passport,
    voter ID, home address, an unusual ID format or a salary written as plain digits ("21,00,000") in free text is
    protected only if a detector finds it.
@@ -205,7 +214,7 @@ that commit (mock provider, synthetic data). The auditor's own scripts were not 
 | S1 | Request parameters (`temperature`, `max_tokens`, `top_p`, `stream_options`, `tool_choice`, …) carried data to the provider unchecked | Confirmed | **Fixed.** Every parameter now has a strict type and range. The outgoing request is built from an explicit allowlist. Contracted purposes refuse `tools`, `tool_choice` and `stop`, which are free text (`check_parameters`, `tests/test_audit_regressions.py`) |
 | S2 | `band_position`: the band name and limits were caller-supplied and crossed raw, so any text, or an exact salary to ₹1, could leave | Confirmed | **Fixed.** Pay bands are a sealed `reference` table in the signed contract; the caller only names a band. Contracts are refused if a C0 input is not a key of a sealed table, and table ranges must be at least 20% wide |
 | S3 | `X-PGW-Input-Source` is a public constant; any caller passes | Confirmed (already documented, §4) | **Open.** Proposed fix: the source system signs a hash of the content it cleaned with its own key |
-| S4 | The roster was not sealed; an emptied roster disabled name matching | Confirmed | **Fixed for the roster.** Production seals it with the config. The NER and env settings remain open (§6.8) |
+| S4 | The roster was not sealed; an emptied roster disabled name matching. Security-relevant settings (NER, egress allowlist, limits, provider attestation) came from unsigned environment variables; NER off in production only logged a warning | Confirmed | **Fixed in code, with tests (§2).** Production seals the roster, and takes every security-relevant setting from the signed deployment profile `registry/deployment.yaml`; a differing environment value stops startup, and NER off needs a signed written justification. Residual: operational settings (mode, trust anchor, manifest path, secrets, log locations) still come from the environment (§6.8), and the rollback limit of §2 applies to the profile too |
 | S5 | Free-text leaks on realistic tickets (auditor 13/36; our re-check 8/11) | Confirmed | **Open, structural.** Lowercase or undeclared names, UAN, passport, voter ID, address and plain-digit salaries leak. Declaring people as subjects removed the name leaks |
 | S6 | ID formats missed (auditor 11/15; our re-check 5/18: bare Aadhaar, spaced PAN, uncued account number, phone in words, IFSC by policy) | Partly confirmed | **Open.** No detector tuning in this round |
 | S7 | Medical or harassment details sent | Confirmed (expected, §4) | **Open, by design.** Enforced only at the source |

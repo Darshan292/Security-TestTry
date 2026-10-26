@@ -54,7 +54,7 @@ spec:
 #      let the proxy enforce the hostname allowlist.
 #   c) Plain NetworkPolicy with ipBlock CIDRs for the provider's published ranges
 #      (below): coarse, goes stale, review regularly.
-# The allowed set must match PGW_EGRESS_ALLOWLIST (api.anthropic.com by default).
+# The allowed set must match egress_allowlist in the signed registry/deployment.yaml (api.anthropic.com).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: {name: gateway-egress-cidr, namespace: pgw}
