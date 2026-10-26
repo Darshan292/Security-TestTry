@@ -127,6 +127,7 @@ class Contract:
     subjects: SubjectSpec | None = None
     guidance: str | None = None                   # task guidance for the model (system message, sealed)
     org_contacts: tuple[str, ...] = ()            # organisational C0 contacts (role mailbox, helpdesk number)
+    public_constants: tuple[str, ...] = ()        # organisation-specific public numbers (C0), held out of detection
     redaction_text: dict = field(default_factory=dict)   # C3 type -> words shown instead of a "[TYPE]" marker
     reference: dict = field(default_factory=dict)         # sealed public tables, e.g. pay_bands (C0)
     external_input: ExternalInput = ExternalInput(frozenset())   # required in every contract file
@@ -232,6 +233,26 @@ def _parse_org_contacts(raw) -> list[str]:
     return out
 
 
+_CONST_WORDS = re.compile(r"(?i)\b(?:rs|inr|usd|per|month|annum|year|day|week|hour|lakhs?|lacs?|crores?|lpa|cr|k|l)\b")
+
+
+def _parse_public_constants(raw) -> list[str]:
+    """Organisation-specific public numbers (a published meal cap, a policy threshold) held out of detection as
+    exact strings, like org_contacts. Sealed and code-owned. Each entry must be an amount: digits with currency or
+    unit words only, at most 8 digits, so a name, an email, an ID with letters, a phone or an account number can
+    never be listed."""
+    out = [str(x).strip() for x in (raw or [])]
+    for x in out:
+        rest = _CONST_WORDS.sub("", x)
+        if (not x or len(x) > 40 or not any(c.isdigit() for c in x) or sum(c.isdigit() for c in x) > 8
+                or re.search(r"[^\d\s₹$,.%/()\-]", rest)):
+            raise ContractError("public_constants: each entry must be an amount (digits with currency or unit words, "
+                                "at most 8 digits, 40 characters)")
+    if len(out) > 20:
+        raise ContractError("public_constants: at most 20 entries")
+    return out
+
+
 def _parse_redaction_text(raw) -> dict:
     out = {str(k).upper(): str(v) for k, v in (raw or {}).items()}
     bad = [k for k in out if k != "DEFAULT" and CLASS_OF.get(T(k) if k in T.__members__ else None) is not DataClass.C3]
@@ -317,6 +338,7 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      subjects=_parse_subjects(raw.get("declared_subjects")),
                      guidance=_parse_guidance(raw.get("guidance")),
                      org_contacts=tuple(_parse_org_contacts(raw.get("org_contacts"))),
+                     public_constants=tuple(_parse_public_constants(raw.get("public_constants"))),
                      redaction_text=_parse_redaction_text(raw.get("redaction_text")),
                      external_input=_parse_external_input(raw.get("external_input")), reference=reference,
                      business_identifiers=_parse_business_identifiers(raw.get("business_identifiers")))

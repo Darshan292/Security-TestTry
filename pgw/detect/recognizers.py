@@ -731,8 +731,10 @@ _PAY_CTX = re.compile(
 _NONCOMP_CTX = re.compile(
     r"(?<![a-z])(?:invoices?|gst\w*|igst|cgst|sgst|order(?!\s+to\b)s?|prices?|total|subtotal|shares?|stocks?|"
     r"closed\s+at|revenue|budget|actual|variance|turnover|sales|receipt|mrp|discount|tax|charges?|fees?|quotation|"
-    r"purchase|vendor|profit|loss|ebitda|valuation|funding|capex|opex|margin|limits?|threshold|spend|spending|spent|"
-    r"expenditure|ceiling|above|below|caps?)(?![a-z])")
+    r"purchase|vendor|profit|loss|ebitda|valuation|funding|capex|opex|margin|spend|spending|spent|"
+    r"expenditure|above|below)(?![a-z])")
+# Limit words (ceiling, cap, limit, threshold, ...) are not in this list: whether a limit governs an amount is
+# decided structurally by _statutory_amount, so a person's salary written next to a limit word stays compensation.
 _PER_ANNUM = re.compile(r"[ \t]*(?:per[ \t]+(?:annum|year|yr)|p\.?a\.?\b|/[ \t]*(?:annum|year|yr)|a[ \t]+year)", re.I)
 
 
@@ -774,6 +776,86 @@ def _comp_ctx_ok(text: str, s: int, e: int, radius: int = 80) -> bool:
     return neg is None or pay < neg
 
 
+# --- statutory and limit constants -------------------------------------------------------------------------
+# "the bonus ceiling under the Payment of Bonus Act is Rs 7,000 per month" states a public constant, not anyone's
+# pay, even though "bonus" is nearer to the amount than "ceiling". An amount is such a constant when, in its own
+# clause, (a) a limit word governs it from the left ("ceiling ... is Rs X", "capped at Rs X", "minimum wage of
+# Rs X") with no other amount in between, (b) it is the subject of a limit predicate ("Rs X per month is the wage
+# ceiling"), or (c) the clause is statutory ("under the ... Act", "as per the Act", "prescribed", "statutory").
+# Never when a specific person anchors it in the same clause with no other amount in between: a pronoun ("her",
+# "his", "their"), a possessive ("the employee's", "Priya's") or a two-word personal name. So "her salary of Rs
+# 21,00,000 exceeds the ceiling" stays compensation, and so does "her bonus is capped at Rs 50,000".
+_LIMIT = (r"(?:ceilings?|caps?|capped|limits?|limited|thresholds?|maximum|minimum|max\.?|min\.?|floor|"
+          r"not\s+exceeding|not\s+more\s+than|not\s+less\s+than|at\s+most|at\s+least)")
+_LIMIT_LEFT = re.compile(r"(?<![a-z])" + _LIMIT + r"(?![a-z])", re.I)
+_LIMIT_RIGHT = re.compile(r"\s*(?:(?:per|a|an|each)\s+\w+\s+)?(?:is|are|was|were|being|remains|becomes|as)\s+"
+                          r"(?:the|a|an)?\s*(?:[\w'’-]+\s+){0,4}?" + _LIMIT + r"(?![a-z])", re.I)
+_LEGAL_TITLE = re.compile(r"(?:[A-Z][\w'’-]*\s+(?:(?:of|and|for|on|the|&)\s+)*)*(?:Acts?|Rules|Regulations?|Codes?|"
+                          r"Schemes?|Polic(?:y|ies)|Ordinances?|Amendments?|Bills?|Orders?)\b(?:,?\s*\(?(?:1[89]|20)\d\d\)?)?")
+_STATUTE = re.compile(r"(?<![a-z])(?:statutory|statute|prescribed|notified|minimum\s+wages?|wage\s+ceiling|"
+                      r"under\s+(?:the|this|that|section\s+\S+\s+of\s+the)\s+\x00|as\s+per\s+(?:the\s+)?(?:\x00|law|rules))",
+                      re.I)
+_PERSON_ANCHOR = re.compile(
+    r"(?<![\w'’])(?i:her|his|their|him|she|he|my|your)(?![\w'’])|[A-Za-z]{2,}['’]s(?![\w])"
+    r"|(?<![\w'’])[A-Z][a-z]+\s+[A-Z][a-z]+(?![\w'’])"
+    r"|(?<![\w'’])(?i:current|expected|offered|revised|proposed|existing|present|last[\s-]+drawn|take[\s-]?home)"
+    r"(?:\s+[a-z]+)?\s+(?i:ctc|salary|pay|compensation|package|basic|gross|fixed|bonus|stipend)(?![\w'’])")
+_PUBLIC_WORDS = {"government", "state", "central", "union", "department", "ministry", "corporation", "board",
+                 "minimum", "maximum", "wage", "wages", "india", "indian", "labour", "commissioner", "authority",
+                 "rs", "inr", "per", "month", "annum", "the", "this", "that", "under", "esi", "epf", "pf",
+                 "employer", "employers", "company", "organisation", "organization", "establishment", "act", "rule",
+                 "scheme", "fund", "policy", "code", "today", "year"}
+_CLAUSE_END = re.compile(r"(?<!\b[A-Z])(?<!\b(?i:rs|no|mr|ms|dr|vs|pa))(?<!\b(?i:p\.a))[.;:!?](?=\s|$)|\n"
+                         r"|,\s+(?=(?i:but|and|so|which|while|whereas|though|although|hence|because|since|whereby)\b)"
+                         r"|\s(?i:but|whereas|while)\s")
+_MONEY = re.compile(r"(?:₹|(?<![A-Za-z])(?:rs\.?|inr))\s*\d|\d[\d,]*(?:\.\d+)?\s*(?:lakhs?|lacs?|crores?|lpa)\b", re.I)
+
+
+_TITLE_YEAR_PRE = re.compile(r"\b(?:Acts?|Rules|Regulations?|Codes?|Schemes?|Polic(?:y|ies)|Ordinances?|"
+                             r"Amendments?|Bills?|Orders?),?[ \t]*\(?$")
+
+
+def _clause(text: str, s: int, e: int, radius: int = 200) -> tuple[int, int]:
+    lo = max(0, s - radius)
+    cs = lo
+    for m in _CLAUSE_END.finditer(text, lo, s):
+        cs = m.end()
+    m = _CLAUSE_END.search(text, e, min(len(text), e + radius))
+    return cs, (m.start() if m else min(len(text), e + radius))
+
+
+def _anchored_to_person(text: str, s: int, e: int, cs: int, ce: int) -> bool:
+    masked = _LEGAL_TITLE.sub(lambda m: "\x00" * len(m.group()), text[cs:ce])
+    for m in _PERSON_ANCHOR.finditer(masked):
+        w = m.group()
+        if " " in w and (w[0].islower() or w.split()[1][0].islower()
+                         or {x.lower() for x in w.split()} & _PUBLIC_WORDS):
+            continue
+        if "'" in w or "’" in w:
+            if w.lower().rstrip("s").rstrip("'’") in _PUBLIC_WORDS:
+                continue
+        a, b = m.start() + cs, m.end() + cs
+        between = text[b:s] if b <= s else text[e:a]
+        if not _MONEY.search(between):
+            return True
+    return False
+
+
+def _statutory_amount(text: str, s: int, e: int) -> bool:
+    """True when the amount at [s, e) is a statutory or limit constant (rules above), not a person's pay."""
+    cs, ce = _clause(text, s, e)
+    if _anchored_to_person(text, s, e, cs, ce):
+        return False
+    before = text[cs:s]
+    for m in _LIMIT_LEFT.finditer(before):
+        if not _MONEY.search(before[m.end():]):
+            return True
+    if _LIMIT_RIGHT.match(text, e, ce):
+        return True
+    masked = _LEGAL_TITLE.sub(lambda m: "\x00", text[cs:ce])
+    return bool(_STATUTE.search(masked))
+
+
 def _compensation(text: str) -> list[Cand]:
     out: list[Cand] = _bank_file_amounts(text)
     for m in _COMP_MARKED.finditer(text):
@@ -784,6 +866,8 @@ def _compensation(text: str) -> list[Cand]:
             continue  # "12 L" / "5 k" without a currency marker: too ambiguous
         annum = bool((unit and unit.strip().lower() == "lpa") or _PER_ANNUM.match(text, m.end()))
         if not annum and not _comp_ctx_ok(text, m.start(), m.end()):
+            continue
+        if _statutory_amount(text, m.start(), m.end()):
             continue
         out.append((m.start(), m.end(), T.COMPENSATION, 0.9, "D2:compensation"))
     for kw in _COMP_KW.finditer(text):
@@ -808,6 +892,11 @@ def _compensation(text: str) -> list[Cand]:
                 continue  # tail of a phone number / date / id
             if "," not in n and "." not in n and len(n) == 4 and 1990 <= int(n) <= 2100 \
                     and _YEAR_PRE.search(text[max(0, m.start() - 24):m.start()]):
+                continue
+            if "," not in n and "." not in n and len(n) == 4 and _TITLE_YEAR_PRE.search(text, max(0, m.start() - 16),
+                                                                                       m.start()):
+                continue  # the year of a statute: "Payment of Bonus Act, 1965"
+            if _statutory_amount(text, m.start(), m.end()):
                 continue
             out.append((m.start(), m.end(), T.COMPENSATION, 0.8, "D2:compensation"))
     return out

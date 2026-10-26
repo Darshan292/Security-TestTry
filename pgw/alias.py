@@ -93,6 +93,21 @@ class AliasAllocator:
         return a
 
 
+    def claim(self, t: EntityType, value: str, alias: str) -> bool:
+        """Point `value` at an alias chosen elsewhere (a name the conversation already linked to a person). Refused,
+        and nothing changes, when another value in this request holds that alias."""
+        key = (t, canon(t, value))
+        other = self._by_alias.get(alias)
+        if other is not None and other != key:
+            return False
+        old = self._by_key.get(key)
+        if old is not None and self._by_alias.get(old) == key:
+            del self._by_alias[old]
+        self._by_alias[alias] = key
+        self._by_key[key] = alias
+        return True
+
+
 def parse_alias(text: str) -> tuple[str, str] | None:
     """'[person_7qx2ma' / 'PERSON_7QX2MA]' -> ('PERSON', '7QX2MA'); None if not alias-shaped."""
     m = ALIAS_RE.fullmatch(text)

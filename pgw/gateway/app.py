@@ -570,7 +570,7 @@ def create_app(settings: Settings) -> Starlette:
             _tr("contract", contract=contract.ref, route=contract.route, task_type=contract.task_type,
                 classes={k.value: v for k, v in contract.classes.items()},
                 restore=sorted(c.value for c in contract.restore), guidance=bool(contract.guidance),
-                org_contacts=len(contract.org_contacts))
+                org_contacts=len(contract.org_contacts), public_constants=len(contract.public_constants))
         messages, declared, withheld, subj, raw_outputs = body["messages"], None, [], [], None
         input_source = None
         if contract is not None:
@@ -661,7 +661,11 @@ def create_app(settings: Settings) -> Starlette:
                 reason="external LLM on protected text" if contract else "uncontracted legacy purpose")
         prot_impl = contract_protector if contract is not None else protector
         org = contract.org_contacts if contract is not None else ()
-        if org:   # organisational C0 contacts are held out of detection (sentinels) and put back after protection
+        consts = contract.public_constants if contract is not None else ()
+        held = (*org, *consts)
+        if held:   # organisational C0 contacts and public constants are held out of detection (sentinels) and
+            # put back after protection. Contacts match in any case; constants exactly, as whole numbers
+            # ("Rs 7,000" is not held out of "Rs 7,000,000").
             messages = json.loads(json.dumps(messages))
             for m in messages:
                 parts = [m] if isinstance(m.get("content"), str) else [
@@ -669,8 +673,11 @@ def create_app(settings: Settings) -> Starlette:
                 for part in parts:
                     key = "content" if part is m else "text"
                     t = "".join(c for c in part[key] if not _ORG_SENTINEL <= ord(c) < _ORG_SENTINEL + 0x100)
-                    for i, oc in enumerate(org):
-                        t = re.sub(re.escape(oc), chr(_ORG_SENTINEL + i), t, flags=re.IGNORECASE)
+                    for i, oc in enumerate(held):
+                        if i < len(org):
+                            t = re.sub(re.escape(oc), chr(_ORG_SENTINEL + i), t, flags=re.IGNORECASE)
+                        else:
+                            t = re.sub(r"(?<![\w.,])" + re.escape(oc) + r"(?![\w]|[.,]\d)", chr(_ORG_SENTINEL + i), t)
                     part[key] = t
         try:
             prot = await (bounded(prot_impl.protect, messages, ctx) if declared is None
@@ -697,13 +704,13 @@ def create_app(settings: Settings) -> Starlette:
                         contract)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
 
-        if org:
+        if held:
             for m in prot.messages:
                 parts = [m] if isinstance(m.get("content"), str) else [
                     p for p in (m.get("content") or []) if isinstance(p, dict) and isinstance(p.get("text"), str)]
                 for part in parts:
                     key = "content" if part is m else "text"
-                    for i, oc in enumerate(org):
+                    for i, oc in enumerate(held):
                         part[key] = part[key].replace(chr(_ORG_SENTINEL + i), oc)
         if raw_outputs:   # contract-RAW local-compute outputs, held out of detection, go back in now
             for m in prot.messages:
@@ -732,7 +739,7 @@ def create_app(settings: Settings) -> Starlette:
             egress_check(wire, prot.sensitive_values + withheld)
             subjects.check_outbound(wire, declared if subj else [],
                                     (PLACEHOLDER_NOTE, model, *((contract.guidance,) if contract and contract.guidance
-                                                                else ()), *org))
+                                                                else ()), *held))
         except EgressViolation:
             ms = (time.perf_counter() - t0) * 1000
             ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "VIOLATION", ms, "egress", contract)
@@ -758,7 +765,8 @@ def create_app(settings: Settings) -> Starlette:
         def new_restorer() -> Restorer:
             return Restorer(prot.alias_map, restore=app.restore_output, never_restore=never,
                             roster=roster, mode=policy.stream_mode(purpose),
-                            allowed=frozenset(o.lower() for o in (contract.org_contacts if contract else ())))
+                            allowed=frozenset(o.lower() for o in ((*contract.org_contacts, *contract.public_constants)
+                                                                  if contract else ())))
 
         def record(items) -> None:
             if ctx.conversation_id:
