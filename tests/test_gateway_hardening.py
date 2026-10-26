@@ -89,6 +89,7 @@ def tree_settings(tmp, manifest, **kw):
     base = dict(mode="production", trusted_config_pubkey=signing_key()[1], policy_path=str(tmp / "policies/hris-default.yaml"),
                 registry_path=str(tmp / "registry/apps.yaml"), integrity_manifest=str(manifest),
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
+                replay_db_path=str(tmp / "replay.sqlite"),
                 master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"),
                 private_upstream=MockLLMUpstream("summarise"))   # the shipped EXT_PSEUDO contracts keep unverified
     base.update(kw)                                              # input in-boundary (unattested: PRIVATE)

@@ -153,6 +153,55 @@ class ReplayCache:
             heapq.heappush(self._expiry, (exp, key))
 
 
+class ReplayStoreUnavailable(Exception):
+    """The replay store could not record or check a message: refuse (fail closed); never accept unrecorded."""
+
+
+class SqliteReplayStore:
+    """Persistent replay store shared by every gateway process on a host (one SQLite file, WAL). Survives restarts,
+    so a message accepted before a restart cannot be replayed after it. A primary-key insert is the atomic check:
+    two processes racing on the same message cannot both succeed. Any database error raises ReplayStoreUnavailable
+    (the request is refused). Not for network filesystems: replicas on several hosts need a shared database with
+    the same insert-or-fail semantics (SECURITY_BOUNDARY.md §4)."""
+
+    def __init__(self, path: str, max_entries: int = REPLAY_CACHE_MAX, max_skew: int = MAX_SKEW_S):
+        import sqlite3
+        self._sqlite3 = sqlite3
+        self.max_entries, self.max_skew, self.path = max_entries, max_skew, path
+        self._lock = threading.Lock()
+        try:
+            self._db = sqlite3.connect(path, timeout=2.0, isolation_level=None, check_same_thread=False)
+            self._db.execute("PRAGMA journal_mode=WAL")
+            self._db.execute("PRAGMA synchronous=FULL")
+            self._db.execute("CREATE TABLE IF NOT EXISTS seen (k BLOB PRIMARY KEY, exp INTEGER NOT NULL)")
+            self._db.execute("CREATE INDEX IF NOT EXISTS seen_exp ON seen(exp)")
+        except sqlite3.Error as e:
+            raise ReplayStoreUnavailable(type(e).__name__) from None
+
+    def __len__(self) -> int:
+        return self._db.execute("SELECT COUNT(*) FROM seen").fetchone()[0]
+
+    def add(self, key: bytes, timestamp: int, now: float | None = None) -> None:
+        now = time.time() if now is None else now
+        sq = self._sqlite3
+        with self._lock:
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                try:
+                    self._db.execute("DELETE FROM seen WHERE exp < ?", (int(now),))
+                    if self._db.execute("SELECT COUNT(*) FROM seen").fetchone()[0] >= self.max_entries:
+                        raise ReplayCacheFull()
+                    self._db.execute("INSERT INTO seen (k, exp) VALUES (?, ?)", (key, int(timestamp) + self.max_skew))
+                except BaseException:
+                    self._db.execute("ROLLBACK")
+                    raise
+                self._db.execute("COMMIT")
+            except sq.IntegrityError:
+                raise AttestationError("replayed") from None
+            except sq.Error as e:
+                raise ReplayStoreUnavailable(type(e).__name__) from None
+
+
 def verify(pubkeys: dict, purpose: str, source_id: str, timestamp: str, signature: str, messages,
            pgw_subjects=None, now: float | None = None, max_skew: int = MAX_SKEW_S, *, app_id: str, nonce: str,
            replay: ReplayCache | None = None) -> str:

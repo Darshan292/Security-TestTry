@@ -52,6 +52,7 @@ repo):
 | Env | Default | Effect |
 |---|---|---|
 | `PGW_MODE` | `production` | `production`: signed config and profile required, every purpose contracted, no development switches. `development` is for synthetic-data tests and demos only. The mode is on every audit line and on `/healthz`; check it in deployment review |
+| `PGW_REPLAY_DB` | unset (production will not start) | Persistent store of accepted source attestations, so each one is used once. Local persistent disk shared by all gateway processes on the host. Not for network filesystems. A store error refuses requests (503) |
 | `PGW_TRUSTED_CONFIG_PUBKEY` | unset (production will not start) | Ed25519 public key that must have signed `policies/MANIFEST.json`. Supply it from a secret store or image the config authors cannot write |
 | `PGW_INTEGRITY_MANIFEST` | `policies/MANIFEST.json` | Registry, policy, contracts, roster and deployment profile must match their sealed sha256 and version, or the gateway does not start. No env switch turns this off |
 | `PGW_POLICY_SIGNING_KEY` / `PGW_REQUIRE_SIGNED_POLICY=1` | unset / off | Older HMAC check, still verified if set. Not a trust anchor (symmetric key) |

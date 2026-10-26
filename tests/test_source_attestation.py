@@ -477,3 +477,64 @@ def test_ordinary_keys_still_load():
         assert len(A.parse_public_key(A.generate_key()[1])) == 32
     for pub in A.DEMO_PUBKEYS:
         A.parse_public_key(pub)
+
+
+# --- the replay store is persistent, shared and fails closed -------------------------------------------------------
+
+def test_production_requires_a_persistent_replay_store(tmp_path):
+    cfg = production(tmp_path, [{"app_id": APP, "tenant": "acme", "key_sha256": sha(KEY), "models": ["mock-1"],
+                                 "purposes": ["ticket_summary"], "tasks": {"ticket_summary": refusing(tmp_path)}}])
+    cfg.pop("replay_db_path")
+    with pytest.raises(ValueError, match="replay store"):
+        create_app(Settings(**cfg, ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e"),
+                            master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise")))
+
+
+def test_replay_is_refused_across_restart_and_across_instances(tmp_path):
+    tasks = {"ticket_summary": refusing(tmp_path)}
+    b = body()
+    h = attest("ticket_summary", b)
+    first, ext1 = make(tmp_path, tasks)
+    assert post(first, b, h).status_code == 200
+    second, ext2 = make(tmp_path, tasks)        # a restarted or parallel gateway on the same replay store
+    r = post(second, b, h)
+    assert r.status_code == 422 and r.json()["error"]["attestation"] == "replayed" and ext2.received == []
+
+
+def test_replay_store_failure_refuses_the_request(tmp_path, monkeypatch):
+    client, ext = make(tmp_path, {"ticket_summary": refusing(tmp_path)})
+
+    def broken(self, key, timestamp, now=None):
+        raise A.ReplayStoreUnavailable("OperationalError")
+    monkeypatch.setattr(A.SqliteReplayStore, "add", broken)
+    b = body()
+    r = post(client, b, attest("ticket_summary", b))
+    assert r.status_code == 503 and r.json()["error"]["type"] == "replay_store_unavailable"
+    assert ext.received == [] and CANARY not in r.text
+
+
+def test_sqlite_store_maps_database_errors_to_unavailable(tmp_path):
+    import sqlite3
+    store = A.SqliteReplayStore(str(tmp_path / "r.sqlite"))
+    store.add(b"k1", int(time.time()))
+    with pytest.raises(A.AttestationError):
+        store.add(b"k1", int(time.time()))      # atomic insert-or-fail
+
+    class Failing:
+        def execute(self, *a):
+            raise sqlite3.OperationalError("disk I/O error")
+    store._db = Failing()
+    with pytest.raises(A.ReplayStoreUnavailable):
+        store.add(b"k2", int(time.time()))
+    with pytest.raises(A.ReplayStoreUnavailable):
+        A.SqliteReplayStore(str(tmp_path / "missing-dir" / "r.sqlite"))   # cannot open: startup fails
+
+
+def test_sqlite_store_expires_and_bounds(tmp_path):
+    now = time.time()
+    store = A.SqliteReplayStore(str(tmp_path / "r.sqlite"), max_entries=2, max_skew=10)
+    store.add(b"a", int(now)), store.add(b"b", int(now))
+    with pytest.raises(A.ReplayCacheFull):
+        store.add(b"c", int(now), now)
+    store.add(b"c", int(now), now + 11)         # a and b expired, so room again
+    assert len(store) == 1

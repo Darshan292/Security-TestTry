@@ -154,9 +154,19 @@ Every request for a contracted purpose must carry four headers, on every route. 
     the window, in a bounded cache (`REPLAY_CACHE_MAX`, 100 000). When the cache is full of live entries the gateway
     answers 503 and sends nothing; it never evicts an entry that could still be replayed. Only verified messages
     enter the cache, so forgeries cannot fill it.
-- **The replay cache is per process.** With several gateway replicas (or workers), each has its own cache and a
-  captured request can be replayed once per replica within the window. Multi-replica deployments need a shared
-  store (for example an atomic set-if-absent with expiry) before this guarantee holds across the fleet.
+- **Where accepted messages are stored.**
+  - **Production:** a persistent replay store is required (`PGW_REPLAY_DB`, a SQLite file in WAL mode); startup
+    fails without one. Every gateway process on the host shares it, and it survives restarts. The check is an
+    atomic primary-key insert, so two processes racing on the same message cannot both accept it.
+  - **When the store fails:** any database error (unreadable, locked past 2 s, disk full) refuses the request
+    with 503 `replay_store_unavailable`, and nothing is sent. A message is never accepted without being recorded.
+    Tests: `test_replay_is_refused_across_restart_and_across_instances`,
+    `test_replay_store_failure_refuses_the_request`.
+  - **Development:** the in-memory per-process cache is allowed.
+  - **Limit:** replicas on several hosts must not share one SQLite file over a network filesystem. They need a
+    shared database with the same insert-or-fail semantics. That backend is not implemented; until it is, run
+    every replica that serves attested purposes on hosts sharing a local store, or accept one replay per host
+    within the window.
 - On failure the contract's `unattested` action applies:
   - `REFUSE`: the response is 422 `input_not_source_sanitized` with a content-free `attestation` reason, nothing is
     sent, and the ledger records `BLOCKED`, reason `input_not_sanitized` and `input_attestation`.
@@ -184,7 +194,7 @@ Every request for a contracted purpose must carry four headers, on every route. 
   says "chemotherapy" is sent (`test_not_expected_content_is_not_removed_when_attested`).
 - **Not verified: key custody at the source.** If the calling app, or anyone else, holds the source key, the
   guarantee reduces to that party's word. The gateway cannot tell.
-- **Replay across replicas.** See the per-process note above. The conversation id is not signed; it is a routing
+- **Replay across hosts.** See the multi-host limit above. The conversation id is not signed; it is a routing
   hint for alias restore, not content.
 - **Small-order keys.** Public keys that are small-order points (all eight, in any encoding) or non-canonically
   encoded are refused when the contract loads.

@@ -36,7 +36,8 @@ def env_for(cfg, tmp, **extra):
     """A production environment for from_env, with no profile-pinned variable unless given in `extra`."""
     return {"PGW_MODE": "production", "PGW_INTEGRITY_MANIFEST": cfg["integrity_manifest"],
             "PGW_TRUSTED_CONFIG_PUBKEY": cfg["trusted_config_pubkey"], "PGW_MASTER_KEY": os.urandom(32).hex(),
-            "PGW_LEDGER_DB": str(tmp / "l.sqlite"), "PGW_EGRESS_LEDGER": str(tmp / "e.jsonl"), **extra}
+            "PGW_LEDGER_DB": str(tmp / "l.sqlite"), "PGW_EGRESS_LEDGER": str(tmp / "e.jsonl"),
+            "PGW_REPLAY_DB": str(tmp / "replay.sqlite"), **extra}
 
 
 def different(field: str, tmp: Path):

@@ -28,7 +28,10 @@ services:
       # Provider credentials: ONLY here. Supplied from the host env / .env, never baked in.
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:?set in the deploy environment}"
       PGW_MASTER_KEY_FILE: /run/secrets/pgw_master_key   # or PGW_MASTER_KEY from env
+      PGW_REPLAY_DB: /var/lib/pgw/replay.sqlite          # single-use attestations; persistent, local disk only
     secrets: [pgw_master_key]
+    volumes:
+      - pgw_state:/var/lib/pgw        # replay store (and ledgers): must persist across restarts
     networks:
       appnet:
         aliases: [gateway]            # apps reach it as http://gateway:8080
@@ -51,6 +54,9 @@ networks:
     internal: true                    # no route out: the core of the T13 control
   egressnet:
     driver: bridge                    # reachable only by services that explicitly attach it
+
+volumes:
+  pgw_state: {}
 
 secrets:
   pgw_master_key:

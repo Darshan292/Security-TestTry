@@ -51,7 +51,9 @@ def _median(text: str) -> float:
 
 @pytest.mark.parametrize("name", CASES)
 def test_adversarial_input_is_fast(name):
-    assert _time(CASES[name](SIZE)) < LIMIT
+    # Median of three runs, not one sample: a single timing is at the mercy of the scheduler (this test failed about
+    # one run in three on an idle 4-core machine). The bound itself is unchanged.
+    assert _median(CASES[name](SIZE)) < LIMIT
 
 
 @pytest.mark.parametrize("name", ["digit_run", "no_whitespace", "dots", "uppercase_run", "short_option_run"])

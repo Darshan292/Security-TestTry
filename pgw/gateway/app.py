@@ -480,7 +480,14 @@ def create_app(settings: Settings) -> Starlette:
 
     if settings.trace is not None:
         _log(logging.WARNING, event="trace_hook_enabled_demo_only")
-    replay_cache = attest.ReplayCache(attest.REPLAY_CACHE_MAX)   # per process (SECURITY_BOUNDARY.md §4)
+    # Single-use attestations. Production needs the persistent store (shared by every process on the host and
+    # surviving restarts); the in-memory cache is development-only (SECURITY_BOUNDARY.md §4).
+    if settings.replay_db_path:
+        replay_cache = attest.SqliteReplayStore(settings.replay_db_path, attest.REPLAY_CACHE_MAX)
+    elif prod and contracts:
+        raise ValueError("production requires a persistent attestation replay store (PGW_REPLAY_DB)")
+    else:
+        replay_cache = attest.ReplayCache(attest.REPLAY_CACHE_MAX)
 
     async def chat(request: Request) -> Response:
         rid = "req_" + uuid.uuid4().hex[:24]
@@ -601,6 +608,10 @@ def create_app(settings: Settings) -> Starlette:
             except attest.ReplayCacheFull:
                 _log(logging.ERROR, event="attestation_replay_cache_full", request_id=rid)
                 raise _Reject(503, "gateway_busy", "attestation replay cache full; request not sent") from None
+            except attest.ReplayStoreUnavailable:
+                _log(logging.ERROR, event="attestation_replay_store_unavailable", request_id=rid)
+                raise _Reject(503, "replay_store_unavailable",
+                              "attestation replay store unavailable; request not sent") from None
             except attest.AttestationError as e:
                 _tr("input_source", attested=bool(h.get("x-pgw-input-source")), accepted=False,
                     reason=e.reason, unattested=contract.external_input.unattested)

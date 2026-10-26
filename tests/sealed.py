@@ -138,7 +138,8 @@ def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, si
     if private_upstream is not None:
         extra["private_upstream"] = private_upstream
     return {"mode": "production", "registry_path": str(reg), "policy_path": str(base / "policies" / pol_name),
-            "integrity_manifest": str(manifest), "trusted_config_pubkey": pub, **extra}
+            "integrity_manifest": str(manifest), "trusted_config_pubkey": pub,
+            "replay_db_path": str(Path(tmp) / "replay.sqlite"), **extra}
 
 
 def legacy_dev(registry_path: str | Path) -> dict:

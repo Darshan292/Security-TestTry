@@ -1718,7 +1718,8 @@ _PERF_SHAPES = {
 def test_detect_d2_scales_linearly(shape):
     make = _PERF_SHAPES[shape]
     small, big = make(1500), make(3000)
-    t1, t2 = _best_of(detect_d2, small), _best_of(detect_d2, big)
+    # best of 7: the ratio of two ~millisecond timings is noise-sensitive; the bounds are unchanged
+    t1, t2 = _best_of(detect_d2, small, 7), _best_of(detect_d2, big, 7)
     assert _best_of(detect_d2, make(4000)) < 1.5
     assert t2 / max(t1, 1e-4) < 2.6, (shape, t1, t2)
 
