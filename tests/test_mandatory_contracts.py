@@ -6,7 +6,6 @@ Synthetic data only. Every "nothing was sent" assertion reads what the mock prov
 import json
 import logging
 import os
-import re
 from pathlib import Path
 
 import pytest
@@ -135,14 +134,18 @@ def test_defaults_and_environment_cannot_enable_the_legacy_path():
     assert Settings.from_env({"PGW_TRUSTED_CONFIG_PUBKEY": "ab" * 32}).trusted_config_pubkey == "ab" * 32
 
 
-def test_only_explicit_development_helpers_enable_the_legacy_path():
-    """Compatibility tests reach the legacy path only through tests/sealed.legacy_dev (or the labelled legacy demo);
-    production code never sets the flag."""
-    allowed = {"tests/sealed.py", "tests/test_mandatory_contracts.py", "demo/demo_gateway.py"}
-    hits = set()
-    for p in [*ROOT.glob("pgw/**/*.py"), *ROOT.glob("tests/*.py"), *ROOT.glob("demo/*.py"), *ROOT.glob("scripts/*.py")]:
-        if re.search(r"legacy_uncontracted\s*=\s*True|\"legacy_uncontracted\":\s*True", p.read_text()):
-            hits.add(p.relative_to(ROOT).as_posix())
+@pytest.mark.parametrize("switch,allowed", [
+    ("legacy_uncontracted", {"tests/sealed.py", "tests/test_mandatory_contracts.py", "demo/demo_gateway.py"}),
+    ("dev_allow_real_provider", {"tests/test_mandatory_contracts.py", "demo/ui_server.py",
+                                 "scripts/pilot_validation.py"}),
+])
+def test_development_switches_are_only_named_where_expected(switch, allowed):
+    """Development-only switches appear (in any form: kwarg, setattr, dict key) only in the gateway that checks
+    them and in these explicit development callers. Compatibility tests reach the legacy path via legacy_dev."""
+    allowed = allowed | {"pgw/gateway/settings.py", "pgw/gateway/app.py"}
+    hits = {p.relative_to(ROOT).as_posix() for p in [*ROOT.glob("pgw/**/*.py"), *ROOT.glob("tests/*.py"),
+                                                      *ROOT.glob("demo/*.py"), *ROOT.glob("scripts/*.py")]
+            if switch in p.read_text()}
     assert hits <= allowed, hits - allowed
 
 
@@ -282,3 +285,26 @@ def test_every_shipped_contract_declares_its_input_boundary():
 def test_health_reports_mode(tmp_path):
     client, _ = ticket_client(tmp_path)
     assert client.get("/healthz").json() == {"status": "ok", "mode": "production"}
+
+
+# --- development mode is isolated: unsigned config never reaches a real provider unless set in code --------------
+
+def test_development_mode_only_reaches_the_mock_provider(tmp_path):
+    from pgw.gateway.upstream import OpenAICompatUpstream
+    real = OpenAICompatUpstream("https://api.example.invalid/v1", "k")
+    apps = [app_entry(["ticket_summary"], {"ticket_summary": TICKET})]
+    with pytest.raises(ValueError, match="mock provider"):
+        create_app(settings(tmp_path, apps, real, mode="development", trusted_config_pubkey=None))
+    env_dev = Settings.from_env({"PGW_MODE": "development", "PGW_DEV_ALLOW_REAL_PROVIDER": "1"})
+    assert env_dev.dev_allow_real_provider is False            # never from the environment
+    create_app(settings(tmp_path / "ok", apps, real, mode="development", trusted_config_pubkey=None,
+                        dev_allow_real_provider=True))         # explicit, code-only opt-in for synthetic runs
+    with pytest.raises(ValueError, match="development-only"):
+        create_app(settings(tmp_path / "p", apps, real, dev_allow_real_provider=True))
+
+
+def test_startup_log_records_the_mode(tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="pgw.gateway")
+    ticket_client(tmp_path)
+    started = [r.getMessage() for r in caplog.records if "event='started'" in r.getMessage()]
+    assert started and "mode='production'" in started[-1]

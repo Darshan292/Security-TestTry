@@ -59,7 +59,7 @@ ALLOWED_TOP = {"model", "messages", "stream", "temperature", "max_tokens", "max_
                "stop", "tools", "tool_choice", "n", "stream_options",
                "pgw_subjects"}   # gateway-only fields (pgw_*) are never forwarded
 LOG_FIELDS = ("event", "request_id", "tenant", "app", "purpose", "model", "status", "decision", "error_type",
-              "latency_ms", "gate_events", "stream", "integrity", "ner")
+              "latency_ms", "gate_events", "stream", "integrity", "ner", "mode", "provider")
 
 
 def _log(level: int, **fields) -> None:
@@ -299,6 +299,11 @@ def create_app(settings: Settings) -> Starlette:
     elif contracts:
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
+    if (not prod and not isinstance(upstream, MockLLMUpstream) and not settings.dev_allow_real_provider):
+        # Development config may be unsigned, so it must stay isolated: no real provider unless set in code.
+        raise ValueError("development mode only reaches the mock provider (dev_allow_real_provider is code-only)")
+    if prod and settings.dev_allow_real_provider:
+        raise ValueError("dev_allow_real_provider is a development-only switch")
     private = settings.private_upstream
     if private is None and settings.private_upstream_url:
         check_private_destination(settings.private_upstream_url, settings.private_allowlist,
@@ -314,7 +319,8 @@ def create_app(settings: Settings) -> Starlette:
                                 "configured")
     egress_ledger = EgressLedger(settings.egress_ledger_path, keys if settings.tenant_keys_file else None)
     slots = threading.BoundedSemaphore(settings.max_concurrent_protect)
-    _log(logging.INFO, event="started", integrity=integrity_ref, ner=settings.ner_model if contracts else None)
+    _log(logging.INFO if prod else logging.WARNING, event="started", mode=settings.mode, integrity=integrity_ref,
+         ner=settings.ner_model if contracts else None, provider=upstream.name)
 
     async def bounded(fn, *args):
         """Run CPU work in a worker with a deadline. The slot is released only when the worker really finishes,

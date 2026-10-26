@@ -88,6 +88,10 @@ class Settings:
     # DEVELOPMENT ONLY: serve purposes that have no data contract through the generic policy pack (the pre-contract
     # path). Never read from the environment; create_app refuses it unless mode == "development".
     legacy_uncontracted: bool = False
+    # DEVELOPMENT ONLY: allow a non-mock external provider while the config is unsigned (synthetic-data validation
+    # runs such as scripts/pilot_validation.py and the demo inspector). Never read from the environment, so a
+    # deployment configured by env in development mode can only reach the mock provider.
+    dev_allow_real_provider: bool = False
     policy_path: str = "policies/hris-default.yaml"
     registry_path: str = "registry/apps.yaml"
     roster_path: str | None = None            # optional JSONL of employees

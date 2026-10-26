@@ -248,8 +248,11 @@ def test_assistant_turn_without_conversation_id_400(env):
 
 # --- failure modes ---------------------------------------------------------------------
 
-class Broken:
+class Broken(MockLLMUpstream):   # a fake (development mode only reaches mock providers)
     name = "broken"
+
+    def __init__(self):
+        super().__init__("summarise")
 
     def wire_bytes(self, body):
         return json.dumps(body).encode()

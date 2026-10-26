@@ -55,12 +55,12 @@ Status updated 2026-10-02 after the hardening pass; see PILOT_READINESS.md for t
 
 ### B. What is still missing
 - **No real model answer seen.** The harness exists and ran against the real endpoint only without a valid key (outbound bytes and fail-closed behaviour validated). Alias survival and restoration of a real answer are not validated.
-- **No private/local LLM route.** C4 content is refused, not served.
+- ~~No private/local LLM route~~ a private in-boundary route exists (`PRIVATE_LOCAL`, `pgw/private_llm`) for C4 content.
 - **Untested on the contract paths:** multi-turn (restore ledger). Contracted purposes are forced to buffered output, so incremental streaming is not used there.
 - **Local-compute catalogue is two functions** (`salary_difference`, `esi_eligibility`), not derived from real ESU tasks.
 - **NER is a secondary net, not complete coverage** (done: wired, see D). Names it misses still leave raw.
 - **Network egress configs are not exercised** (the code allowlist is tested).
-- **Still absent:** SQLite ledger (no PostgreSQL), single shared roster key (no per-tenant keys), no contract-change governance process beyond the signed manifest (who signs, and how changes are reviewed, is organisational). No tenant-specific contracts (one purpose means one contract).
+- **Still absent:** SQLite ledger (no PostgreSQL), no contract-change governance process beyond the signed manifest (who signs, and how changes are reviewed, is organisational). Per-tenant keys exist (`pgw/keys.py`: alias HMAC, restore ledger, audit MAC); tenant-specific contracts and policies are not supported (one purpose means one contract).
 - **No evaluation on real ESU tasks inside the boundary,** and no owner review of the E-UTIL cases yet.
 - **Declared subjects for Path A: implemented** (`pgw/product/subjects.py`, `tests/test_declared_subjects.py`). Undeclared people still depend on detection.
 
@@ -85,7 +85,7 @@ Done since the original slice (pointer in brackets):
 2. ~~Remove the quadratic paths, add input size caps, fix the silent `except: pass`.~~ **Done** for the 3 known paths, the limits and the stream-path log (`tests/test_dos_bounds.py`, `tests/test_gateway_hardening.py`).
 3. **Run both paths against the real provider with a valid key,** have a human review the outputs, and exercise multi-turn on contract paths. *Partly done:* harness exists; real endpoint run without a valid key only (`scripts/pilot_validation.py`).
 4. **A private/local route endpoint for C4,** and a LOCAL-COMPUTE function catalogue taken from real ESU tasks (eligibility, arrears, band position). *Partly done:* `salary_difference` and `esi_eligibility` exist.
-5. **Deployment basics.** *Done:* hash-locked requirements (`requirements/`); egress allowlist in code (`tests/test_egress_allowlist.py`); sealed, versioned contracts and policy (`policies/MANIFEST.json`). *Written, not exercised:* compose/k8s egress network configs (`deploy/`). *Remaining:* per-tenant keys, durable ledger, exercising the network configs.
+5. **Deployment basics.** *Done:* hash-locked requirements (`requirements/`); egress allowlist in code (`tests/test_egress_allowlist.py`); sealed, versioned registry, policy and contracts, signed in production (`policies/MANIFEST.json`); per-tenant keys (`pgw/keys.py`). *Written, not exercised:* compose/k8s egress network configs (`deploy/`). *Remaining:* durable ledger, tenant-specific contracts (not supported), exercising the network configs.
 
 ### E. What should explicitly NOT be solved yet
 - New detector families, corpora, benchmark cycles or PD-13 adoption.

@@ -187,6 +187,7 @@ def build(groq_key: str | None, tmp: Path, runs: Runs):
     s = Settings(mode="development", integrity_manifest=None, registry_path=str(reg), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                  ledger_db_path=str(tmp / "restore.sqlite"), egress_ledger_path=str(tmp / "audit.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=upstream, private_upstream=private, ner_model=ner,
+                 dev_allow_real_provider=bool(groq_key),   # synthetic demo; set in code, never from env
                  trace=runs.observe)
     return create_app(s), model, provider, ner, s
 

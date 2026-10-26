@@ -180,3 +180,11 @@ def test_load_captures_keeps_every_outbound_exchange(tmp_path):
     rep = evaluate(SPEC["A1"], cap)
     priv = {r.check: r.status for r in rep.results if r.category == "PRIVACY"}
     assert priv["outbound:raw_values_absent"] == "FAIL"        # the leak is only in the second exchange
+
+
+def test_response_without_a_captured_request_is_not_evaluable(tmp_path):
+    rec = {"scenario": "A1 ticket summary", "restored_response": "ok", "outbound_http": [OK_EX],
+           "inbound_http": [None, None]}
+    (tmp_path / "A1_ticket_summary.json").write_text(json.dumps(rec))
+    cap = load_captures(tmp_path)["A1 ticket summary"]
+    assert outbound_status(cap["outbound"])["outbound:raw_values_absent"] == "NOT_EVALUABLE"

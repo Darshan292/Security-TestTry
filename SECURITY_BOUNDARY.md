@@ -23,10 +23,19 @@ guarantee.
 explicit opt-in that allows three things: an unsigned manifest, no manifest, and the legacy path. The trace hook
 also requires `development`.
 
+**Development mode is isolated from real providers.** It can only reach the mock provider. A real provider in
+development needs `dev_allow_real_provider=True`, which:
+
+- is set in code only, never from the environment, so an env-configured deployment cannot turn it on;
+- is used only by the synthetic-data harness (`scripts/pilot_validation.py`) and the demo inspector;
+- is refused in production.
+
+Test: `test_development_mode_only_reaches_the_mock_provider`.
+
 **What the mode check cannot do.** The gateway cannot detect an operator who falsely declares `development`.
 Three measures make it visible instead:
 
-- the mode is logged at startup;
+- the mode is logged at startup (`test_startup_log_records_the_mode`);
 - the mode is recorded on every audit-ledger line (`"mode"`);
 - the mode is reported on `/healthz`.
 
@@ -59,6 +68,10 @@ verified if configured, but it is not a trust anchor: whoever holds the gateway'
 - Anyone who can replace `PGW_TRUSTED_CONFIG_PUBKEY` can make the gateway trust their own signature. That public
   key must come from configuration the config authors cannot write (secret store, image, admission policy).
 - Who may hold the private key, and how a change is reviewed before it is signed, is an organisational control.
+- **No rollback protection.** An older manifest that was validly signed, together with its older files, still
+  verifies. For example, a previous registry with a model or key hash that was later removed would be accepted. To
+  prevent this, the deployment must pin what it ships (an immutable image digest) or rotate the signing key when
+  revoking a configuration. The gateway keeps no monotonic config serial.
 - Every sealed file is read once at startup, and the bytes that are verified are the bytes that are parsed. A file
   swapped on disk during startup cannot be served unverified (`test_verified_bytes_are_the_parsed_bytes`). A change
   on disk after startup has no effect until restart, and the restart re-verifies it.
@@ -157,7 +170,8 @@ M1–M3). It is not a general evaluator.
   It says nothing about any other personal data that may be in the text.
 - **Partial captures are no longer a pass.** The privacy check is NOT_EVALUABLE unless every captured outbound
   exchange is present, is JSON, and has a `messages` list. Previously only the first exchange was inspected, and
-  empty or non-JSON captures could pass. An empty restored answer is also NOT_EVALUABLE.
+  empty or non-JSON captures could pass. An empty restored answer is also NOT_EVALUABLE. A capture with more provider
+  responses than captured requests is NOT_EVALUABLE too.
 - Tests: `test_privacy_is_not_evaluable_unless_every_exchange_is_inspected`, `test_a_leak_in_a_later_exchange_fails`,
   `test_empty_answer_is_not_evaluable_not_a_privacy_pass`, `test_load_captures_keeps_every_outbound_exchange`.
 - **Re-check of the existing Groq runs.** `final-groq` and `final2-groq` give the same per-case results under the

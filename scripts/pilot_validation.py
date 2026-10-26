@@ -246,6 +246,7 @@ def make_settings(out: Path, upstream, **kw) -> Settings:
                     roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                     ledger_db_path=str(out / "restore_ledger.sqlite"), egress_ledger_path=str(out / "egress.jsonl"),
                     master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream,
+                    dev_allow_real_provider=True,   # explicit synthetic-data validation run (code-only switch)
                     **kw)
 
 

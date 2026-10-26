@@ -47,7 +47,10 @@ def load_captures(d: Path) -> dict[str, dict]:
             except (ValueError, KeyError, IndexError, TypeError):
                 raw = ""
         # every exchange is kept: privacy is NOT_EVALUABLE unless all of them can be inspected (checks.py)
-        out[rec["scenario"]] = {"answer": rec.get("restored_response") or "", "outbound": list(ob) if ob else None,
+        ob = list(ob)
+        if len(ib) > len(ob):   # an exchange with a response but no captured request: cannot be inspected
+            ob += [None] * (len(ib) - len(ob))
+        out[rec["scenario"]] = {"answer": rec.get("restored_response") or "", "outbound": ob or None,
                                 "provider_raw": raw}
     sheet = d / "human_review.md"
     if sheet.exists():
