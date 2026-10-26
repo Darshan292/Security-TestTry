@@ -32,7 +32,7 @@ from ..egress import check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
 from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer
-from ..product import integrity, local_compute, subjects
+from ..product import attest, integrity, local_compute, subjects
 from ..product.content import unreliable_script
 from ..product.contracts import CLASS_OF, Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
@@ -133,9 +133,10 @@ PLACEHOLDER_NOTE = ("Tokens in square brackets such as [PERSON_...] are placehol
                     "account').")
 
 
-def load_contracts(registry: list[AppEntry], policy: PolicyPack,
-                   contents: dict | None = None) -> tuple[dict[str, Contract], PolicyPack]:
+def load_contracts(registry: list[AppEntry], policy: PolicyPack, contents: dict | None = None,
+                   allow_demo_keys: bool = False) -> tuple[dict[str, Contract], PolicyPack]:
     """Contracts by purpose, and a policy pack extended with their per-type actions. Any problem stops startup.
+    A source key whose private half is public (attest.DEMO_PUBKEYS) is refused unless allow_demo_keys (development).
 
     The map is GLOBAL and keyed by purpose (as is the policy pack's action table): a purpose means the same contract
     for every app and tenant. Tenant-specific contracts are not supported; two bindings of one purpose must be
@@ -154,6 +155,13 @@ def load_contracts(registry: list[AppEntry], policy: PolicyPack,
                 raise ContractError(f"purpose {purpose!r} is bound to contract files with different content "
                                     "(tenant-specific contracts are not supported; one purpose = one contract)")
             digests[purpose] = digest
+            demo = sorted(s for s, k in c.external_input.keys.items() if k in attest.DEMO_PUBKEYS)
+            if demo and not allow_demo_keys:
+                raise ContractError(f"purpose {purpose!r}: source key(s) {demo} are the repository's DEMO keys "
+                                    "(their private keys are public); replace them with your sources' keys and "
+                                    "re-sign the config")
+            if demo:
+                _log(logging.WARNING, event="demo_source_keys_development_only", purpose=purpose)
             if c.route == "LOCAL_COMPUTE" and c.compute not in local_compute.FUNCTIONS:
                 raise ContractError(f"unknown compute function {c.compute!r}")
             contracts[purpose] = c
@@ -338,7 +346,7 @@ def create_app(settings: Settings) -> Starlette:
     policy = PolicyPack.load(settings.policy_path, read(settings.policy_path))
     from ..keys import build_keys   # per-tenant key file if configured, else the single master key
     keys: Keys = build_keys(settings, registry)   # or pgw.keys.TenantKeyring: same interface
-    contracts, policy = load_contracts(registry, policy, snapshot)
+    contracts, policy = load_contracts(registry, policy, snapshot, allow_demo_keys=not prod)
     for p in contracts:   # contracted (RESTRICTED-by-default) purposes never stream unrestored text
         if policy.stream_mode(p) != "buffered":
             raise ContractError(f"purpose {p!r}: contracted purposes must use buffered output")
@@ -429,11 +437,14 @@ def create_app(settings: Settings) -> Starlette:
         return found
 
     def ledger_line(rid, app, purpose, model, body_hash, counts, decision, ms, reason=None, contract=None,
-                    n_subjects=None, input_source=None):
+                    n_subjects=None, input_source=None, attestation=None):
         try:
             extra = {"contract": contract.ref, "route": contract.route} if contract is not None else {}
-            if input_source is not None:
+            if input_source is not None:   # only ever set after the source's signature verified
                 extra["input_source"] = input_source
+                extra["input_verified"] = True
+            if attestation is not None:    # content-free reason the attestation failed
+                extra["input_attestation"] = attestation
             if n_subjects is not None:
                 extra["declared_subjects"] = n_subjects
             egress_ledger.write(request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose, model=model,
@@ -448,6 +459,7 @@ def create_app(settings: Settings) -> Starlette:
 
     if settings.trace is not None:
         _log(logging.WARNING, event="trace_hook_enabled_demo_only")
+    replay_cache = attest.ReplayCache(attest.REPLAY_CACHE_MAX)   # per process (SECURITY_BOUNDARY.md §4)
 
     async def chat(request: Request) -> Response:
         rid = "req_" + uuid.uuid4().hex[:24]
@@ -554,20 +566,33 @@ def create_app(settings: Settings) -> Starlette:
             if _text_size(messages) > contract.max_chars:
                 raise _Reject(413, "content_too_large", "request exceeds the data contract's size limit")
             # NOT_EXPECTED attributes (medical, disciplinary, ...) are not detected by the gateway. Free text goes
-            # to an external model only when the app declares it was produced by a source-side sanitizer/export
-            # this contract allowlists; otherwise it is refused or kept in-boundary (SECURITY_BOUNDARY.md §4).
-            input_source = request.headers.get("x-pgw-input-source", "").strip()
-            if input_source not in contract.external_input.sanitizers:
-                _tr("input_source", attested=bool(input_source), accepted=False,
-                    unattested=contract.external_input.unattested)
+            # to an external model only with a valid signature, by a source key this contract pins, over exactly
+            # these messages and subjects; otherwise it is refused or kept in-boundary (SECURITY_BOUNDARY.md §4).
+            # Verified here, on the parsed body, before any send and before anything rewrites the messages.
+            h = request.headers
+            try:
+                input_source = attest.verify(contract.external_input.keys, purpose,
+                                             h.get("x-pgw-input-source", "").strip(),
+                                             h.get("x-pgw-input-timestamp", "").strip(),
+                                             h.get("x-pgw-input-signature", "").strip(),
+                                             body["messages"], body.get("pgw_subjects"), app_id=app.app_id,
+                                             nonce=h.get("x-pgw-input-nonce", "").strip(), replay=replay_cache)
+            except attest.ReplayCacheFull:
+                _log(logging.ERROR, event="attestation_replay_cache_full", request_id=rid)
+                raise _Reject(503, "gateway_busy", "attestation replay cache full; request not sent") from None
+            except attest.AttestationError as e:
+                _tr("input_source", attested=bool(h.get("x-pgw-input-source")), accepted=False,
+                    reason=e.reason, unattested=contract.external_input.unattested)
                 if contract.external_input.unattested == "PRIVATE":
-                    return await _private(rid, app, purpose, model, body, ctx, contract, t0, "input_not_sanitized")
+                    return await _private(rid, app, purpose, model, body, ctx, contract, t0, "input_not_sanitized",
+                                          e.reason)
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
-                            "input_not_sanitized", contract)
+                            "input_not_sanitized", contract, attestation=e.reason)
                 raise _Reject(422, "input_not_source_sanitized",
-                              "this purpose only sends input produced by an allowlisted source-side sanitizer "
-                              "(X-PGW-Input-Source); not sent externally")
-            _tr("input_source", attested=True, accepted=True, sanitizer=input_source)
+                              "this purpose only sends input signed by an allowlisted source-side sanitizer "
+                              "(X-PGW-Input-Source/-Timestamp/-Nonce/-Signature); not sent externally",
+                              attestation=e.reason) from None
+            _tr("input_source", attested=True, accepted=True, verified=True, sanitizer=input_source)
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
                 return await _private(rid, app, purpose, model, body, ctx, contract, t0)
             if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
@@ -711,7 +736,8 @@ def create_app(settings: Settings) -> Starlette:
             return await _non_stream(rid, up_body, new_restorer, record, contract)
         return await _stream(rid, up_body, new_restorer, record, contract)
 
-    async def _private(rid, app, purpose, model, body, ctx, contract, t0, reason="content_class_C4") -> Response:
+    async def _private(rid, app, purpose, model, body, ctx, contract, t0, reason="content_class_C4",
+                       attestation=None) -> Response:
         """C4 content the gateway cannot protect reliably goes, unprotected, ONLY to the in-boundary model.
         The external upstream is never called. The answer still passes the output gate (raw C3 is masked)."""
         if body.get("stream"):
@@ -726,7 +752,8 @@ def create_app(settings: Settings) -> Starlette:
             note="unprotected, but never leaves the boundary")
         ms = (time.perf_counter() - t0) * 1000
         ledger_line(rid, app, purpose, model, hashlib.sha256(private.wire_bytes(p_body)).hexdigest(), {},
-                    "SENT_PRIVATE", ms, reason, dataclasses.replace(contract, route="PRIVATE_LOCAL"))
+                    "SENT_PRIVATE", ms, reason, dataclasses.replace(contract, route="PRIVATE_LOCAL"),
+                    attestation=attestation)
         try:
             t_up = time.perf_counter()
             data = await private.complete(p_body)

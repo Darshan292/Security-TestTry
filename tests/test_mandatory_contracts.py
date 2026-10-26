@@ -17,7 +17,7 @@ from pgw.gateway.app import create_app
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product.contracts import ContractError, load_contract
-from tests.sealed import ROOT, legacy_dev, production, sha, source
+from tests.sealed import ROOT, attest, legacy_dev, production, sha
 
 KEY = "pilot-key"
 CANARY = "Zorawar Pemberton-Okafor"           # synthetic; must never appear in a refusal, log or ledger
@@ -36,12 +36,14 @@ def settings(tmp, apps, mock=None, **kw):
                     upstream=mock or MockLLMUpstream("summarise"))
 
 
-def post(client, purpose, text=CANARY_TEXT, headers=None, subjects=True):
+def post(client, purpose, text=CANARY_TEXT, headers=None, subjects=True, signed=False, contract=None):
+    """signed=True: the source's signed attestation for exactly this body (tests/sealed.attest)."""
     body = {"model": "mock-1", "messages": [{"role": "user", "content": text}]}
     if subjects and purpose.startswith("ticket_summary"):
         body["pgw_subjects"] = {"requester": {"name": CANARY}}
+    sig = attest(purpose, body, contract=contract) if signed else {}
     return client.post("/v1/chat/completions", json=body,
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **(headers or {})})
+                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **sig, **(headers or {})})
 
 
 def ledger(tmp) -> str:
@@ -189,17 +191,27 @@ MEDICAL = ("Ticket for Zorawar Pemberton-Okafor: leave without pay query. Note f
            "chemotherapy and had a disciplinary warning in July.")
 
 
-def ticket_client(tmp, mock=None, purpose="ticket_summary", **kw):
+def ticket_client(tmp, mock=None, purpose="ticket_summary", path=None, **kw):
     mock = mock or MockLLMUpstream("summarise")
-    path = str(ROOT / f"contracts/{purpose}.yaml")
+    path = path or str(ROOT / f"contracts/{purpose}.yaml")
     return TestClient(create_app(settings(tmp, [app_entry([purpose], {purpose: path})], mock, **kw))), mock
 
 
+def refusing_ticket_contract(tmp) -> str:
+    """ticket_summary as an operator without an in-boundary model ships it: unattested input is REFUSED."""
+    p = tmp / "refuse" / "ticket_summary.yaml"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(Path(TICKET).read_text().replace("unattested: PRIVATE", "unattested: REFUSE"))
+    assert load_contract(p).external_input.unattested == "REFUSE"
+    return str(p)
+
+
 @pytest.mark.parametrize("hdr", [{}, {"X-PGW-Input-Source": "free-text@1"}, {"X-PGW-Input-Source": ""},
-                                 {"X-PGW-Input-Source": "hris-case-export@1"}],      # another contract's sanitizer
-                         ids=["missing", "unknown", "empty", "other-contract"])
+                                 {"X-PGW-Input-Source": "hris-case-export@1"},       # another contract's sanitizer
+                                 {"X-PGW-Input-Source": "helpdesk-ticket-export@1"}],   # the right id, unsigned
+                         ids=["missing", "unknown", "empty", "other-contract", "bare-id"])
 def test_unattested_input_is_refused_before_any_send(tmp_path, hdr, caplog):
-    client, mock = ticket_client(tmp_path)
+    client, mock = ticket_client(tmp_path, path=refusing_ticket_contract(tmp_path))
     caplog.set_level(logging.DEBUG)
     r = post(client, "ticket_summary", MEDICAL, hdr)
     assert r.status_code == 422 and r.json()["error"]["type"] == "input_not_source_sanitized"
@@ -217,22 +229,23 @@ def test_local_compute_free_text_needs_the_attestation_too(tmp_path):
                              {"name": "Hetal Shah", "employee_id": "KD-11063", "annual_ctc": 2180000}]}
     r = post(client, "salary_comparison", json.dumps(payload))
     assert r.status_code == 422 and not mock.received
-    assert post(client, "salary_comparison", json.dumps(payload), source("salary_comparison")).status_code == 200
+    assert post(client, "salary_comparison", json.dumps(payload), signed=True).status_code == 200
 
 
 def test_attested_input_is_sent_and_recorded(tmp_path):
     client, mock = ticket_client(tmp_path)
-    r = post(client, "ticket_summary", CANARY_TEXT, source("ticket_summary"))
+    r = post(client, "ticket_summary", CANARY_TEXT, signed=True)
     assert r.status_code == 200 and len(mock.received) == 1
     row = json.loads(ledger(tmp_path).splitlines()[-1])
     assert row["decision"] == "SENT" and row["input_source"] == "helpdesk-ticket-export@1"
+    assert row["input_verified"] is True
 
 
 def test_not_expected_content_is_not_removed_when_attested(tmp_path):
     """LIMITATION, asserted so it cannot be claimed away: the gateway does not detect or remove medical or
     disciplinary detail from free text. If the app attests a sanitizer that let it through, it is sent."""
     client, mock = ticket_client(tmp_path)
-    assert post(client, "ticket_summary", MEDICAL, source("ticket_summary")).status_code == 200
+    assert post(client, "ticket_summary", MEDICAL, signed=True).status_code == 200
     wire = mock.received[-1].decode()
     assert "chemotherapy" in wire and "disciplinary warning" in wire and CANARY not in wire
 
@@ -252,6 +265,8 @@ def test_unattested_input_can_be_kept_in_boundary(tmp_path):
     (lambda c: c.pop("external_input"), "must declare external_input"),
     (lambda c: c["external_input"].update(sanitizers=[]), "sanitizers"),
     (lambda c: c["external_input"].update(sanitizers=["Bad Id!"]), "sanitizers"),
+    (lambda c: c["external_input"].update(sanitizers=["helpdesk-ticket-export@1"]), "public key"),   # no key
+    (lambda c: c["external_input"].update(sanitizers={"Bad Id!": "ab" * 32}), "sanitizers"),
     (lambda c: c["external_input"].update(unattested="ALLOW"), "REFUSE or PRIVATE"),
     (lambda c: c["external_input"].update(trust_app=True), "unknown keys"),
 ])
@@ -272,7 +287,7 @@ def test_private_unattested_needs_ext_pseudo_and_a_private_endpoint(tmp_path):
     with pytest.raises(ContractError, match="EXT_PSEUDO"):
         load_contract(p)
     with pytest.raises(ContractError, match="private endpoint"):
-        ticket_client(tmp_path, purpose="ticket_summary_any_script")
+        ticket_client(tmp_path, purpose="ticket_summary_any_script", private_upstream=None)
 
 
 def test_every_shipped_contract_declares_its_input_boundary():

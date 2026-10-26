@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT))
 from pgw.gateway.app import create_app  # noqa: E402
 from pgw.gateway.settings import Settings  # noqa: E402
 from pgw.gateway.upstream import MockLLMUpstream  # noqa: E402
+from pgw.product import attest  # noqa: E402
 
 KEY = "pilot-hr-helpdesk-key-change-me"
 SUBJECTS = {"requester": {"name": "Imran Ansari", "employee_id": "KD-11914"}}
@@ -48,7 +49,9 @@ async def run_level(ner: str | None, conc: int, n: int, size: int, workers: int 
                      registry_path=str(ROOT / "registry/apps.yaml"), policy_path=str(ROOT / "policies/hris-default.yaml"),
                      roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                      ledger_db_path=f"{tmp}/ledger.sqlite", egress_ledger_path=f"{tmp}/egress.jsonl",
-                     master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"), ner_model=ner, ner_workers=workers)
+                     master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"), ner_model=ner, ner_workers=workers,
+                     private_upstream=MockLLMUpstream("summarise"))   # unverified input would stay in-boundary
+        demo_key = attest.load_demo_keys()["helpdesk-ticket-export@1"]   # development: the committed DEMO key
         app = create_app(s)
         sem = asyncio.Semaphore(conc)
         lat: list[float] = []
@@ -58,7 +61,8 @@ async def run_level(ner: str | None, conc: int, n: int, size: int, workers: int 
                 body = {"model": "mock-1", "messages": [{"role": "user", "content": make_ticket(size, i)}],
                         "pgw_subjects": SUBJECTS}
                 h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
-                     "X-PGW-Input-Source": "helpdesk-ticket-export@1"}
+                     **attest.sign_body(demo_key, "ticket_summary", "helpdesk-ticket-export@1", body,
+                                      app_id="hr-helpdesk-pilot")}
                 async with sem:
                     t = time.perf_counter()
                     r = await c.post("/v1/chat/completions", headers=h, json=body)

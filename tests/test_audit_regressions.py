@@ -16,7 +16,7 @@ from pgw.gateway.upstream import MockLLMUpstream
 from pgw.policy import generalize
 from pgw.product.contracts import ContractError, load_contract
 from pgw.types import EntityType
-from tests.sealed import ROOT, legacy_dev, production, sha, source
+from tests.sealed import ROOT, attest, legacy_dev, production, sha
 
 KEY = "pilot-key"
 AADHAAR = "386091390995"
@@ -38,7 +38,7 @@ def post(client, extra, purpose="ticket_summary", content="Payroll arrears missi
     if purpose == "ticket_summary":
         body["pgw_subjects"] = {"requester": {"name": "Priya Raghunathan"}}
     return client.post("/v1/chat/completions", json=body,
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)})
+                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **attest(purpose, body)})
 
 
 # --- S1: every non-message field is strictly typed; contracted purposes take no free-text parameters ------------

@@ -2,7 +2,7 @@
 # Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
 # government/financial identifiers are not needed for a summary, so they are removed, not blocked.
 contract: ticket_summary
-version: 4
+version: 5
 task_type: hr_ticket_summary
 route: EXT_PSEUDO
 data_classes:
@@ -27,9 +27,14 @@ declared_subjects:          # people the app knows are involved; protected witho
   roles: {requester: 1, assignee: 1, mentioned: 20, other: 10}
   fields: {name: PERSON, employee_id: EMPLOYEE_ID, email: EMAIL, phone: PHONE}
 # Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
-# gateway. Free text reaches the external model only if the calling app sends X-PGW-Input-Source naming one of these
-# source-side sanitizers/exports (an attestation by the app owner, recorded in the audit ledger; the gateway does not
-# verify the content). Without it: refused (422), nothing sent.
+# gateway. Free text reaches the external model only with a valid Ed25519 signature, by the key pinned here, over
+# this purpose, the source id, a fresh timestamp and the request's messages and pgw_subjects (pgw.product.attest).
+# That proves which source produced the content, not that its sanitizer removed anything.
+# Without a valid signature: in-boundary model only (needs a configured private endpoint; an operator without one
+# sets REFUSE and re-signs).
+# THE KEY BELOW IS A DEMO KEY (its private half is committed in tests/fixtures). Production refuses to start with it:
+# generate your source's key (python -m pgw.product.attest keygen KEYFILE), put the public key here and re-sign.
 external_input:
-  sanitizers: [helpdesk-ticket-export@1]
-  unattested: REFUSE
+  sanitizers:
+    helpdesk-ticket-export@1: "2d8e205442997cadefc51d732902532d7a81d3edaa1bada9d5c383cfd4f30cec"
+  unattested: PRIVATE
