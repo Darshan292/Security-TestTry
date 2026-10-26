@@ -15,6 +15,33 @@ Operational controls around the privacy gateway that code alone does not enforce
 - **One purpose, one contract.** Contracts are resolved globally by purpose. Two registry entries that bind one purpose to files with different content stop startup, even when the name and version strings match. Tenant-specific contracts are not supported.
 - **Source-side input boundary.** Each contract lists the source-side sanitizers or exports (`external_input`) whose free text it accepts. The app team that owns the sanitizer is responsible for it removing NOT_EXPECTED attributes. The gateway records the attestation; it does not verify it (SECURITY_BOUNDARY.md §4).
 
+## Source signing keys (input attestation)
+
+Free text reaches an external model only when the source system that produced it signs it (SECURITY_BOUNDARY.md §4).
+Each contract's `external_input.sanitizers` maps a source id to that source's Ed25519 public key.
+
+- **Demo keys must be replaced.** The repository's contracts ship with DEMO public keys whose private halves are
+  committed in `tests/fixtures/DEMO_ONLY_source_signing_keys.json`. A production gateway refuses to start while any
+  contract carries one (`pgw.product.attest.DEMO_PUBKEYS`). Development mode accepts them, with a warning.
+- **Creating a key.** The source system's owner runs `python -m pgw.product.attest keygen KEYFILE` (file mode 0600,
+  never overwritten). The private key stays in the source system: not in the calling app, the gateway, the
+  repository or CI. Put the printed public key in the contract (quoted), bump the contract `version`, and reseal and
+  sign the config as for any contract change.
+- **Signing.** The source signs each request with `pgw.product.attest.sign` (or an equivalent implementation of
+  `canonical_message`). The calling app forwards the three headers unchanged. The app must not hold the key: an app
+  that can sign can attest anything, and the guarantee reduces to the old unverified claim.
+- **Clocks.** The signed timestamp must be within ±300 s of the gateway clock (`MAX_SKEW_S`). Run NTP on both sides.
+  Refusals carry a content-free `attestation` reason (`stale_timestamp`, `bad_signature`, ...), also written to the
+  ledger as `input_attestation`.
+- **Rotation.** Add the new key under a new source id (for example `helpdesk-ticket-export@2`) next to the old one,
+  re-sign and deploy, move the source to the new key, then remove the old entry and re-sign again. A contract may
+  list up to 10 sources. A key cannot be revoked faster than a signed config redeploy.
+- **Compromise.** Remove or replace the source's entry and redeploy the signed config. Until then, whoever holds the
+  key can send any free text to the external model for that purpose. Owners, rotation schedule and the compromise
+  procedure are TBD by the organisation.
+- **In-boundary fallback.** The shipped EXT_PSEUDO contracts set `unattested: PRIVATE`, so the gateway needs a
+  configured private endpoint to start. A deployment without one sets `unattested: REFUSE` and re-signs.
+
 ## Provider data retention and region
 
 The gateway minimises what is sent; it does not control what a provider does with it. Before enabling a provider for real data, the organisation must have, per provider and per account or workspace used:

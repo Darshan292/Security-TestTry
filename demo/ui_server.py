@@ -192,11 +192,13 @@ def build(groq_key: str | None, tmp: Path, runs: Runs):
     return create_app(s), model, provider, ner, s
 
 
-def input_source(purpose: str) -> dict:
-    """The demo plays the source app: its fixed synthetic scenarios stand for the contract's allowlisted export."""
+def input_source(purpose: str, body: dict) -> dict:
+    """The demo plays the source system: it signs its fixed synthetic scenarios with the contract's DEMO source key
+    (committed, development only; production refuses demo keys). A real source keeps its own private key."""
+    from pgw.product import attest
     from pgw.product.contracts import load_contract
-    ids = sorted(load_contract(ROOT / f"contracts/{purpose}.yaml").external_input.sanitizers)
-    return {"X-PGW-Input-Source": ids[0]}
+    sid = sorted(load_contract(ROOT / f"contracts/{purpose}.yaml").external_input.sanitizers)[0]
+    return attest.sign_body(attest.load_demo_keys()[sid], purpose, sid, body)
 
 
 def scenarios() -> list[dict]:
@@ -344,7 +346,7 @@ def make_ui(groq_key: str | None, port: int = 8765, extra_origins: tuple[str, ..
             if subj:
                 body["pgw_subjects"] = subj
             headers = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, "X-PGW-Trace": rid,
-                       **input_source(purpose)}
+                       **input_source(purpose, body)}
             if conv:
                 headers["X-PGW-Conversation-Id"] = conv
             task = asyncio.create_task(client.post("/v1/chat/completions", json=body, headers=headers))

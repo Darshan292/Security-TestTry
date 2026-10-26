@@ -118,41 +118,69 @@ attributes, and no keyword list has been added to pretend otherwise. The test
 
 ### What is enforced instead
 
-Free text reaches an external model only if it comes from a source that reduces it. Each contract must declare:
+Free text reaches an external model only if the source system that produced it signs it. Each contract must declare:
 
 ```yaml
 external_input:
-  sanitizers: [helpdesk-ticket-export@1]   # source-side exports/sanitizers this purpose accepts
-  unattested: REFUSE                        # or PRIVATE (EXT_PSEUDO contracts with an in-boundary model)
+  sanitizers:                                     # source-side exports/sanitizers this purpose accepts
+    helpdesk-ticket-export@1: "<64-hex Ed25519 public key>"
+  unattested: PRIVATE                             # or REFUSE
 ```
 
-Every request for a contracted purpose must carry `X-PGW-Input-Source: <one of those ids>`, on every route. That
-includes LOCAL_COMPUTE, whose `instruction` field is free text that goes to the external model.
+The contract is sealed and signed with the rest of the config, so the pinned keys are as trusted as the config.
+The source system holds the private key. The calling app and the gateway never do.
 
-- If the header is missing, empty, unknown or names another contract's sanitizer, the input is not sent externally.
-  With `REFUSE`, the response is 422 `input_not_source_sanitized`, nothing is sent, and the ledger records
-  `BLOCKED` with reason `input_not_sanitized`. With `PRIVATE`, the input goes only to the in-boundary model and the
-  ledger records `SENT_PRIVATE` with the same reason.
-- An accepted sanitizer id is recorded on the ledger line (`input_source`).
-- A contract without a valid `external_input` does not load. `PRIVATE` is allowed only on EXT_PSEUDO contracts, and
-  only when a private endpoint is configured.
-- Tests: `test_unattested_input_is_refused_before_any_send`, `test_local_compute_free_text_needs_the_attestation_too`,
-  `test_unattested_input_can_be_kept_in_boundary`, `test_contracts_must_declare_a_valid_input_boundary`,
-  `test_every_shipped_contract_declares_its_input_boundary`.
+Every request for a contracted purpose must carry three headers, on every route. That includes LOCAL_COMPUTE, whose
+`instruction` field is free text that goes to the external model.
 
-### What the attestation is, and what it is not
+- `X-PGW-Input-Source: <id>`, `X-PGW-Input-Timestamp: <unix seconds>`, `X-PGW-Input-Signature: <hex>`.
+- The signature is Ed25519 over `pgw-input-attestation/v1` + newline + the JSON array
+  `[purpose, source id, timestamp, sha256]` (`pgw.product.attest.canonical_message`).
+- The hash is over the canonical JSON (sorted keys, no whitespace, ASCII escapes, no NaN or Infinity) of
+  `{"messages": ..., "pgw_subjects": ... or null}`, as the gateway parsed the body. It therefore covers every
+  message, including assistant history, tool calls and list-form content parts, plus their order and count, and the
+  declared subjects.
+- The gateway verifies before any send and before anything rewrites the messages. It rejects:
+  - an unknown or missing source id, or a missing signature;
+  - a timestamp more than 300 s from the gateway clock, either way (`MAX_SKEW_S`);
+  - a signature by another key, for another purpose, for another source id, or over other content.
+- On failure the contract's `unattested` action applies:
+  - `REFUSE`: the response is 422 `input_not_source_sanitized` with a content-free `attestation` reason, nothing is
+    sent, and the ledger records `BLOCKED`, reason `input_not_sanitized` and `input_attestation`.
+  - `PRIVATE`: the input goes only to the in-boundary model, and the ledger records `SENT_PRIVATE`.
+- A verified request's ledger line records `input_source` (the id) and `input_verified: true`.
+- The shipped EXT_PSEUDO contracts default to `PRIVATE`. `PRIVATE` is allowed only on EXT_PSEUDO contracts, and the
+  gateway does not start unless a private endpoint is configured. LOCAL_COMPUTE contracts keep `REFUSE`.
+- **Demo keys.** The shipped contracts pin DEMO keys whose private halves are committed
+  (`tests/fixtures/DEMO_ONLY_source_signing_keys.json`) so that demos and tests can sign. Production refuses to
+  start with any of them (`pgw.product.attest.DEMO_PUBKEYS`). Development accepts them. Operators must replace them
+  with their own sources' keys and re-sign the config (OPERATIONS.md).
+- A contract without a valid `external_input` does not load. That includes a missing, malformed or all-zero public
+  key and the old list form without keys.
+- Tests: `tests/test_source_attestation.py`, `test_unattested_input_is_refused_before_any_send`,
+  `test_local_compute_free_text_needs_the_attestation_too`, `test_unattested_input_can_be_kept_in_boundary`,
+  `test_contracts_must_declare_a_valid_input_boundary`.
 
-The header is a **declaration by the authenticated calling app**: "this text came out of our sanitizer or export X".
+### What the attestation proves, and what it does not
 
-- **What the gateway checks:** that the app made the declaration, that the purpose allowlists it, and that it is
-  recorded on the ledger line.
-- **What the gateway does not check:** whether sanitizer X exists, whether it ran, or whether it removed anything.
+- **Verified:** the holder of the source's private key signed exactly this content (messages and declared subjects)
+  for this purpose and source id within the last five minutes. Knowing the public id is no longer enough. The calling
+  app cannot add, alter, reorder or replay content under another request's signature.
+- **Not verified:** whether the source's sanitizer actually removed NOT_EXPECTED content. A signed ticket that still
+  says "chemotherapy" is sent (`test_not_expected_content_is_not_removed_when_attested`).
+- **Not verified: key custody at the source.** If the calling app, or anyone else, holds the source key, the
+  guarantee reduces to that party's word. The gateway cannot tell.
+- **Replay of identical content.** Within the 300 s window, a captured request can be re-sent unchanged by any app
+  authorised for the purpose. The signature does not bind the calling app, the conversation id or a nonce. Re-sending
+  identical, already-signed content discloses nothing new to the provider, but it is not prevented.
+- **Interoperability.** A source implementation in another language must reproduce the canonical JSON exactly,
+  including number formatting and `\uXXXX` escapes. A mismatch fails closed (refused or in-boundary), not open.
 
-The NOT_EXPECTED guarantee therefore rests on the source system. The candidates are:
+The NOT_EXPECTED guarantee therefore still rests on the source system. The candidates are:
 
 - an allowlisted export of HRIS fields;
 - a ticket form without free-text medical fields;
-- a reviewed sanitizer owned by the app team.
+- a reviewed sanitizer owned by the source team, which holds the key.
 
 When the source cannot reduce the input safely, the only safe options are refusal or the in-boundary model.
 
@@ -181,7 +209,8 @@ M1–M3). It is not a general evaluator.
 
 1. **The content of free text.** NOT_EXPECTED attributes, and any personal data the detectors miss, cross if the app
    attests the input. Recall is measured in `SECURITY_EVALUATION.md` and is not complete.
-2. **The truth of `X-PGW-Input-Source`.** It is an accountable claim, not a verified fact.
+2. **What a signed source did.** The gateway verifies which source key signed the input (§4). It does not
+   verify that the source's sanitizer removed anything, or that only the source holds the key.
 3. **The trust anchor.** The gateway cannot verify where `PGW_TRUSTED_CONFIG_PUBKEY` came from, or whether
    `PGW_MODE=development` is used outside development.
 4. **Network-level egress.** The app must not be able to reach the provider around the gateway. That is the
@@ -204,7 +233,7 @@ that commit (mock provider, synthetic data). The auditor's own scripts were not 
 |---|---|---|---|
 | S1 | Request parameters (`temperature`, `max_tokens`, `top_p`, `stream_options`, `tool_choice`, …) carried data to the provider unchecked | Confirmed | **Fixed.** Every parameter now has a strict type and range. The outgoing request is built from an explicit allowlist. Contracted purposes refuse `tools`, `tool_choice` and `stop`, which are free text (`check_parameters`, `tests/test_audit_regressions.py`) |
 | S2 | `band_position`: the band name and limits were caller-supplied and crossed raw, so any text, or an exact salary to ₹1, could leave | Confirmed | **Fixed.** Pay bands are a sealed `reference` table in the signed contract; the caller only names a band. Contracts are refused if a C0 input is not a key of a sealed table, and table ranges must be at least 20% wide |
-| S3 | `X-PGW-Input-Source` is a public constant; any caller passes | Confirmed (already documented, §4) | **Open.** Proposed fix: the source system signs a hash of the content it cleaned with its own key |
+| S3 | `X-PGW-Input-Source` is a public constant; any caller passes | Confirmed (already documented, §4) | **Fixed for provenance.** The source signs (Ed25519, key pinned in the signed contract) the purpose, source id, a timestamp within ±300 s and a hash of all messages and declared subjects. The bare id, other keys, other purposes or ids, edited, reordered or extended content and stale timestamps are rejected before any send. Unverified input is refused or, by default on EXT_PSEUDO, kept in-boundary. Production refuses the shipped demo keys. **Still open:** whether the source's sanitizer removed NOT_EXPECTED content, key custody at the source, and identical replay within the window (§4) |
 | S4 | The roster was not sealed; an emptied roster disabled name matching | Confirmed | **Fixed for the roster.** Production seals it with the config. The NER and env settings remain open (§6.8) |
 | S5 | Free-text leaks on realistic tickets (auditor 13/36; our re-check 8/11) | Confirmed | **Open, structural.** Lowercase or undeclared names, UAN, passport, voter ID, address and plain-digit salaries leak. Declaring people as subjects removed the name leaks |
 | S6 | ID formats missed (auditor 11/15; our re-check 5/18: bare Aadhaar, spaced PAN, uncued account number, phone in words, IFSC by policy) | Partly confirmed | **Open.** No detector tuning in this round |

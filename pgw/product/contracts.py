@@ -21,6 +21,7 @@ from pathlib import Path
 import yaml
 
 from ..types import Action, EntityType as T
+from . import attest
 
 
 class DataClass(str, Enum):
@@ -57,7 +58,7 @@ PURPOSE_DEPENDENT = ("leave_balance", "attendance", "performance_rating", "healt
                      "disciplinary_outcome", "eligibility_result", "derived_compensation")
 # The stances are DECLARATIONS, validated for completeness but not detected or removed at runtime: the gateway has
 # no detector for these attributes in free text. What the gateway enforces is the input boundary below
-# (ExternalInput): free text crosses only if the app attests it came from an allowlisted source-side sanitizer.
+# (ExternalInput): free text crosses only with a valid signature by an allowlisted source-side sanitizer's key.
 STANCES = {"PSEUDONYMISED_RAW",   # may cross raw only next to aliased identities (still personal data)
            "NOT_EXPECTED",        # the source must not send it for this purpose (not detected by the gateway)
            "LOCAL_ONLY"}          # only through LOCAL_COMPUTE inputs/outputs under their egress rules
@@ -72,9 +73,12 @@ class ContractError(ValueError):
 class ExternalInput:
     """Source-side boundary for free text that reaches an external model (SECURITY_BOUNDARY.md §4).
     sanitizers: ids of the source-side exports/sanitizers whose output this purpose accepts (X-PGW-Input-Source).
+    keys: sanitizer id -> pinned Ed25519 public key (hex); a request must carry that source's signature over its
+      content (pgw.product.attest). The private key stays in the source system.
     unattested: REFUSE (422, nothing sent) or PRIVATE (in-boundary model only; EXT_PSEUDO contracts)."""
     sanitizers: frozenset
     unattested: str = "REFUSE"
+    keys: dict = field(default_factory=dict, compare=False, hash=False)
 
 
 @dataclass(frozen=True)
@@ -229,15 +233,22 @@ def _parse_external_input(raw) -> ExternalInput:
         raise ContractError("contract must declare external_input (source-side sanitizers for free text that reaches "
                             "an external model; NOT_EXPECTED attributes are not detected by the gateway)")
     ids = raw.get("sanitizers")
-    if not isinstance(ids, list) or not ids or len(ids) > 10 or not all(
+    if not isinstance(ids, dict) or not ids or len(ids) > 10 or not all(
             isinstance(x, str) and _SANITIZER_ID.fullmatch(x) for x in ids):
-        raise ContractError("external_input.sanitizers: 1-10 ids ([a-z0-9._@-], at most 64 chars)")
+        raise ContractError("external_input.sanitizers: 1-10 entries {id: Ed25519 public key hex} "
+                            "(ids [a-z0-9._@-], at most 64 chars)")
+    for sid, pub in ids.items():
+        try:
+            attest.parse_public_key(pub)
+        except ValueError:
+            raise ContractError(f"external_input.sanitizers.{sid}: public key must be a valid Ed25519 key "
+                                "(64 lowercase hex characters)") from None
     un = str(raw.get("unattested", "REFUSE")).upper()
     if un not in ("REFUSE", "PRIVATE"):
         raise ContractError("external_input.unattested must be REFUSE or PRIVATE")
     if set(raw) - {"sanitizers", "unattested"}:
         raise ContractError("external_input: unknown keys")
-    return ExternalInput(frozenset(ids), un)
+    return ExternalInput(frozenset(ids), un, dict(ids))
 
 
 def load_contract(path: str | Path, data: bytes | None = None) -> Contract:

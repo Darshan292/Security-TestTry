@@ -13,7 +13,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import create_app
-from tests.sealed import production, source
+from tests.sealed import attest, production
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream, OpenAICompatUpstream
 from pgw.private_llm import app as private_app
@@ -45,17 +45,17 @@ def make(tmp, private=None, url=None, contract="ticket_summary_any_script"):
     cfg = production(tmp, [{
         "app_id": "pilot", "tenant": "acme", "key_sha256": hashlib.sha256(KEY.encode()).hexdigest(),
         "restore_output": True, "models": ["mock-1"], "purposes": [contract],
-        "tasks": {contract: str(ROOT / f"contracts/{contract}.yaml")}}])
+        "tasks": {contract: str(ROOT / f"contracts/{contract}.yaml")}}], private_upstream=private)
     ext = MockLLMUpstream("summarise")
     s = Settings(**cfg, ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
-                 master_key=os.urandom(32).hex(), upstream=ext, private_upstream=private, private_upstream_url=url)
+                 master_key=os.urandom(32).hex(), upstream=ext, private_upstream_url=url)
     return TestClient(create_app(s)), ext
 
 
 def call(client, text, purpose="ticket_summary_any_script", **extra):
-    return client.post("/v1/chat/completions", json={"model": "mock-1", "pgw_subjects": SUBJ, **extra,
-                       "messages": [{"role": "user", "content": text}]},
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)})
+    body = {"model": "mock-1", "pgw_subjects": SUBJ, **extra, "messages": [{"role": "user", "content": text}]}
+    return client.post("/v1/chat/completions", json=body,
+                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **attest(purpose, body)})
 
 
 def test_c4_content_goes_only_to_the_private_model(tmp_path):
@@ -87,8 +87,10 @@ def test_private_model_failure_fails_closed_and_never_falls_back_external(tmp_pa
 
 
 def test_refuse_contracts_still_refuse(tmp_path):
-    client, ext = make(tmp_path, contract="ticket_summary")
-    assert call(client, HINDI, purpose="ticket_summary").status_code == 422 and not ext.received
+    local = LocalModel()   # ticket_summary keeps unverified input in-boundary, but C4 content is still REFUSED
+    client, ext = make(tmp_path, private=local, contract="ticket_summary")
+    assert call(client, HINDI, purpose="ticket_summary").status_code == 422
+    assert not ext.received and not local.received
 
 
 def test_private_contract_without_endpoint_stops_startup(tmp_path):

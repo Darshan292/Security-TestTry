@@ -247,16 +247,21 @@ def make_settings(out: Path, upstream, **kw) -> Settings:
                     ledger_db_path=str(out / "restore_ledger.sqlite"), egress_ledger_path=str(out / "egress.jsonl"),
                     master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream,
                     dev_allow_real_provider=True,   # explicit synthetic-data validation run (code-only switch)
-                    **kw)
+                    # the shipped EXT_PSEUDO contracts keep unverified input in-boundary; every scenario here is
+                    # signed, so this stand-in for the in-boundary model is configured but not expected to be used
+                    **{"private_upstream": MockLLMUpstream("summarise"), **kw})
 
 
-def input_source(purpose: str) -> dict:
-    """These fixed synthetic inputs stand for the contract's allowlisted source-side export (SECURITY_BOUNDARY.md)."""
+def input_source(purpose: str, body: dict) -> dict:
+    """The script plays the source system: it signs these fixed synthetic inputs with the contract's DEMO source key
+    (development mode only; SECURITY_BOUNDARY.md §4). A real source signs with its own key."""
+    from pgw.product import attest
     from pgw.product.contracts import load_contract
     path = ROOT / f"contracts/{purpose}.yaml"
     if not path.exists():   # an unregistered/uncontracted purpose: the gateway refuses it before this matters
         return {}
-    return {"X-PGW-Input-Source": sorted(load_contract(path).external_input.sanitizers)[0]}
+    sid = sorted(load_contract(path).external_input.sanitizers)[0]
+    return attest.sign_body(attest.load_demo_keys()[sid], purpose, sid, body)
 
 
 def post(client, purpose, content, model=MODEL, subjects=None, messages=None, conv=None):
@@ -264,7 +269,7 @@ def post(client, purpose, content, model=MODEL, subjects=None, messages=None, co
             "messages": messages or [{"role": "user", "content": content}]}
     if subjects is not None:
         body["pgw_subjects"] = subjects
-    h = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, **input_source(purpose)}
+    h = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, **input_source(purpose, body)}
     if conv:
         h["X-PGW-Conversation-Id"] = conv
     return client.post("/v1/chat/completions", headers=h, json=body)

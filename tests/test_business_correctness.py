@@ -12,7 +12,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import PLACEHOLDER_NOTE, create_app, render_markers
-from tests.sealed import production, source
+from tests.sealed import attest, production
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product.contracts import ContractError, load_contract
@@ -40,7 +40,7 @@ def call(client, text, purpose="hr_email_draft", subjects=SUBJ):
     if subjects is not None:
         body["pgw_subjects"] = subjects
     return client.post("/v1/chat/completions", json=body,
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)})
+                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **attest(purpose, body)})
 
 
 def test_guidance_and_sender_contacts_reach_the_model_recipient_contacts_do_not(tmp_path):

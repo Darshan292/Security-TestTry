@@ -13,7 +13,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import create_app
-from tests.sealed import production, source
+from tests.sealed import attest, production
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product.contracts import ContractError
@@ -30,9 +30,6 @@ TICKET = ("Ticket PAY-90412 | Raised by: Imran Ansari\n"
 SUBJECTS = {"requester": {"name": "Imran Ansari", "employee_id": "KD-11914"},
             "assignee": {"name": "Tejaswini Kulkarni"},
             "mentioned": [{"name": "Nandini"}]}
-
-SRC = source("ticket_summary")
-
 
 def sha(k):
     return hashlib.sha256(k.encode()).hexdigest()
@@ -55,7 +52,7 @@ def call(client, content, subjects=None, purpose="ticket_summary", conv=None):
     body = {"model": "mock-1", "messages": [{"role": "user", "content": content}]}
     if subjects is not None:
         body["pgw_subjects"] = subjects
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **attest(purpose, body)}
     if conv:
         h["X-PGW-Conversation-Id"] = conv
     return client.post("/v1/chat/completions", headers=h, json=body)
@@ -210,7 +207,7 @@ def test_ledger_counts_declared_subjects_without_values(tmp_path):
     call(client, TICKET, SUBJECTS)
     text = (tmp_path / "egress.jsonl").read_text()
     row = json.loads(text.splitlines()[-1])
-    assert row["declared_subjects"] == 4 and row["contract"] == "ticket_summary@4"
+    assert row["declared_subjects"] == 4 and row["contract"] == "ticket_summary@5"
     for v in ("Nandini", "Tejaswini", "Imran", "KD-11914"):
         assert v not in text
 
@@ -281,7 +278,8 @@ def test_names_inside_tool_arguments_and_list_parts(tmp_path):
             "name": "lookup", "arguments": json.dumps({"who": "Tejaswini Kulkarni", "u": "Jos\u00e9"})}}]},
         {"role": "tool", "tool_call_id": "c1", "content": "found tejaswini"}]}
     r = client.post("/v1/chat/completions", json=body, headers={"Authorization": f"Bearer {KEY}",
-                    "X-PGW-Purpose": "ticket_summary", "X-PGW-Conversation-Id": "conv-tool", **SRC})
+                    "X-PGW-Purpose": "ticket_summary", "X-PGW-Conversation-Id": "conv-tool",
+                                                         **attest("ticket_summary", body)})
     assert r.status_code == 200 and "tejaswini" not in mock.received[-1].decode().lower()
 
 
@@ -289,10 +287,12 @@ def test_c4_and_size_limits_cover_list_form_content(tmp_path):
     client, mock = make(tmp_path)
     body = {"model": "mock-1", "pgw_subjects": TK,
             "messages": [{"role": "user", "content": [{"type": "text", "text": "राहुल शर्मा का वेतन"}]}]}
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC}
-    assert client.post("/v1/chat/completions", json=body, headers=h).status_code == 422
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary"}
+    assert client.post("/v1/chat/completions", json=body,
+                       headers={**h, **attest("ticket_summary", body)}).status_code == 422
     body["messages"][0]["content"] = [{"type": "text", "text": "x" * 15000}] * 2
-    assert client.post("/v1/chat/completions", json=body, headers=h).status_code == 413
+    assert client.post("/v1/chat/completions", json=body,
+                       headers={**h, **attest("ticket_summary", body)}).status_code == 413
     assert not mock.received
 
 
@@ -333,7 +333,8 @@ def test_declared_values_in_tools_or_stop_are_a_400(tmp_path):
     body = {"model": "mock-1", "pgw_subjects": TK, "stop": ["Tejaswini"],
             "messages": [{"role": "user", "content": "hello"}]}
     r = client.post("/v1/chat/completions", json=body,
-                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC})
+                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
+                             **attest("ticket_summary", body)})
     assert r.status_code == 400 and not mock.received and "Tejaswini" not in r.text
 
 
@@ -384,10 +385,10 @@ def test_later_turn_reprotects_names_not_declared_again(tmp_path):
     assert call(client, TICKET, SUBJECTS, conv="c-mt").status_code == 200
     hist = [{"role": "user", "content": TICKET}, {"role": "assistant", "content": "Nandini re-ran it."},
             {"role": "user", "content": "Thanks, please loop in tejaswini kulkarni and NANDINI again."}]
-    r = client.post("/v1/chat/completions", json={"model": "mock-1", "messages": hist,
-                    "pgw_subjects": {"requester": SUBJECTS["requester"]}},
-                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC,
-                             "X-PGW-Conversation-Id": "c-mt"})
+    body = {"model": "mock-1", "messages": hist, "pgw_subjects": {"requester": SUBJECTS["requester"]}}
+    r = client.post("/v1/chat/completions", json=body,
+                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
+                             **attest("ticket_summary", body), "X-PGW-Conversation-Id": "c-mt"})
     assert r.status_code == 200
     w = wire(mock).lower()
     assert "nandini" not in w and "tejaswini" not in w and "kulkarni" not in w

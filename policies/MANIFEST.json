@@ -2,32 +2,32 @@
  "ed25519": null,
  "files": {
   "contracts/band_position.yaml": {
-   "sha256": "668af523130088a701d7d05aa398b9a9ff9b3be57282bf7301c5e3a13cc35b45",
-   "version": 3
+   "sha256": "0e095b9cbdc7c95ecad391914002176a5e2302428dc1aa12439780b0bab0bf84",
+   "version": 4
   },
   "contracts/esi_letter.yaml": {
-   "sha256": "373699422a7614137caec6e50d1f960b6bac94b97f1d704346edbd4bf06eea64",
-   "version": 3
+   "sha256": "4eaceb093aa1b76115f4c98717d32e89f3e59feaf7fe25946c6cc224e5b4af69",
+   "version": 4
   },
   "contracts/hr_case_explanation.yaml": {
-   "sha256": "659f01a4e69976fa04633a77362fef5ce219ac99db1c2650b003836fbe6c7b44",
-   "version": 4
-  },
-  "contracts/hr_email_draft.yaml": {
-   "sha256": "c61c3e65f50e97f3d537f47eed9fef2434daaa39f729599b5c322dfa8287f373",
+   "sha256": "f83b28f4f6b02e2f90c383af33e432488dd92a48fa6216fa6df346671ba9b271",
    "version": 5
   },
+  "contracts/hr_email_draft.yaml": {
+   "sha256": "029afd552d0e7f3da709656262454f786058784cc34f622ee79f53ad5e5fbc82",
+   "version": 6
+  },
   "contracts/salary_comparison.yaml": {
-   "sha256": "100521a1a619a6db9afc8ad232a13228ed413a2e1e26f80b67b772cbd81671a5",
-   "version": 4
+   "sha256": "901eac58d881a4fbe29c46b717fe40604670167bfb6a1a0e332f5de413cd6de9",
+   "version": 5
   },
   "contracts/ticket_summary.yaml": {
-   "sha256": "5109bb54a85459bd70907f2ad4bf0fd4337e674b12cb4e0ea4128510fc3b88b1",
-   "version": 4
+   "sha256": "8389cd46f05ac08d727dc977d6e2fc36e6321f3d249d9d6d4a068e7081b98ee1",
+   "version": 5
   },
   "contracts/ticket_summary_any_script.yaml": {
-   "sha256": "3f6389273e502d57c99e346d0f8b443b94f5bd904d9da77e743a8c41e36dad24",
-   "version": 2
+   "sha256": "4b387c4353909db0ed1c2832bdcb6b0ba06afdecbe6fbe4a90fc809bd368ed7a",
+   "version": 3
   },
   "policies/hris-default.yaml": {
    "sha256": "dface432ef2ff1e63990d65d8642dcee46deec47f1d6e2763e8c86404f3ff44a",

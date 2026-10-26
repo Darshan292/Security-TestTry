@@ -1,0 +1,29 @@
+{
+  "WARNING": "DEMO/TEST ONLY. These private keys are public (committed to the repository). They sign synthetic demo and test requests for the demo public keys shipped in contracts/*.yaml. A production gateway refuses any contract that still carries one of these public keys (pgw.product.attest.DEMO_PUBKEYS).",
+  "keys": {
+    "band-review-form@1": {
+      "private_key": "b20440affae2335b643dcbd34d000703436b34436953507fdad30ab06c6c9976",
+      "public_key": "853c6ae50fb259f388e8b8222988bc24ff2ddcf37f84322cdbf3387eeb1fb48f"
+    },
+    "comp-review-form@1": {
+      "private_key": "abf266ab0696a5e6e9c23e83342dfa0b58436107f2053b05cdec76a215fff854",
+      "public_key": "fbcf8d3fd275bc11b9770d7a7ea4e43080346f1779ce9502e0c1e0c98ea63e1d"
+    },
+    "esi-coverage-form@1": {
+      "private_key": "fe1043ec18e354d8adb1696bcefd18d6fe6188b3565b0e3142803d185480ab62",
+      "public_key": "df95e36301ef3eebec44a842d8c3e2bf094ed03ef2ef8a4b510524a5c49b6428"
+    },
+    "helpdesk-ticket-export@1": {
+      "private_key": "ce9dd7d702ca034a2584c03181ae084bfb7bc77df4993056cf323f7e864f9d59",
+      "public_key": "2d8e205442997cadefc51d732902532d7a81d3edaa1bada9d5c383cfd4f30cec"
+    },
+    "hr-email-composer@1": {
+      "private_key": "303f9b75509323e534b51fd82ea070f7d2b0ddfd519158eafddaeb31b81408d0",
+      "public_key": "836eb89434c1ae57216a94529c1501bd9217fe24cbfc912a1c1f2d2bd5798d43"
+    },
+    "hris-case-export@1": {
+      "private_key": "4bf915a2b6ea466b9164a14df5b2f7c8f421aee4523dc11b88a4e269f422bc1d",
+      "public_key": "e6ed0bedd45b9b37ae920bdc53e9970c83924ae7c2bd175fb0a01a267d5a821d"
+    }
+  }
+}

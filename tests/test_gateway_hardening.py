@@ -16,7 +16,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import build_upstream, create_app
-from tests.sealed import production, signing_key, source
+from tests.sealed import attest, production, signing_key, use_test_keys
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product import integrity
@@ -53,13 +53,20 @@ def settings(tmp, upstream=None, policy=None, **kw):
 
 
 def call(client, content, purpose="ticket_summary", stream=False, headers=None, raw=None):
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose), **(headers or {})}
-    if raw is not None:
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose}
+    if raw is not None:   # signed over whatever the raw bytes parse to (if they parse), so the raw path is reached
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict) and isinstance(parsed.get("messages"), list):
+            h.update(attest(purpose, parsed))
+        h.update(headers or {})
         return client.post("/v1/chat/completions", headers={**h, "content-type": "application/json"}, content=raw)
     body = {"model": "mock-1", "stream": stream, "messages": [{"role": "user", "content": content}]}
     if purpose == "ticket_summary":   # only the requester is declared; everything else relies on detection
         body["pgw_subjects"] = {"requester": {"name": "Imran Ansari"}}
-    return client.post("/v1/chat/completions", headers=h, json=body)
+    return client.post("/v1/chat/completions", headers={**h, **attest(purpose, body), **(headers or {})}, json=body)
 
 
 # --- integrity: registry, policy and contracts are sealed; production needs a trusted signature ----------------
@@ -68,6 +75,8 @@ def sealed_tree(tmp):
     """A copy of registry/, policies/ and contracts/ with its own manifest (base = manifest's grandparent)."""
     for d in ("registry", "policies", "contracts"):
         shutil.copytree(ROOT / d, tmp / d, ignore=shutil.ignore_patterns("MANIFEST.json"))
+    for c in (tmp / "contracts").glob("*.yaml"):   # an operator replaces the demo source keys before signing
+        use_test_keys(c)
     return tmp / "policies" / "MANIFEST.json"
 
 
@@ -76,8 +85,9 @@ def tree_settings(tmp, manifest, **kw):
     base = dict(mode="production", trusted_config_pubkey=signing_key()[1], policy_path=str(tmp / "policies/hris-default.yaml"),
                 registry_path=str(tmp / "registry/apps.yaml"), integrity_manifest=str(manifest),
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
-                master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"))
-    base.update(kw)
+                master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"),
+                private_upstream=MockLLMUpstream("summarise"))   # the shipped EXT_PSEUDO contracts keep unverified
+    base.update(kw)                                              # input in-boundary (unattested: PRIVATE)
     return Settings(**base)
 
 
@@ -91,8 +101,9 @@ def test_repo_manifest_seals_the_shipped_registry_policy_and_contracts(tmp_path)
     # The repo manifest is unsigned: it is valid for development only. Production needs the operator's signature.
     dev = dict(registry_path=str(ROOT / "registry/apps.yaml"), policy_path=str(ROOT / "policies/hris-default.yaml"),
                ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e.jsonl"),
-               master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"))
-    create_app(Settings(mode="development", **dev))
+               master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"),
+               private_upstream=MockLLMUpstream("summarise"))
+    create_app(Settings(mode="development", **dev))               # development accepts the demo source keys
     files = json.loads((ROOT / "policies/MANIFEST.json").read_text())["files"]
     assert "registry/apps.yaml" in files
     with pytest.raises(integrity.IntegrityError, match="trusted config public key"):

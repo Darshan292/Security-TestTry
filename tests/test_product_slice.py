@@ -14,7 +14,7 @@ from starlette.testclient import TestClient
 
 import pgw.product.local_compute as lc
 from pgw.gateway.app import create_app
-from tests.sealed import legacy_dev, production, source
+from tests.sealed import attest, legacy_dev, production
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.pipeline import Protector
@@ -73,7 +73,7 @@ def call(client, purpose, content, key=KEY, subjects=None):
     if purpose == "ticket_summary":
         body["pgw_subjects"] = subjects or REQUESTER
     return client.post("/v1/chat/completions", json=body,
-                       headers={"Authorization": f"Bearer {key}", "X-PGW-Purpose": purpose, **source(purpose)})
+                       headers={"Authorization": f"Bearer {key}", "X-PGW-Purpose": purpose, **attest(purpose, body)})
 
 
 def sent(mock) -> str:
@@ -261,7 +261,7 @@ def test_ledger_records_route_and_contract_without_content(tmp_path):
     call(client, "salary_comparison", json.dumps(PAYLOAD))
     rows = [json.loads(line) for line in (tmp_path / "egress.jsonl").read_text().splitlines()]
     assert [(r["route"], r["contract"], r["decision"]) for r in rows] == [
-        ("EXT_PSEUDO", "ticket_summary@4", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@4", "SENT")]
+        ("EXT_PSEUDO", "ticket_summary@5", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@5", "SENT")]
     text = (tmp_path / "egress.jsonl").read_text()
     for v in TICKET_RAW + SALARY_FORMS + ["Amit Trivedi"]:
         assert v not in text
