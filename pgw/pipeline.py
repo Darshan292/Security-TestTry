@@ -19,10 +19,11 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from .alias import AliasAllocator, canon, scope_key
 from .detect import idshape, recognizers
+from .detect.numwords import only_digit_words
 from .detect.edm import RestoreLedger, RosterIndex
 from . import ablation as _abl
 from . import normalize as _normalize_mod
-from .normalize import normalize, to_original
+from .normalize import normalize, to_original, word_end
 
 
 def _views(text: str):
@@ -519,14 +520,19 @@ class Protector:
                 ner_res = dict(zip(ner_views if many is not None else dict.fromkeys(ner_views), res))
         for name, view, omap in views:
             dets = recognizers.detect_d2(view) + detect_person_cues(view)
-            if name == "base" and backstop:
+            if name in ("base", "numwords") and backstop:
                 dets += idshape.detect(view)     # number-shaped identifier backstop (lowest score: loses overlaps)
             if self.roster is not None and _abl.get().D3:
                 dets += self.roster.detect(view)
             if name in ("base", "casefold_titled", "despaced") and view in ner_res:
                 dets += [d for d in ner_res[view] if _name_shaped(view[d.start:d.end])]
             for d in dets:
+                if d.type is EntityType.PERSON and not d.source.startswith(_STRONG_SOURCES) \
+                        and only_digit_words(view[d.start:d.end]):
+                    continue                     # "Six Zero Two": a number spoken in words, not a name
                 s, e = to_original(omap, d.start, d.end)
+                if name == "numwords":
+                    e = word_end(text, e)        # a digit maps to the start of the word that spells it
                 if e > s:
                     out.append(Detection(s, e, d.type, d.score, f"{d.source}@{name}" if name != "base" else d.source))
         return out

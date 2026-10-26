@@ -15,6 +15,7 @@ import unicodedata
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+from .detect.numwords import to_digits
 from .types import EntityType
 
 CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -43,9 +44,9 @@ def canon(t: EntityType, value: str) -> str:
     """Type-specific canonical form so formatting variants share an alias."""
     v = unicodedata.normalize("NFKC", value)
     if t in (EntityType.AADHAAR, EntityType.CARD, EntityType.BANK_ACCOUNT):
-        return re.sub(r"\D", "", v)
+        return to_digits(v)              # digits, also when spelled in words ("nine eight ...")
     if t is EntityType.PHONE:
-        d = re.sub(r"\D", "", v)
+        d = to_digits(v)
         return d[-10:] if len(d) > 10 and (d.startswith("91") or d.startswith("0")) else d
     if t in (EntityType.PAN, EntityType.IFSC, EntityType.EMPLOYEE_ID):
         return re.sub(r"[\s_\-]", "", v).upper()

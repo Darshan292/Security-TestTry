@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from .detect.numwords import amount_value
 from .types import Action, EntityType
 
 
@@ -70,8 +71,8 @@ _FOREIGN = re.compile(r"\b(?:usd|eur|gbp|aed|sgd|cad|aud|jpy|chf)\b|[$€£¥]",
 def _inr_amount(s: str) -> float | None:
     t = s.replace(",", "")
     m = re.search(r"\d+(?:\.\d+)?", t)
-    if not m:
-        return None
+    if not m or re.search(r"(?i)\d[ \t]*(?:lakhs?|lacs?|crores?|crs?)\b.*\S", t):
+        return amount_value(s)          # in words, or several units ("twenty two lakh", "12 lakh 50 thousand")
     n = float(m.group())
     u = _UNIT.search(t[m.end():])
     if u:

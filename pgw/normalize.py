@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from .detect.numwords import digit_view
+
 ZERO_WIDTH = frozenset("​‌‍⁠﻿­᠎")
 
 # Confusables fold (Cyrillic / Greek / Armenian / IPA / small-cap look-alikes -> Latin). Detection view
@@ -73,6 +75,15 @@ def normalize(text: str) -> tuple[str, list[int]]:
             omap.append(i)
     omap.append(len(text))
     return "".join(out), omap
+
+
+def word_end(text: str, end: int) -> int:
+    """Extend an original end offset that falls inside a word to the end of that word (numwords view: a digit maps
+    to the first character of the word that spells it)."""
+    while 0 < end < len(text) and (text[end].isalpha() or text[end] in ZERO_WIDTH) and \
+            (text[end - 1].isalpha() or text[end - 1] in ZERO_WIDTH):
+        end += 1
+    return end
 
 
 def to_original(omap: list[int], start: int, end: int) -> tuple[int, int]:
@@ -268,7 +279,9 @@ def views(text: str) -> list[tuple[str, str, list[int]]]:
     """[(view_name, view_text, omap), ...]; the first is always ("base", *normalize(text)).
 
     Extra views are de-obfuscated renderings of the base (names: despaced, deobfuscated_email,
-    despaced_email, digits_joined, casefold_titled), emitted only when they differ from base. Every
+    despaced_email, digits_joined, numwords, casefold_titled), emitted only when they differ from base. numwords
+    spells digit-by-digit word runs as digits (pgw.detect.numwords); a span ending inside a word there must be
+    extended to the word's end (word_end). Every
     omap maps view chars to ORIGINAL indices (trailing len(text)), so to_original() works on any span.
     """
     s, om = normalize(text)
@@ -288,6 +301,9 @@ def views(text: str) -> list[tuple[str, str, list[int]]]:
     r = _join_digits(s, om)
     if r:
         out.append(("digits_joined", *r))
+    r = digit_view(s, om)
+    if r:
+        out.append(("numwords", *r))
     t = _titled(s)
     if t:
         out.append(("casefold_titled", t, list(om)))
