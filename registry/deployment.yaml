@@ -1,0 +1,32 @@
+# Deployment profile (pgw/gateway/settings.py): every security-relevant gateway setting, sealed in
+# policies/MANIFEST.json by the registry/*.yaml glob and therefore Ed25519-signed in production.
+# In PGW_MODE=production these values are authoritative: an environment variable or Settings value that differs
+# stops startup. Changing a limit, the NER model or the egress allowlist = edit this file, bump `version`, have it
+# reviewed by a code owner, re-seal and sign (OPERATIONS.md). In development the profile is advisory (warnings).
+kind: pgw-deployment-profile
+version: 1
+settings:
+  # Sealed configuration files (paths relative to the sealed tree; the roster is optional).
+  registry_path: registry/apps.yaml
+  policy_path: policies/hris-default.yaml
+  roster_path: null
+  # Where data may go.
+  upstream_kind: mock                      # mock | openai | anthropic
+  upstream_url: https://api.openai.com/v1
+  anthropic_base_url: https://api.anthropic.com
+  egress_allowlist: [api.anthropic.com]    # exact https hosts; must match the network policy in deploy/
+  provider_zero_retention: false           # set true only with the provider's ZDR/no-training terms on file
+  provider_region: null                    # processing region named in those terms
+  upstream_timeout_s: 60.0
+  private_upstream_url: null               # in-boundary (C4) endpoint, or null for no private route
+  private_allowlist: [127.0.0.1, localhost, "::1", pgw-private-llm]
+  # How much is inspected. NER off needs ner_model: null AND ner_off_justification (>= 20 characters).
+  ner_model: en_core_web_lg
+  ner_workers: 4
+  ner_queue_max: 8
+  ner_timeout_s: 8.0
+  max_body_bytes: 262144
+  max_content_chars: 50000
+  max_messages: 200
+  protect_timeout_s: 10.0
+  max_concurrent_protect: 8

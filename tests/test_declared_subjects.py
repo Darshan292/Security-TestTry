@@ -40,11 +40,12 @@ def make(tmp, behaviour="summarise", ner=None, tasks=None):
                       for p in ("ticket_summary", "hr_case_explanation", "salary_comparison")}
     cfg = production(tmp, [{
         "app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY), "restore_output": True, "models": ["mock-1"],
-        "purposes": sorted(tasks), "tasks": tasks}], roster=ROOT / "tests/fixtures/slice_roster.jsonl")
+        "purposes": sorted(tasks), "tasks": tasks}], roster=ROOT / "tests/fixtures/slice_roster.jsonl",
+        deployment={"ner_model": ner})
     mock = MockLLMUpstream(behaviour)
     s = Settings(**cfg,
                  ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
-                 master_key=os.urandom(32).hex(), upstream=mock, ner_model=ner)
+                 master_key=os.urandom(32).hex(), upstream=mock)
     return TestClient(create_app(s)), mock
 
 

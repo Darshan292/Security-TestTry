@@ -7,7 +7,7 @@
 #   2. Only the gateway is also attached to `egressnet` (a normal bridge with a
 #      route out) and only the gateway receives provider credentials.
 # The gateway additionally enforces a destination allowlist in code
-# (PGW_EGRESS_ALLOWLIST / pgw.gateway.settings.check_destination).
+# (egress_allowlist in the signed registry/deployment.yaml / pgw.gateway.settings.check_destination).
 #
 # Network layer verified with real containers on 2026-10-02: see deploy/verify_network.sh
 # and the "Verified 2026-10-02" section of deploy/README.md. Kubernetes is NOT exercised.
@@ -19,8 +19,9 @@ services:
     environment:
       PGW_HOST: "0.0.0.0"
       PGW_PORT: "8080"
-      PGW_UPSTREAM: anthropic
-      PGW_EGRESS_ALLOWLIST: "api.anthropic.com"
+      # Provider, egress allowlist, NER and limits are NOT set here: in production they come only from the signed
+      # deployment profile registry/deployment.yaml (set upstream_kind: anthropic and the provider attestation
+      # there, review, re-sign). A PGW_* value here that differs from the profile stops startup.
       PGW_MODE: production               # default; development-only switches are refused (SECURITY_BOUNDARY.md)
       # Ed25519 public key that signed policies/MANIFEST.json (the repo manifest is unsigned: sign your own).
       PGW_TRUSTED_CONFIG_PUBKEY: "${PGW_TRUSTED_CONFIG_PUBKEY:?sign the config and set the trusted public key}"

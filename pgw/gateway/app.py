@@ -36,7 +36,8 @@ from ..product import attest, integrity, local_compute, subjects
 from ..product.content import unreliable_script
 from ..product.contracts import CLASS_OF, Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
-from .settings import MODES, Settings, check_destination, check_private_destination
+from .settings import (MODES, Settings, apply_deployment_profile, check_destination, check_private_destination,
+                       profile_location)
 from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError
 
 log = logging.getLogger("pgw.gateway")
@@ -319,8 +320,29 @@ def create_app(settings: Settings) -> Starlette:
             snapshot[key_] = Path(path).read_bytes()
         return snapshot[key_]
 
+    hmac_key = bytes.fromhex(settings.policy_signing_key) if settings.policy_signing_key else None
+    # Deployment profile (audit S4): in production every security-relevant setting comes from the sealed, signed
+    # registry/deployment.yaml; an environment value that differs stops startup. It is verified before any other
+    # setting is used, so the registry, policy and roster paths below are already the signed ones.
+    check_startup_mode(settings, [])   # mode invariants first (development switches, manifest required)
+    loc = profile_location(settings)
+    if prod and loc is None:
+        raise ValueError("production requires the integrity manifest")
+    profile_bytes = None
+    if loc is not None and loc[1].is_file():
+        profile_bytes = read(loc[1])
+        if prod:
+            integrity.verify([loc[1]], settings.integrity_manifest, hmac_key, settings.require_signed_policy,
+                             trusted_pubkey=settings.trusted_config_pubkey, require_trusted=True,
+                             contents=snapshot)
+    settings, differs = apply_deployment_profile(settings, profile_bytes, loc[0] if loc else None)
+    for name in differs:
+        log.warning("event='deployment_profile_differs_development_only' setting=%r", name)
+
     registry = load_registry(settings.registry_path, read(settings.registry_path))
     sealed = _sealed_paths(settings, [c for a in registry for _, c in a.tasks])
+    if loc is not None and profile_bytes is not None:
+        sealed.append(str(loc[1]))
     # The roster is a detection input: swapping it for an empty one silently disables roster matching (audit S4).
     # Production seals it like the rest of the config; development may run an unsealed roster (warned).
     if settings.roster_path and prod:
@@ -330,8 +352,7 @@ def create_app(settings: Settings) -> Starlette:
     for p in sealed:
         read(p)
     if settings.integrity_manifest is not None:
-        key = bytes.fromhex(settings.policy_signing_key) if settings.policy_signing_key else None
-        integrity_ref = integrity.verify(sealed, settings.integrity_manifest, key, settings.require_signed_policy,
+        integrity_ref = integrity.verify(sealed, settings.integrity_manifest, hmac_key, settings.require_signed_policy,
                                          trusted_pubkey=settings.trusted_config_pubkey, require_trusted=prod,
                                          contents=snapshot)
         if not settings.trusted_config_pubkey:
@@ -367,7 +388,7 @@ def create_app(settings: Settings) -> Starlette:
             ner = NerDetector(settings.ner_model)
             ner.warm()
         contract_protector = Protector(policy, keys, roster, ledger, ner=ner)
-    elif contracts:
+    elif contracts:   # production reaches this only with a signed ner_off_justification in the profile
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
     if (not prod and not isinstance(upstream, MockLLMUpstream) and not settings.dev_allow_real_provider):
