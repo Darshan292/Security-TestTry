@@ -27,6 +27,8 @@ from typing import Any
 from pgw import ablation as _ablation
 from pgw.types import Detection, EntityType as T
 
+from .numwords import unit_amounts
+
 __all__ = ["detect_d2", "detect_fields", "detect_field_context", "verhoeff_valid", "verhoeff_check_digit", "luhn_valid"]
 
 _NA = r"(?<![A-Za-z0-9])"      # not inside a longer alnum token (left)
@@ -899,6 +901,93 @@ def _compensation(text: str) -> list[Cand]:
             if _statutory_amount(text, m.start(), m.end()):
                 continue
             out.append((m.start(), m.end(), T.COMPENSATION, 0.8, "D2:compensation"))
+    return out
+
+
+# --- amounts by shape: Indian digit grouping and Indian units (audit S5: "21,00,000", "twenty two lakh") ------------
+# The lakh grouping d{1,2}(,dd)+,ddd is how Indian money is written; it is never a date, a phone or an ID format. Such a
+# number (>= 1,00,000 by construction) is an amount with or without a currency cue, and so is a Western-grouped number
+# >= 100,000 (_WESTERN_SHAPE). So is a number phrase, in words or
+# digits, with lakh / lac / crore ("twenty two lakh fifty thousand", "1.2 crore"; pgw.detect.numwords). Both are
+# COMPENSATION-class (C2: aliased and restored on EXT_PSEUDO, generalised elsewhere), except
+#   - a statutory or limit constant (_statutory_amount), and sealed public_constants (held out before detection);
+#   - a count: the amount is directly followed by a unit of count ("1,50,000 employees", "2 lakh users");
+#   - business money: a non-pay context (invoice, total, budget, revenue, purchase, ...) is nearer than any pay
+#     context, the same rule as currency-marked amounts (_comp_ctx_ok);
+#   - with a currency cue ("Rs 21,00,000", "INR 2 lakh", "21,00,000 INR") the amount is decided exactly as the
+#     currency-marked path decides it: pay context or per annum required.
+_LAKH_GROUPED = re.compile(r"(?<![\w,])(?<!\d\.)[1-9]\d?(?:,\d\d)+,\d{3}(?:\.\d{1,2})?(?![\w]|[.,]\d)")
+_WESTERN_GROUPED = re.compile(r"(?<![\w,])(?<!\d\.)[1-9]\d{0,2}(?:,\d{3})+(?:\.\d{1,2})?(?![\w]|[.,]\d)")
+# Western grouping >= 100,000 without a cue ("2,100,000") counts too. Measured on dev3build arm A with NER: gates
+# identical with and without it (neg_fp_item_rate 0.7056, collateral_masking 0.0336; one Western amount >= 100,000
+# in the corpus, a statutory one), so it is kept for recall.
+_WESTERN_SHAPE = True
+_COUNT_NOUNS = frozenset(
+    "employees employee people persons person staff workers members users customers clients candidates applicants "
+    "students participants visitors subscribers followers patients beneficiaries households families citizens voters "
+    "records rows entries lines files documents pages items units pieces copies transactions requests tickets calls "
+    "messages emails sms downloads views visits clicks installs devices accounts shares votes hours days weeks months "
+    "years minutes seconds km kms kilometres kilometers miles steps points sq sqft tonnes tons kg litres liters "
+    "seats jobs vacancies positions roles hires posts".split())
+_COUNT_AFTER = re.compile(r"\+?[ \t]*(?:-[ \t]*)?(?:new|more|active|registered|total|odd|plus)?[ \t]*([A-Za-z]+)")
+
+
+def _count_follows(text: str, e: int) -> bool:
+    m = _COUNT_AFTER.match(text, e)
+    return bool(m) and m.group(1).lower() in _COUNT_NOUNS
+
+
+_CUE_AFTER = re.compile(r"[ \t]*(?i:lpa|inr|usd|eur|gbp|aed|sgd|cad|aud|chf|jpy|dollars?|euros?)(?![A-Za-z])")
+
+
+def _business_ctx(text: str, s: int, e: int, radius: int = 80) -> bool:
+    """A non-pay money context is nearer than any pay context (or there is no pay context)."""
+    before = _ctx_norm(text[max(0, s - radius):s])
+    after = _ctx_norm(text[e:e + radius])
+    neg = _nearest(_NONCOMP_CTX, before, after)
+    if neg is None:
+        return False
+    pay = _nearest(_PAY_CTX, before, after)
+    return pay is None or neg <= pay
+
+
+# Words without which _statutory_amount cannot hold (its limit, predicate and statute rules all need one of them).
+_STATUTORY_TRIGGER = re.compile(r"(?<![a-z])(?:" + _LIMIT + r"|statut\w*|prescribed|notified|wages?|under|as\s+per)"
+                                r"(?![a-z])", re.I)
+_SHAPE_CHECKS = 256     # full statutory checks per string; beyond that an amount is kept (fail closed, bounded time)
+
+
+def _amount_shapes(text: str) -> list[Cand]:
+    out: list[Cand] = []
+    rxs = (_LAKH_GROUPED, _WESTERN_GROUPED) if _WESTERN_SHAPE else (_LAKH_GROUPED,)
+    spans: list[tuple[int, int]] = []
+    for rx in rxs:
+        for m in rx.finditer(text):
+            if rx is _WESTERN_GROUPED and float(m.group().replace(",", "")) < 100_000:
+                continue
+            spans.append(m.span())
+    words = {(a, b) for a, b, _ in unit_amounts(text)}
+    spans += words
+    if not spans:
+        return out
+    triggers = [m.start() for m in _STATUTORY_TRIGGER.finditer(text)]
+    budget = _SHAPE_CHECKS
+    for a, b in sorted(spans):
+        if _count_follows(text, b):
+            continue
+        cue = _CUR_BEFORE.search(text, max(0, a - 6), a) or _CUE_AFTER.match(text, b)
+        if cue:
+            if not (_PER_ANNUM.match(text, b) or _comp_ctx_ok(text, a, b)):
+                continue
+        elif _business_ctx(text, a, b):
+            continue
+        i = bisect.bisect_left(triggers, a - 200)      # a clause never reaches beyond 200 characters (_clause)
+        if i < len(triggers) and triggers[i] < b + 200 and budget > 0:
+            budget -= 1
+            if _statutory_amount(text, a, b):
+                continue
+        # a unit phrase scores like a currency-marked amount, so "14 lakh 50 thousand" is one amount, not "14 lakh"
+        out.append((a, b, T.COMPENSATION, 0.9 if (a, b) in words else 0.75, "D2:compensation_shape"))
     return out
 
 
@@ -2185,7 +2274,8 @@ def detect_d2(text: str) -> list[Detection]:
     hdr = _header_spans(text)
     for part in () if not _ablation.get().D2 else (
         _email(text), _upi(text), phones, aadhaar, _pan(text), _ifsc(text), cards, bank,
-        _secret(text), _employee_id(text), _compensation(text), _dob(text), _bank_file_names(text),
+        _secret(text), _employee_id(text), _compensation(text), _amount_shapes(text), _dob(text),
+        _bank_file_names(text),
     ):
         # header cells of a CSV/TSV are field names, never values
         cands.extend(c for c in part if not (hdr and any(a <= c[0] < b for a, b in hdr))
