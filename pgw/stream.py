@@ -213,5 +213,8 @@ class Restorer:
             if ent is None or not self.restore or ent.type in self.never_restore:
                 return m.group(0)
             self.restored.append((ent.type, ent.value))
+            # every way the request wrote this value (e.g. "Priya", "Ms Raghunathan" for one person): a later turn
+            # that repeats any of them is re-protected from the restore ledger
+            self.restored.extend((ent.type, s) for s in sorted(ent.sources) if s != ent.value)
             return ent.value
         return ALIAS_RE.sub(sub, text)

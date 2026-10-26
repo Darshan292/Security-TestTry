@@ -86,6 +86,7 @@ class Matcher:
     t: T
     pattern: re.Pattern
     score: float
+    name: str = ""      # on a declared PERSON's whole-name matcher: the declared name (partial mentions share its alias)
 
     def spans(self, text: str) -> list[tuple[int, int]]:
         f, omap = fold(text)
@@ -144,7 +145,7 @@ def _name_matchers(value: str) -> list[Matcher]:
         p, flags = _word(toks[0])
         return [Matcher(T.PERSON, re.compile(_NB + p + _NA_NAME, flags), FULL_SCORE)]
     out = [Matcher(T.PERSON, re.compile(_NB + _NAME_JOIN.join(map(re.escape, toks)) + _NA_NAME, re.IGNORECASE),
-                   FULL_SCORE)]
+                   FULL_SCORE, value)]
     g, sur = toks[0], toks[-1]
     if len(g) >= 3 and len(sur) >= 3:                 # handles: tkulkarni, tejaswinik, kulkarnit, kulkarni.tejaswini
         for h in (re.escape(g[0]) + re.escape(sur), re.escape(g) + re.escape(sur[0]),

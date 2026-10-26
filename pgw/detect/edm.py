@@ -156,6 +156,11 @@ class RosterIndex:
         return out
 
 
+# Name-link candidates: initial + surname ("S. Kulshreshtha", "s kulshreshtha"), or one capitalised name word.
+_LINK_CAND = re.compile(r"(?<![\w'’])(?:(?P<i>[^\W\d_])\.?[ \t]+(?P<sur>[^\W\d_]{3,})(?:['’]s)?(?![\w'’])"
+                        r"|(?P<w>[^\W\d_a-z][^\W\d_]{2,})(?:['’]s)?(?![\w'’]))")
+
+
 class RestoreLedger:
     """Per-conversation keyed hashes of every value the gateway restored (ADR-0010).
 
@@ -184,6 +189,15 @@ class RestoreLedger:
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(restore_ledger)")}
         if "key_id" not in cols:   # ledger written before key ids: rows keep the legacy key ('')
             self.db.execute("ALTER TABLE restore_ledger ADD COLUMN key_id TEXT NOT NULL DEFAULT ''")
+        # Name links (pgw.pipeline partial-name rule): keyed hash of a partial name form -> the alias of the one full
+        # name it belongs to in this conversation, or '' once it was ambiguous. Aliases are pseudonyms the provider
+        # already saw; the name form itself is only stored as a keyed hash.
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS name_links ("
+            " tenant TEXT, app TEXT, conversation_id TEXT, h BLOB, alias TEXT, expires_at REAL,"
+            " key_id TEXT NOT NULL DEFAULT '',"
+            " PRIMARY KEY (tenant, app, conversation_id, h))"
+        )
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS conversation_keys ("
             " tenant TEXT, app TEXT, conversation_id TEXT, key_id TEXT, expires_at REAL,"
@@ -249,6 +263,74 @@ class RestoreLedger:
             result.append(dets)
         return result
 
+    def _link_h(self, ns: str, part: str, key: bytes) -> bytes:
+        return self._k("NAME_LINK\x1f" + ns, part, key)
+
+    def name_links(self, ctx: Context, ns: str, parts: list[str]) -> dict[str, str]:
+        """part -> alias ('' = ambiguous) for the partial name forms this conversation has linked under `ns`."""
+        if not ctx.conversation_id or not parts:
+            return {}
+        rows = self.db.execute(
+            "SELECT key_id, h, alias FROM name_links WHERE tenant=? AND app=? AND conversation_id=? AND expires_at>?",
+            (ctx.tenant, ctx.app, ctx.conversation_id, time.time())).fetchall()
+        if not rows:
+            return {}
+        by_kid: dict[str, dict[bytes, str]] = {}
+        for kid, h, alias in rows:
+            by_kid.setdefault(kid, {})[h] = alias
+        out: dict[str, str] = {}
+        for kid, table in sorted(by_kid.items()):
+            key = self._key(ctx.tenant, kid)
+            for p in parts:
+                a = table.get(self._link_h(ns, p, key))
+                if a is not None:
+                    out[p] = "" if (p in out and out[p] != a) else a
+        return out
+
+    def name_link_detect(self, ctx: Context, ns: str, texts: list[str]) -> list[list[Detection]]:
+        """PERSON detections for the name parts this conversation linked earlier (pgw.pipeline): a capitalised name
+        word, or an initial plus surname in any case. A trailing possessive stays outside the span."""
+        if not ctx.conversation_id:
+            return [[] for _ in texts]
+        rows = self.db.execute(
+            "SELECT key_id, h FROM name_links WHERE tenant=? AND app=? AND conversation_id=? AND expires_at>?",
+            (ctx.tenant, ctx.app, ctx.conversation_id, time.time())).fetchall()
+        if not rows:
+            return [[] for _ in texts]
+        by_kid: dict[str, set[bytes]] = {}
+        for kid, h in rows:
+            by_kid.setdefault(kid, set()).add(h)
+        keyed = [(self._key(ctx.tenant, kid), hs) for kid, hs in sorted(by_kid.items())]
+        out = []
+        for text in texts:
+            dets = []
+            for m in _LINK_CAND.finditer(text):
+                if m.group("w") is not None:
+                    s, e = m.span("w")
+                    part = canon(EntityType.PERSON, m.group("w"))
+                else:
+                    s, e = m.span("i")[0], m.span("sur")[1]
+                    part = canon(EntityType.PERSON, m.group("i")) + " " + canon(EntityType.PERSON, m.group("sur"))
+                if any(self._link_h(ns, part, key) in hs for key, hs in keyed):
+                    dets.append(Detection(s, e, EntityType.PERSON, 0.9, "D3b:name_link"))
+            out.append(dets)
+        return out
+
+    def record_name_links(self, ctx: Context, ns: str, links: dict[str, str]) -> None:
+        """Store part -> alias. A part that now points somewhere else than before becomes ambiguous ('') for good."""
+        if not ctx.conversation_id or not links:
+            return
+        old = self.name_links(ctx, ns, list(links))
+        exp = time.time() + self.ttl_s
+        kid = self.keys.active_id(ctx.tenant) if self.keys is not None else ""
+        key = self._key(ctx.tenant, kid)
+        rows = [(ctx.tenant, ctx.app, ctx.conversation_id, self._link_h(ns, p, key),
+                 "" if (p in old and old[p] != a) else a, exp, kid) for p, a in links.items()]
+        with self.db:
+            self.db.executemany("INSERT OR REPLACE INTO name_links"
+                                " (tenant, app, conversation_id, h, alias, expires_at, key_id)"
+                                " VALUES (?,?,?,?,?,?,?)", rows)
+
     def pinned_key(self, ctx: Context) -> str | None:
         row = self.db.execute(
             "SELECT key_id FROM conversation_keys WHERE tenant=? AND app=? AND conversation_id=? AND expires_at>?",
@@ -264,4 +346,5 @@ class RestoreLedger:
         with self.db:
             args = (ctx.tenant, ctx.app, ctx.conversation_id)
             self.db.execute("DELETE FROM restore_ledger WHERE tenant=? AND app=? AND conversation_id=?", args)
+            self.db.execute("DELETE FROM name_links WHERE tenant=? AND app=? AND conversation_id=?", args)
             self.db.execute("DELETE FROM conversation_keys WHERE tenant=? AND app=? AND conversation_id=?", args)
