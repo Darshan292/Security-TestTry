@@ -279,16 +279,46 @@ def check_codes(answer: str, source: str) -> Result:
 _MARKER = re.compile(r"\[(BANK_ACCOUNT|UPI_ID|AADHAAR|PAN|CARD|SECRET|PHONE|EMAIL|PERSON|EMPLOYEE_ID)\]")
 
 
-def check_privacy(outbound: str | None, answer: str, raw_values: list[str], never_returned: list[str]) -> list[Result]:
-    out = []
+def _outbound_texts(outbound) -> tuple[list[str] | None, str]:
+    """Every captured outbound exchange as decoded JSON strings, or (None, why) if any of them cannot be inspected.
+
+    Privacy may only PASS when every exchange that left the gateway was captured and parsed: a missing, empty or
+    non-JSON exchange (or a body without a messages list) makes the check NOT_EVALUABLE, never a pass."""
     if outbound is None:
-        out.append(Result("PRIVACY", "outbound:raw_values_absent", "NOT_EVALUABLE",
-                          "no outbound capture for this case"))
+        return None, "no outbound capture for this case"
+    items = [outbound] if isinstance(outbound, str) else list(outbound)
+    if not items:
+        return None, "outbound capture is empty"
+    texts = []
+    for i, raw in enumerate(items):
+        if not isinstance(raw, str) or not raw.strip():
+            return None, f"outbound exchange {i + 1} of {len(items)} is missing or empty"
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            return None, f"outbound exchange {i + 1} of {len(items)} is not JSON (unsupported capture format)"
+        if not isinstance(body, dict) or not isinstance(body.get("messages"), list):
+            return None, f"outbound exchange {i + 1} of {len(items)} has no messages list (unsupported format)"
+        texts.append(strings_of(raw))
+    return texts, f"{len(items)} outbound exchange(s) inspected"
+
+
+def check_privacy(outbound, answer: str, raw_values: list[str], never_returned: list[str]) -> list[Result]:
+    """Scenario canaries only: `raw_values` / `never_returned` are the values declared for this fixed scenario
+    (plus those the scenario's detectors are expected to find). A PASS means none of THESE values crossed or came
+    back; it says nothing about other personal data that may be in the text."""
+    out = []
+    texts, why = _outbound_texts(outbound)
+    if texts is None:
+        out.append(Result("PRIVACY", "outbound:raw_values_absent", "NOT_EVALUABLE", why))
     else:
-        hay = strings_of(outbound).lower()
+        hay = "\n".join(texts).lower()
         hit = [v for v in raw_values if v.lower() in hay]
         out.append(Result("PRIVACY", "outbound:raw_values_absent", "FAIL" if hit else "PASS",
-                          f"{len(raw_values)} protected values checked, {len(hit)} found", ", ".join(hit)))
+                          f"{len(raw_values)} declared values checked in {why}, {len(hit)} found", ", ".join(hit)))
+    if not isinstance(answer, str) or not answer.strip():
+        out.append(Result("PRIVACY", "answer:captured", "NOT_EVALUABLE", "no restored answer captured"))
+        return out
     a = norm(answer)
     hit = [v for v in never_returned if v in a]
     out.append(Result("PRIVACY", "answer:c3_never_returned", "FAIL" if hit else "PASS",

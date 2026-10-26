@@ -240,11 +240,23 @@ def inbound_text(inbound: str) -> str:
 # --- run ------------------------------------------------------------------------------------------------------
 
 def make_settings(out: Path, upstream, **kw) -> Settings:
-    return Settings(registry_path=str(ROOT / "registry/apps.yaml"),
+    # Development mode: the repo manifest is sealed but unsigned (production requires the operator's Ed25519
+    # signature, SECURITY_BOUNDARY.md). Integrity of registry, policy and contracts is still verified.
+    return Settings(mode="development", registry_path=str(ROOT / "registry/apps.yaml"),
                     roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                     ledger_db_path=str(out / "restore_ledger.sqlite"), egress_ledger_path=str(out / "egress.jsonl"),
                     master_key=os.urandom(32).hex(), ner_model="en_core_web_lg", upstream=upstream,
+                    dev_allow_real_provider=True,   # explicit synthetic-data validation run (code-only switch)
                     **kw)
+
+
+def input_source(purpose: str) -> dict:
+    """These fixed synthetic inputs stand for the contract's allowlisted source-side export (SECURITY_BOUNDARY.md)."""
+    from pgw.product.contracts import load_contract
+    path = ROOT / f"contracts/{purpose}.yaml"
+    if not path.exists():   # an unregistered/uncontracted purpose: the gateway refuses it before this matters
+        return {}
+    return {"X-PGW-Input-Source": sorted(load_contract(path).external_input.sanitizers)[0]}
 
 
 def post(client, purpose, content, model=MODEL, subjects=None, messages=None, conv=None):
@@ -252,7 +264,7 @@ def post(client, purpose, content, model=MODEL, subjects=None, messages=None, co
             "messages": messages or [{"role": "user", "content": content}]}
     if subjects is not None:
         body["pgw_subjects"] = subjects
-    h = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose}
+    h = {"Authorization": f"Bearer {APP_KEY}", "X-PGW-Purpose": purpose, **input_source(purpose)}
     if conv:
         h["X-PGW-Conversation-Id"] = conv
     return client.post("/v1/chat/completions", headers=h, json=body)

@@ -25,8 +25,8 @@ class PolicyPack:
     stream_modes: dict[str, str] = None
 
     @classmethod
-    def load(cls, path: str | Path) -> "PolicyPack":
-        raw = yaml.safe_load(Path(path).read_text())
+    def load(cls, path: str | Path, data: bytes | None = None) -> "PolicyPack":
+        raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
         defaults = {EntityType(k): Action(v) for k, v in raw["defaults"].items()}
         missing = set(EntityType) - set(defaults)
         if missing:  # every type needs an explicit default; no silent ALLOW

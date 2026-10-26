@@ -21,6 +21,9 @@ services:
       PGW_PORT: "8080"
       PGW_UPSTREAM: anthropic
       PGW_EGRESS_ALLOWLIST: "api.anthropic.com"
+      PGW_MODE: production               # default; development-only switches are refused (SECURITY_BOUNDARY.md)
+      # Ed25519 public key that signed policies/MANIFEST.json (the repo manifest is unsigned: sign your own).
+      PGW_TRUSTED_CONFIG_PUBKEY: "${PGW_TRUSTED_CONFIG_PUBKEY:?sign the config and set the trusted public key}"
       # Provider credentials: ONLY here. Supplied from the host env / .env, never baked in.
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:?set in the deploy environment}"
       PGW_MASTER_KEY_FILE: /run/secrets/pgw_master_key   # or PGW_MASTER_KEY from env

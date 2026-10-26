@@ -3,6 +3,7 @@
 - **Date:** 2026-10-02.
 - **Data:** synthetic HRIS data only. No real employee data was used anywhere.
 - **Status:** not production-ready, and not yet authorised for real HR data.
+- **Security boundary (2026-10-10):** see SECURITY_BOUNDARY.md. It says what the gateway enforces (mandatory contracts, signed registry/policy/contracts in production, source-sanitizer attestation for free text) and what it does not (NOT_EXPECTED content in free text, the truth of the attestation, tenant-specific contracts).
 - **Real provider:** Groq `openai/gpt-oss-120b`, through the OpenAI-compatible adapter (allowlisted host).
 - **Evidence:** `eval/results/pilot_validation_groq.md` (content-free). Full captures stay outside the repo: exact outbound and inbound bytes, restored answers, ledger rows, latency, and contract and policy integrity digest.
 - **Runs:** four real-provider runs of the full suite on the final code paths.

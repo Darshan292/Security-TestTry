@@ -44,7 +44,8 @@ def pct(xs: list[float], p: float) -> float:
 
 async def run_level(ner: str | None, conc: int, n: int, size: int, workers: int = 0) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
-        s = Settings(registry_path=str(ROOT / "registry/apps.yaml"), policy_path=str(ROOT / "policies/hris-default.yaml"),
+        s = Settings(mode="development",   # the repo manifest is unsigned; production needs the operator's signature
+                     registry_path=str(ROOT / "registry/apps.yaml"), policy_path=str(ROOT / "policies/hris-default.yaml"),
                      roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                      ledger_db_path=f"{tmp}/ledger.sqlite", egress_ledger_path=f"{tmp}/egress.jsonl",
                      master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"), ner_model=ner, ner_workers=workers)
@@ -56,7 +57,8 @@ async def run_level(ner: str | None, conc: int, n: int, size: int, workers: int 
             async def one(i: int) -> None:
                 body = {"model": "mock-1", "messages": [{"role": "user", "content": make_ticket(size, i)}],
                         "pgw_subjects": SUBJECTS}
-                h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary"}
+                h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
+                     "X-PGW-Input-Source": "helpdesk-ticket-export@1"}
                 async with sem:
                     t = time.perf_counter()
                     r = await c.post("/v1/chat/completions", headers=h, json=body)

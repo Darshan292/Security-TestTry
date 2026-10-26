@@ -21,6 +21,7 @@ python -m demo.ui_server           # open http://127.0.0.1:8765
 ## What you see
 
 - **Status bar:** the provider and model, the NER mode, the policy/contract integrity digest, the private-route backend, and warnings.
+- **Mode:** the inspector runs the gateway in `development` mode (the trace hook is refused in production). It plays the source app and sends each contract's `X-PGW-Input-Source` attestation; the "Input source" step shows it. The status bar's integrity digest is the shipped policy and contracts checked against the unsigned repo manifest, which is valid for development only.
 - **Scenarios:**
   - A1–A4: external LLM on protected text, with declared subjects.
   - B1–B3: local computation. Exact salaries and wages never leave.

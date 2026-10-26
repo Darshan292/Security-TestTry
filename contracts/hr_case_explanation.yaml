@@ -1,7 +1,7 @@
 # Data contract: explain an HR case's status and next steps to the HR operator (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. Same class treatment as ticket summaries; restored output goes to HR staff only.
 contract: hr_case_explanation
-version: 3
+version: 4
 task_type: hr_case_explanation
 route: EXT_PSEUDO
 data_classes:
@@ -28,3 +28,10 @@ guidance: >-
   no access to the payroll or HR systems, so every cause is a hypothesis; label it as such, list at most three, and
   never state one as the conclusion. 3) Next steps: concrete checks HR Operations can make to find the actual cause.
   Do not invent system names, timelines, codes or policies that are not in the case. Keep it under 200 words.
+# Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
+# gateway. Free text reaches the external model only if the calling app sends X-PGW-Input-Source naming one of these
+# source-side sanitizers/exports (an attestation by the app owner, recorded in the audit ledger; the gateway does not
+# verify the content). Without it: refused (422), nothing sent.
+external_input:
+  sanitizers: [hris-case-export@1]
+  unattested: REFUSE

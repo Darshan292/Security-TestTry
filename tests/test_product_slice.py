@@ -14,6 +14,7 @@ from starlette.testclient import TestClient
 
 import pgw.product.local_compute as lc
 from pgw.gateway.app import create_app
+from tests.sealed import legacy_dev, production, source
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.pipeline import Protector
@@ -42,30 +43,24 @@ def sha(k):
     return hashlib.sha256(k.encode()).hexdigest()
 
 
-def registry(tmp, tasks=None):
-    reg = tmp / "apps.yaml"
-    reg.write_text(yaml.safe_dump({"apps": [
-        {"app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY),
-         "purposes": ["ticket_summary", "salary_comparison", "esi_letter", "uncontracted"], "restore_output": True,
-         "models": ["mock-1"],
-         "tasks": tasks or {"ticket_summary": str(ROOT / "contracts/ticket_summary.yaml"),
-                            "salary_comparison": str(ROOT / "contracts/salary_comparison.yaml"),
-                            "esi_letter": str(ROOT / "contracts/esi_letter.yaml")}},
-        {"app_id": "legacy", "tenant": "acme", "key_sha256": sha(LEGACY_KEY), "purposes": ["hr_case_summary"],
-         "restore_output": True, "models": ["mock-1"]},
-    ]}))
-    return reg
+def apps(tasks=None):
+    tasks = tasks or {"ticket_summary": str(ROOT / "contracts/ticket_summary.yaml"),
+                      "salary_comparison": str(ROOT / "contracts/salary_comparison.yaml"),
+                      "esi_letter": str(ROOT / "contracts/esi_letter.yaml")}
+    return [{"app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY), "purposes": sorted(tasks),
+             "restore_output": True, "models": ["mock-1"], "tasks": tasks}]
+
+
+def base(tmp, mock, tasks=None):
+    """Production mode: a sealed, signed copy of the config (tests/sealed.py)."""
+    return Settings(**production(tmp, apps(tasks)), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+                    ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
+                    master_key=os.urandom(32).hex(), upstream=mock)
 
 
 def make(tmp, behaviour="summarise", tasks=None):
     mock = MockLLMUpstream(behaviour)
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(registry(tmp, tasks)),
-                 roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
-                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
-                 master_key=os.urandom(32).hex(), upstream=mock,
-                 # throwaway contracts are unsealed: skip integrity so these tests reach contract validation
-                 **({"integrity_manifest": None} if tasks else {}))
-    return TestClient(create_app(s)), mock
+    return TestClient(create_app(base(tmp, mock, tasks))), mock
 
 
 # Path A contracts require the app to declare the requester; only the requester is declared here, so the other
@@ -77,8 +72,8 @@ def call(client, purpose, content, key=KEY, subjects=None):
     body = {"model": "mock-1", "messages": [{"role": "user", "content": content}]}
     if purpose == "ticket_summary":
         body["pgw_subjects"] = subjects or REQUESTER
-    return client.post("/v1/chat/completions", headers={"Authorization": f"Bearer {key}", "X-PGW-Purpose": purpose},
-                       json=body)
+    return client.post("/v1/chat/completions", json=body,
+                       headers={"Authorization": f"Bearer {key}", "X-PGW-Purpose": purpose, **source(purpose)})
 
 
 def sent(mock) -> str:
@@ -106,7 +101,16 @@ def test_path_a_raw_values_never_leave_and_high_ids_do_not_block(tmp_path):
 
 
 def test_path_a_same_request_is_blocked_by_the_legacy_presence_rule(tmp_path):
-    client, mock = make(tmp_path)
+    # Comparison with the pre-contract behaviour: reachable only through the explicit development-only legacy mode.
+    reg = tmp_path / "legacy.yaml"
+    reg.write_text(yaml.safe_dump({"apps": [{"app_id": "legacy", "tenant": "acme", "key_sha256": sha(LEGACY_KEY),
+                                             "purposes": ["hr_case_summary"], "models": ["mock-1"]}]}))
+    mock = MockLLMUpstream("summarise")
+    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), **legacy_dev(reg),
+                 roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+                 ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e.jsonl"),
+                 master_key=os.urandom(32).hex(), upstream=mock)
+    client = TestClient(create_app(s))
     r = call(client, "hr_case_summary", SUMMARY_ASK, key=LEGACY_KEY)
     assert r.status_code == 422 and not mock.received        # the behaviour the contract replaces
 
@@ -205,21 +209,23 @@ def test_egress_backstop_catches_a_buggy_compute_that_leaks_an_exact_salary(tmp_
 
 
 def test_uncontracted_purpose_is_refused(tmp_path):
-    client, mock = make(tmp_path)
+    a = apps()
+    a[0]["purposes"] = [*a[0]["purposes"], "uncontracted"]
+    s = Settings(**production(tmp_path, a), ledger_db_path=str(tmp_path / "l.sqlite"),
+                 egress_ledger_path=str(tmp_path / "e.jsonl"), master_key=os.urandom(32).hex(),
+                 upstream=MockLLMUpstream("summarise"))
+    with pytest.raises(ContractError, match="without a data contract"):
+        create_app(s)          # an uncontracted purpose stops startup (request-level checks: test_mandatory_contracts)
+    client, mock = make(tmp_path / "ok")
     r = call(client, "uncontracted", "hello")
-    assert r.status_code == 403 and r.json()["error"]["type"] == "no_data_contract" and not mock.received
+    assert r.status_code == 403 and r.json()["error"]["type"] == "purpose_forbidden" and not mock.received
 
 
 def test_upstream_failure_returns_no_content(tmp_path):
     class Down(MockLLMUpstream):
         async def complete(self, body):
             raise RuntimeError("provider down")
-    mock = Down("summarise")
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(registry(tmp_path)),
-                 roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
-                 ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e.jsonl"),
-                 master_key=os.urandom(32).hex(), upstream=mock)
-    r = call(TestClient(create_app(s)), "ticket_summary", SUMMARY_ASK)
+    r = call(TestClient(create_app(base(tmp_path, Down("summarise")))), "ticket_summary", SUMMARY_ASK)
     assert r.status_code == 502 and "Imran" not in r.text
 
 
@@ -240,12 +246,10 @@ def test_unsafe_contracts_stop_the_gateway_from_starting(tmp_path, mutate, why):
 
 
 def test_contract_cannot_override_an_existing_policy_purpose(tmp_path):
-    reg = tmp_path / "apps.yaml"
-    reg.write_text(yaml.safe_dump({"apps": [{"app_id": "x", "tenant": "acme", "key_sha256": sha(KEY),
-                                             "purposes": ["hr_case_summary"], "models": ["mock-1"],
-                                             "tasks": {"hr_case_summary": str(ROOT / "contracts/ticket_summary.yaml")}}]}))
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
-                 ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e.jsonl"),
+    cfg = production(tmp_path, [{"app_id": "x", "tenant": "acme", "key_sha256": sha(KEY),
+                                 "purposes": ["hr_case_summary"], "models": ["mock-1"],
+                                 "tasks": {"hr_case_summary": str(ROOT / "contracts/ticket_summary.yaml")}}])
+    s = Settings(**cfg, ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"))
     with pytest.raises(ContractError):
         create_app(s)
@@ -257,7 +261,7 @@ def test_ledger_records_route_and_contract_without_content(tmp_path):
     call(client, "salary_comparison", json.dumps(PAYLOAD))
     rows = [json.loads(line) for line in (tmp_path / "egress.jsonl").read_text().splitlines()]
     assert [(r["route"], r["contract"], r["decision"]) for r in rows] == [
-        ("EXT_PSEUDO", "ticket_summary@3", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@2", "SENT")]
+        ("EXT_PSEUDO", "ticket_summary@4", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@3", "SENT")]
     text = (tmp_path / "egress.jsonl").read_text()
     for v in TICKET_RAW + SALARY_FORMS + ["Amit Trivedi"]:
         assert v not in text

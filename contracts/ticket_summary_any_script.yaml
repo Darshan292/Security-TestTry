@@ -2,7 +2,7 @@
 # Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
 # government/financial identifiers are not needed for a summary, so they are removed, not blocked.
 contract: ticket_summary_any_script
-version: 1
+version: 2
 task_type: hr_ticket_summary
 route: EXT_PSEUDO
 data_classes:
@@ -26,3 +26,10 @@ declared_subjects:          # people the app knows are involved; protected witho
   required: [requester]
   roles: {requester: 1, assignee: 1, mentioned: 20, other: 10}
   fields: {name: PERSON, employee_id: EMPLOYEE_ID, email: EMAIL, phone: PHONE}
+# Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
+# gateway. Free text reaches the external model only if the calling app sends X-PGW-Input-Source naming one of these
+# source-side sanitizers/exports (an attestation by the app owner, recorded in the audit ledger; the gateway does not
+# verify the content). Without it: in-boundary model only.
+external_input:
+  sanitizers: [helpdesk-ticket-export@1]
+  unattested: PRIVATE

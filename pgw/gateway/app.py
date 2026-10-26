@@ -36,7 +36,7 @@ from ..product import integrity, local_compute, subjects
 from ..product.content import unreliable_script
 from ..product.contracts import CLASS_OF, Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
-from .settings import Settings, check_destination, check_private_destination
+from .settings import MODES, Settings, check_destination, check_private_destination
 from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError
 
 log = logging.getLogger("pgw.gateway")
@@ -59,7 +59,7 @@ ALLOWED_TOP = {"model", "messages", "stream", "temperature", "max_tokens", "max_
                "stop", "tools", "tool_choice", "n", "stream_options",
                "pgw_subjects"}   # gateway-only fields (pgw_*) are never forwarded
 LOG_FIELDS = ("event", "request_id", "tenant", "app", "purpose", "model", "status", "decision", "error_type",
-              "latency_ms", "gate_events", "stream", "integrity", "ner")
+              "latency_ms", "gate_events", "stream", "integrity", "ner", "mode", "provider")
 
 
 def _log(level: int, **fields) -> None:
@@ -94,8 +94,8 @@ class AppEntry:
     tasks: tuple = ()      # ((purpose, contract_path), ...): apps with tasks only use contracted purposes
 
 
-def load_registry(path: str) -> list[AppEntry]:
-    raw = yaml.safe_load(Path(path).read_text())
+def load_registry(path: str, data: bytes | None = None) -> list[AppEntry]:
+    raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
     base = Path(path).resolve().parent
     out = []
     for a in raw["apps"]:
@@ -131,17 +131,27 @@ PLACEHOLDER_NOTE = ("Tokens in square brackets such as [PERSON_...] are placehol
                     "account').")
 
 
-def load_contracts(registry: list[AppEntry], policy: PolicyPack) -> tuple[dict[str, Contract], PolicyPack]:
-    """Contracts by purpose, and a policy pack extended with their per-type actions. Any problem stops startup."""
+def load_contracts(registry: list[AppEntry], policy: PolicyPack,
+                   contents: dict | None = None) -> tuple[dict[str, Contract], PolicyPack]:
+    """Contracts by purpose, and a policy pack extended with their per-type actions. Any problem stops startup.
+
+    The map is GLOBAL and keyed by purpose (as is the policy pack's action table): a purpose means the same contract
+    for every app and tenant. Tenant-specific contracts are not supported; two bindings of one purpose must be
+    byte-identical files, whatever their name/version strings say."""
     contracts: dict[str, Contract] = {}
+    digests: dict[str, str] = {}
     for app in registry:
         for purpose, path in app.tasks:
-            c = load_contract(path)
+            data = (contents or {}).get(str(Path(path).resolve())) or Path(path).read_bytes()
+            digest = hashlib.sha256(data).hexdigest()
+            c = load_contract(path, data)
             if purpose in policy.purposes:
                 raise ContractError(f"purpose {purpose!r} is already defined by the policy pack; contracted "
                                     "purposes must be distinct so contracts cannot change other apps' behaviour")
-            if purpose in contracts and contracts[purpose].ref != c.ref:
-                raise ContractError(f"purpose {purpose!r} is bound to two different contracts")
+            if purpose in contracts and (contracts[purpose].ref != c.ref or digests[purpose] != digest):
+                raise ContractError(f"purpose {purpose!r} is bound to contract files with different content "
+                                    "(tenant-specific contracts are not supported; one purpose = one contract)")
+            digests[purpose] = digest
             if c.route == "LOCAL_COMPUTE" and c.compute not in local_compute.FUNCTIONS:
                 raise ContractError(f"unknown compute function {c.compute!r}")
             contracts[purpose] = c
@@ -182,7 +192,26 @@ def _text_size(x) -> int:
 
 
 def _sealed_paths(settings: Settings, contracts_paths) -> list[str]:
-    return [settings.policy_path, *sorted(set(contracts_paths))]
+    return [settings.registry_path, settings.policy_path, *sorted(set(contracts_paths))]
+
+
+def check_startup_mode(settings: Settings, registry: list[AppEntry]) -> None:
+    """Production invariants that no configuration may relax. Raises ValueError (startup stops)."""
+    if settings.mode not in MODES:
+        raise ValueError(f"PGW_MODE must be one of {MODES}")
+    prod = settings.mode == "production"
+    if settings.legacy_uncontracted and prod:
+        raise ValueError("the legacy uncontracted path is development-only and cannot be enabled in production")
+    if prod and settings.integrity_manifest is None:
+        raise ValueError("production requires the integrity manifest")
+    if prod and settings.trace is not None:
+        raise ValueError("the trace hook is development-only")
+    if not settings.legacy_uncontracted:
+        for a in registry:   # every registered purpose must be bound to a data contract
+            missing = sorted(a.purposes - {p for p, _ in a.tasks})
+            if missing:
+                raise ContractError(f"app {a.app_id!r}: purposes without a data contract: {missing} "
+                                    "(uncontracted purposes are not served)")
 
 
 def load_roster(path: str, key: bytes) -> RosterIndex:
@@ -213,19 +242,41 @@ def create_app(settings: Settings) -> Starlette:
     # Provider SDK/HTTP client loggers never log above WARNING here (their debug output includes request bodies).
     for name in ("anthropic", "httpx", "httpcore", "openai"):
         logging.getLogger(name).setLevel(max(logging.WARNING, logging.getLogger(name).level))
-    registry = load_registry(settings.registry_path)
-    # Integrity first: nothing from an unsealed or modified policy/contract file is acted on.
+    if settings.mode not in MODES:
+        raise ValueError(f"PGW_MODE must be one of {MODES}")
+    prod = settings.mode == "production"
+    # Integrity first: nothing from an unsealed or modified registry/policy/contract file is acted on. Each file is
+    # read exactly once; the bytes that are verified are the bytes that are parsed (no swap between check and use).
+    snapshot: dict[str, bytes] = {}
+
+    def read(path) -> bytes:
+        key_ = str(Path(path).resolve())
+        if key_ not in snapshot:
+            snapshot[key_] = Path(path).read_bytes()
+        return snapshot[key_]
+
+    registry = load_registry(settings.registry_path, read(settings.registry_path))
+    sealed = _sealed_paths(settings, [c for a in registry for _, c in a.tasks])
+    for p in sealed:
+        read(p)
     if settings.integrity_manifest is not None:
         key = bytes.fromhex(settings.policy_signing_key) if settings.policy_signing_key else None
-        integrity_ref = integrity.verify(_sealed_paths(settings, [c for a in registry for _, c in a.tasks]),
-                                         settings.integrity_manifest, key, settings.require_signed_policy)
+        integrity_ref = integrity.verify(sealed, settings.integrity_manifest, key, settings.require_signed_policy,
+                                         trusted_pubkey=settings.trusted_config_pubkey, require_trusted=prod,
+                                         contents=snapshot)
+        if not settings.trusted_config_pubkey:
+            _log(logging.WARNING, event="integrity_manifest_untrusted_development_only")
     else:
         integrity_ref = "unchecked"
-        _log(logging.WARNING, event="integrity_check_disabled")
-    policy = PolicyPack.load(settings.policy_path)
+    check_startup_mode(settings, registry)
+    if settings.integrity_manifest is None:
+        _log(logging.WARNING, event="integrity_check_disabled_development_only")
+    if settings.legacy_uncontracted:
+        _log(logging.WARNING, event="legacy_uncontracted_path_enabled_development_only")
+    policy = PolicyPack.load(settings.policy_path, read(settings.policy_path))
     from ..keys import build_keys   # per-tenant key file if configured, else the single master key
     keys: Keys = build_keys(settings, registry)   # or pgw.keys.TenantKeyring: same interface
-    contracts, policy = load_contracts(registry, policy)
+    contracts, policy = load_contracts(registry, policy, snapshot)
     for p in contracts:   # contracted (RESTRICTED-by-default) purposes never stream unrestored text
         if policy.stream_mode(p) != "buffered":
             raise ContractError(f"purpose {p!r}: contracted purposes must use buffered output")
@@ -248,6 +299,11 @@ def create_app(settings: Settings) -> Starlette:
     elif contracts:
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
+    if (not prod and not isinstance(upstream, MockLLMUpstream) and not settings.dev_allow_real_provider):
+        # Development config may be unsigned, so it must stay isolated: no real provider unless set in code.
+        raise ValueError("development mode only reaches the mock provider (dev_allow_real_provider is code-only)")
+    if prod and settings.dev_allow_real_provider:
+        raise ValueError("dev_allow_real_provider is a development-only switch")
     private = settings.private_upstream
     if private is None and settings.private_upstream_url:
         check_private_destination(settings.private_upstream_url, settings.private_allowlist,
@@ -258,9 +314,13 @@ def create_app(settings: Settings) -> Starlette:
     for p, c in contracts.items():
         if c.classes[DataClass.C4] == "PRIVATE" and private is None:
             raise ContractError(f"purpose {p!r} routes C4 content privately but no private endpoint is configured")
+        if c.external_input.unattested == "PRIVATE" and private is None:
+            raise ContractError(f"purpose {p!r} routes unattested input privately but no private endpoint is "
+                                "configured")
     egress_ledger = EgressLedger(settings.egress_ledger_path, keys if settings.tenant_keys_file else None)
     slots = threading.BoundedSemaphore(settings.max_concurrent_protect)
-    _log(logging.INFO, event="started", integrity=integrity_ref, ner=settings.ner_model if contracts else None)
+    _log(logging.INFO if prod else logging.WARNING, event="started", mode=settings.mode, integrity=integrity_ref,
+         ner=settings.ner_model if contracts else None, provider=upstream.name)
 
     async def bounded(fn, *args):
         """Run CPU work in a worker with a deadline. The slot is released only when the worker really finishes,
@@ -306,16 +366,18 @@ def create_app(settings: Settings) -> Starlette:
         return found
 
     def ledger_line(rid, app, purpose, model, body_hash, counts, decision, ms, reason=None, contract=None,
-                    n_subjects=None):
+                    n_subjects=None, input_source=None):
         try:
             extra = {"contract": contract.ref, "route": contract.route} if contract is not None else {}
+            if input_source is not None:
+                extra["input_source"] = input_source
             if n_subjects is not None:
                 extra["declared_subjects"] = n_subjects
             egress_ledger.write(request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose, model=model,
                                 provider=upstream.name, body_sha256=body_hash, entity_counts=counts,
                                 provider_terms={"region": settings.provider_region,
                                                 "zero_retention_attested": settings.provider_zero_retention},
-                                policy=policy.ref, integrity=integrity_ref, decision=decision,
+                                policy=policy.ref, integrity=integrity_ref, mode=settings.mode, decision=decision,
                                 latency_ms=round(ms, 2), reason=reason, ts=round(time.time(), 3), **extra)
         except Exception as e:  # audit write failure must not leak content; fail closed
             _log(logging.ERROR, event="egress_ledger_write_failed", request_id=rid, error_type=type(e).__name__)
@@ -352,6 +414,15 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(400, "purpose_required", "X-PGW-Purpose header is required")
         if purpose not in app.purposes:
             raise _Reject(403, "purpose_forbidden", "purpose not permitted for this app")
+        # Mandatory data contract, resolved before the body is even read: an uncontracted purpose never reaches
+        # detection, a provider or the ledger. The legacy path exists only in an explicit development mode.
+        tasks = dict(app.tasks)
+        if purpose in tasks:
+            contract: Contract | None = contracts[purpose]
+        elif settings.legacy_uncontracted and settings.mode == "development":
+            contract = None
+        else:
+            raise _Reject(403, "no_data_contract", "purpose has no data contract for this app")
         _tr("auth", app=app.app_id, tenant=app.tenant, purpose=purpose)
         conv = request.headers.get("x-pgw-conversation-id", "").strip() or None
         if conv and len(conv) > 128:
@@ -393,16 +464,13 @@ def create_app(settings: Settings) -> Starlette:
         t0 = time.perf_counter()
 
         # --- data contract and route (PRODUCT_ARCHITECTURE §2); every failure here is before any send ---
-        contract: Contract | None = None
-        if app.tasks:
-            if purpose not in dict(app.tasks):
-                raise _Reject(403, "no_data_contract", "purpose has no data contract for this app")
-            contract = contracts[purpose]
+        if contract is not None:
             _tr("contract", contract=contract.ref, route=contract.route, task_type=contract.task_type,
                 classes={k.value: v for k, v in contract.classes.items()},
                 restore=sorted(c.value for c in contract.restore), guidance=bool(contract.guidance),
                 org_contacts=len(contract.org_contacts))
         messages, declared, withheld, subj, raw_outputs = body["messages"], None, [], [], None
+        input_source = None
         if contract is not None:
             ctx = dataclasses.replace(ctx, alias_ns=contract.ref)
         if "pgw_subjects" in body and (contract is None or contract.subjects is None):
@@ -423,6 +491,21 @@ def create_app(settings: Settings) -> Starlette:
             texts = subjects.request_texts(messages)    # every string, incl. list-form content parts and tool args
             if _text_size(messages) > contract.max_chars:
                 raise _Reject(413, "content_too_large", "request exceeds the data contract's size limit")
+            # NOT_EXPECTED attributes (medical, disciplinary, ...) are not detected by the gateway. Free text goes
+            # to an external model only when the app declares it was produced by a source-side sanitizer/export
+            # this contract allowlists; otherwise it is refused or kept in-boundary (SECURITY_BOUNDARY.md §4).
+            input_source = request.headers.get("x-pgw-input-source", "").strip()
+            if input_source not in contract.external_input.sanitizers:
+                _tr("input_source", attested=bool(input_source), accepted=False,
+                    unattested=contract.external_input.unattested)
+                if contract.external_input.unattested == "PRIVATE":
+                    return await _private(rid, app, purpose, model, body, ctx, contract, t0, "input_not_sanitized")
+                ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                            "input_not_sanitized", contract)
+                raise _Reject(422, "input_not_source_sanitized",
+                              "this purpose only sends input produced by an allowlisted source-side sanitizer "
+                              "(X-PGW-Input-Source); not sent externally")
+            _tr("input_source", attested=True, accepted=True, sanitizer=input_source)
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
                 return await _private(rid, app, purpose, model, body, ctx, contract, t0)
             if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
@@ -544,7 +627,7 @@ def create_app(settings: Settings) -> Starlette:
         _tr("send", provider=upstream.name, model=model, bytes=len(wire), sha256=body_hash,
             outbound=wire.decode("utf-8", "replace"))
         ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "SENT", ms, None, contract,
-                    len(subj) if contract is not None and contract.subjects is not None else None)
+                    len(subj) if contract is not None and contract.subjects is not None else None, input_source)
         _log(logging.INFO, event="sent", request_id=rid, tenant=app.tenant, app=app.app_id, purpose=purpose,
              model=model, decision="SENT", latency_ms=round(ms, 2), stream=stream)
 
@@ -565,21 +648,22 @@ def create_app(settings: Settings) -> Starlette:
             return await _non_stream(rid, up_body, new_restorer, record, contract)
         return await _stream(rid, up_body, new_restorer, record, contract)
 
-    async def _private(rid, app, purpose, model, body, ctx, contract, t0) -> Response:
+    async def _private(rid, app, purpose, model, body, ctx, contract, t0, reason="content_class_C4") -> Response:
         """C4 content the gateway cannot protect reliably goes, unprotected, ONLY to the in-boundary model.
         The external upstream is never called. The answer still passes the output gate (raw C3 is masked)."""
         if body.get("stream"):
             raise _Reject(400, "unsupported_parameter", "streaming is not available on the private route")
         p_body = {k: v for k, v in body.items() if not k.startswith("pgw_") and k not in ("tools", "tool_choice")}
         p_body["model"] = settings.private_model
-        _tr("route", route="PRIVATE_LOCAL", reason="content the gateway cannot read reliably (C4): in-boundary model only")
+        _tr("route", route="PRIVATE_LOCAL", reason="input not attested as source-sanitized: in-boundary model only"
+            if reason == "input_not_sanitized" else "content the gateway cannot read reliably (C4): in-boundary model only")
         p_wire = private.wire_bytes(p_body)
         _tr("send", provider="private (in-boundary)", model=settings.private_model, bytes=len(p_wire),
             sha256=hashlib.sha256(p_wire).hexdigest(), outbound=p_wire.decode("utf-8", "replace"),
             note="unprotected, but never leaves the boundary")
         ms = (time.perf_counter() - t0) * 1000
         ledger_line(rid, app, purpose, model, hashlib.sha256(private.wire_bytes(p_body)).hexdigest(), {},
-                    "SENT_PRIVATE", ms, "content_class_C4", dataclasses.replace(contract, route="PRIVATE_LOCAL"))
+                    "SENT_PRIVATE", ms, reason, dataclasses.replace(contract, route="PRIVATE_LOCAL"))
         try:
             t_up = time.perf_counter()
             data = await private.complete(p_body)
@@ -762,7 +846,7 @@ def create_app(settings: Settings) -> Starlette:
                                  headers={"X-PGW-Request-Id": rid, "Cache-Control": "no-store"})
 
     async def health(request: Request) -> Response:
-        return JSONResponse({"status": "ok"})
+        return JSONResponse({"status": "ok", "mode": settings.mode})
 
     import contextlib
 

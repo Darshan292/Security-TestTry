@@ -12,6 +12,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import PLACEHOLDER_NOTE, create_app, render_markers
+from tests.sealed import production, source
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product.contracts import ContractError, load_contract
@@ -24,14 +25,12 @@ SUBJ = {"recipient": {"name": "Amit Trivedi", "employee_id": "KD-10989", "email"
 
 
 def make(tmp, behaviour="echo", purpose="hr_email_draft"):
-    reg = tmp / "apps.yaml"
-    reg.write_text(yaml.safe_dump({"apps": [{
+    cfg = production(tmp, [{
         "app_id": "pilot", "tenant": "acme", "key_sha256": hashlib.sha256(KEY.encode()).hexdigest(),
         "restore_output": True, "models": ["mock-1"], "purposes": [purpose],
-        "tasks": {purpose: str(ROOT / f"contracts/{purpose}.yaml")}}]}))
+        "tasks": {purpose: str(ROOT / f"contracts/{purpose}.yaml")}}])
     mock = MockLLMUpstream(behaviour)
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
-                 ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
+    s = Settings(**cfg, ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=mock)
     return TestClient(create_app(s)), mock
 
@@ -41,7 +40,7 @@ def call(client, text, purpose="hr_email_draft", subjects=SUBJ):
     if subjects is not None:
         body["pgw_subjects"] = subjects
     return client.post("/v1/chat/completions", json=body,
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose})
+                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)})
 
 
 def test_guidance_and_sender_contacts_reach_the_model_recipient_contacts_do_not(tmp_path):

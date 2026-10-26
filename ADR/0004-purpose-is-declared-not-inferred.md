@@ -21,6 +21,8 @@ It never says where `context` comes from. The two options are:
 application is registered for. Policy is selected by (tenant, app, purpose,
 destination) — never by prompt content.**
 
+> Implementation note (2026-10): the current code resolves contracts and policy actions globally by purpose; tenant-specific selection is not implemented (SECURITY_BOUNDARY.md §3).
+
 ```yaml
 # app registry (versioned, reviewed like code)
 apps:

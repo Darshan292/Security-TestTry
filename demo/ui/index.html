@@ -129,7 +129,7 @@ pre,.pane{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-
 <script>
 (function(){
 'use strict';
-var STEPS=[["request","Request received"],["auth","Authentication"],["contract","Purpose contract"],["subjects","Subjects"],["route","Routing"],["local_compute","Local compute"],["protect","Protect (detect and replace)"],["egress","Egress check"],["send","Send to LLM"],["provider","Provider response"],["restore","Restore originals"],["audit","Audit decision"],["final","Final result"]];
+var STEPS=[["request","Request received"],["auth","Authentication"],["contract","Purpose contract"],["input_source","Input source"],["subjects","Subjects"],["route","Routing"],["local_compute","Local compute"],["protect","Protect (detect and replace)"],["egress","Egress check"],["send","Send to LLM"],["provider","Provider response"],["restore","Restore originals"],["audit","Audit decision"],["final","Final result"]];
 var ALIAS_RE=/\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]|\[(?:BANK_ACCOUNT|UPI_ID|AADHAAR|PAN|CARD|SECRET)\]/g;
 var ALIAS_ONLY=/^\[[A-Z_]+_[0-9][0-9A-Z]{5}(?:[0-9A-Z]{2})?\]$/;
 var TABS=[["app_input","App input"],["outbound","Provider request (pretty-printed)"],["provider_raw","Provider raw response"],["answer","Restored answer"]];

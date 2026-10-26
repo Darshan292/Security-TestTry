@@ -13,6 +13,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import create_app
+from tests.sealed import production, source
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product.contracts import ContractError
@@ -30,24 +31,23 @@ SUBJECTS = {"requester": {"name": "Imran Ansari", "employee_id": "KD-11914"},
             "assignee": {"name": "Tejaswini Kulkarni"},
             "mentioned": [{"name": "Nandini"}]}
 
+SRC = source("ticket_summary")
+
 
 def sha(k):
     return hashlib.sha256(k.encode()).hexdigest()
 
 
-def make(tmp, behaviour="summarise", ner=None, tasks=None, integrity=True):
-    reg = tmp / "apps.yaml"
-    reg.write_text(yaml.safe_dump({"apps": [{
+def make(tmp, behaviour="summarise", ner=None, tasks=None):
+    tasks = tasks or {p: str(ROOT / f"contracts/{p}.yaml")
+                      for p in ("ticket_summary", "hr_case_explanation", "salary_comparison")}
+    cfg = production(tmp, [{
         "app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY), "restore_output": True, "models": ["mock-1"],
-        "purposes": ["ticket_summary", "hr_case_explanation", "salary_comparison", "band_position"],
-        "tasks": tasks or {p: str(ROOT / f"contracts/{p}.yaml")
-                           for p in ("ticket_summary", "hr_case_explanation", "salary_comparison")}}]}))
+        "purposes": sorted(tasks), "tasks": tasks}])
     mock = MockLLMUpstream(behaviour)
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
-                 roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+    s = Settings(**cfg, roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                  ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
-                 master_key=os.urandom(32).hex(), upstream=mock, ner_model=ner,
-                 **({} if integrity else {"integrity_manifest": None}))
+                 master_key=os.urandom(32).hex(), upstream=mock, ner_model=ner)
     return TestClient(create_app(s)), mock
 
 
@@ -55,7 +55,7 @@ def call(client, content, subjects=None, purpose="ticket_summary", conv=None):
     body = {"model": "mock-1", "messages": [{"role": "user", "content": content}]}
     if subjects is not None:
         body["pgw_subjects"] = subjects
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)}
     if conv:
         h["X-PGW-Conversation-Id"] = conv
     return client.post("/v1/chat/completions", headers=h, json=body)
@@ -148,7 +148,7 @@ def test_only_authorised_classes_are_restored(tmp_path):
     c["restore"] = []
     p = tmp_path / "norestore.yaml"
     p.write_text(yaml.safe_dump(c))
-    client, _ = make(tmp_path, tasks={"ticket_summary": str(p)}, integrity=False)
+    client, _ = make(tmp_path, tasks={"ticket_summary": str(p)})
     out = call(client, TICKET, SUBJECTS).json()["choices"][0]["message"]["content"]
     assert "Nandini" not in out and ALIAS.findall(out)
 
@@ -210,7 +210,7 @@ def test_ledger_counts_declared_subjects_without_values(tmp_path):
     call(client, TICKET, SUBJECTS)
     text = (tmp_path / "egress.jsonl").read_text()
     row = json.loads(text.splitlines()[-1])
-    assert row["declared_subjects"] == 4 and row["contract"] == "ticket_summary@3"
+    assert row["declared_subjects"] == 4 and row["contract"] == "ticket_summary@4"
     for v in ("Nandini", "Tejaswini", "Imran", "KD-11914"):
         assert v not in text
 
@@ -226,7 +226,7 @@ def test_unsafe_subject_specs_stop_startup(tmp_path, mutate):
     p = tmp_path / "bad.yaml"
     p.write_text(yaml.safe_dump(c))
     with pytest.raises(ContractError):
-        make(tmp_path, tasks={"ticket_summary": str(p)}, integrity=False)
+        make(tmp_path, tasks={"ticket_summary": str(p)})
 
 
 def test_subjects_only_on_ext_pseudo(tmp_path):
@@ -235,7 +235,7 @@ def test_subjects_only_on_ext_pseudo(tmp_path):
     p = tmp_path / "bad.yaml"
     p.write_text(yaml.safe_dump(c))
     with pytest.raises(ContractError):
-        make(tmp_path, tasks={"salary_comparison": str(p)}, integrity=False)
+        make(tmp_path, tasks={"salary_comparison": str(p)})
 
 
 # --- regressions from the adversarial review (each reproduced a leak, a DoS or a false positive) ---------------
@@ -281,7 +281,7 @@ def test_names_inside_tool_arguments_and_list_parts(tmp_path):
             "name": "lookup", "arguments": json.dumps({"who": "Tejaswini Kulkarni", "u": "Jos\u00e9"})}}]},
         {"role": "tool", "tool_call_id": "c1", "content": "found tejaswini"}]}
     r = client.post("/v1/chat/completions", json=body, headers={"Authorization": f"Bearer {KEY}",
-                    "X-PGW-Purpose": "ticket_summary", "X-PGW-Conversation-Id": "conv-tool"})
+                    "X-PGW-Purpose": "ticket_summary", "X-PGW-Conversation-Id": "conv-tool", **SRC})
     assert r.status_code == 200 and "tejaswini" not in mock.received[-1].decode().lower()
 
 
@@ -289,7 +289,7 @@ def test_c4_and_size_limits_cover_list_form_content(tmp_path):
     client, mock = make(tmp_path)
     body = {"model": "mock-1", "pgw_subjects": TK,
             "messages": [{"role": "user", "content": [{"type": "text", "text": "राहुल शर्मा का वेतन"}]}]}
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary"}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC}
     assert client.post("/v1/chat/completions", json=body, headers=h).status_code == 422
     body["messages"][0]["content"] = [{"type": "text", "text": "x" * 15000}] * 2
     assert client.post("/v1/chat/completions", json=body, headers=h).status_code == 413
@@ -333,7 +333,7 @@ def test_declared_values_in_tools_or_stop_are_a_400(tmp_path):
     body = {"model": "mock-1", "pgw_subjects": TK, "stop": ["Tejaswini"],
             "messages": [{"role": "user", "content": "hello"}]}
     r = client.post("/v1/chat/completions", json=body,
-                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary"})
+                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC})
     assert r.status_code == 400 and not mock.received and "Tejaswini" not in r.text
 
 
@@ -386,7 +386,7 @@ def test_later_turn_reprotects_names_not_declared_again(tmp_path):
             {"role": "user", "content": "Thanks, please loop in tejaswini kulkarni and NANDINI again."}]
     r = client.post("/v1/chat/completions", json={"model": "mock-1", "messages": hist,
                     "pgw_subjects": {"requester": SUBJECTS["requester"]}},
-                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary",
+                    headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **SRC,
                              "X-PGW-Conversation-Id": "c-mt"})
     assert r.status_code == 200
     w = wire(mock).lower()

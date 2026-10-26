@@ -35,7 +35,10 @@ def main():
         "purposes": ["email_draft", "hr_case_summary"], "restore_output": True, "models": ["mock-1"]}]}))
     for title, purpose, behaviour, text in SCENES:
         mock = MockLLMUpstream(behaviour)
-        s = Settings(policy_path="policies/hris-default.yaml", registry_path=str(reg),
+        # The pre-contract (legacy) path, kept to show what detection alone does. Development-only: production
+        # refuses legacy_uncontracted and every uncontracted purpose (SECURITY_BOUNDARY.md).
+        s = Settings(mode="development", legacy_uncontracted=True, integrity_manifest=None,
+                     policy_path="policies/hris-default.yaml", registry_path=str(reg),
                      ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                      master_key=os.urandom(32).hex(), upstream=mock)
         client = TestClient(create_app(s))

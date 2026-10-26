@@ -66,7 +66,7 @@ def _src(sc, *extra: str) -> str:
 
 A1, A2, A3, A4 = _sc("A1"), _sc("A2"), _sc("A3"), _sc("A4")
 B1, B2, B3 = _sc("B1"), _sc("B2"), _sc("B3")
-HR_CONTACTS = "hr-ops@kestrel-dyn.in +91 80 4000 1234 HR Operations, Kestrel Dynamics"   # hr_email_draft@3 guidance
+HR_CONTACTS = "hr-ops@kestrel-dyn.in +91 80 4000 1234 HR Operations, Kestrel Dynamics"   # hr_email_draft guidance
 
 SPECS: list[Spec] = [
     Spec("A1", "A1 ticket summary", _src(A1),

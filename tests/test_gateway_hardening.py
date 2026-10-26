@@ -16,6 +16,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import build_upstream, create_app
+from tests.sealed import production, signing_key, source
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream
 from pgw.product import integrity
@@ -33,21 +34,18 @@ def sha(k):
     return hashlib.sha256(k.encode()).hexdigest()
 
 
-def registry(tmp, contracts_dir=ROOT / "contracts"):
-    reg = tmp / f"apps-{abs(hash(str(contracts_dir)))}.yaml"
-    reg.write_text(yaml.safe_dump({"apps": [
-        {"app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY),
-         "purposes": ["ticket_summary", "salary_comparison", "esi_letter"], "restore_output": True,
-         "models": ["mock-1"],
-         "tasks": {"ticket_summary": str(contracts_dir / "ticket_summary.yaml"),
-                   "salary_comparison": str(contracts_dir / "salary_comparison.yaml"),
-                   "esi_letter": str(contracts_dir / "esi_letter.yaml")}}]}))
-    return reg
+def apps(contracts_dir=ROOT / "contracts"):
+    return [{"app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY),
+             "purposes": ["ticket_summary", "salary_comparison", "esi_letter"], "restore_output": True,
+             "models": ["mock-1"],
+             "tasks": {"ticket_summary": str(contracts_dir / "ticket_summary.yaml"),
+                       "salary_comparison": str(contracts_dir / "salary_comparison.yaml"),
+                       "esi_letter": str(contracts_dir / "esi_letter.yaml")}}]
 
 
-def settings(tmp, upstream=None, **kw):
-    base = dict(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(registry(tmp)),
-                roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+def settings(tmp, upstream=None, policy=None, **kw):
+    """Production mode over a sealed, signed copy of the config (tests/sealed.py)."""
+    base = dict(**production(tmp, apps(), policy=policy), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                 master_key=os.urandom(32).hex(), upstream=upstream or MockLLMUpstream("summarise"))
     base.update(kw)
@@ -55,7 +53,7 @@ def settings(tmp, upstream=None, **kw):
 
 
 def call(client, content, purpose="ticket_summary", stream=False, headers=None, raw=None):
-    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **(headers or {})}
+    h = {"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose), **(headers or {})}
     if raw is not None:
         return client.post("/v1/chat/completions", headers={**h, "content-type": "application/json"}, content=raw)
     body = {"model": "mock-1", "stream": stream, "messages": [{"role": "user", "content": content}]}
@@ -64,72 +62,129 @@ def call(client, content, purpose="ticket_summary", stream=False, headers=None, 
     return client.post("/v1/chat/completions", headers=h, json=body)
 
 
-# --- integrity: the repo's sealed manifest is used by default; any drift stops startup -------------------------
+# --- integrity: registry, policy and contracts are sealed; production needs a trusted signature ----------------
 
 def sealed_tree(tmp):
-    """A copy of policies/ and contracts/ with its own manifest (base = manifest's grandparent)."""
-    for d in ("policies", "contracts"):
+    """A copy of registry/, policies/ and contracts/ with its own manifest (base = manifest's grandparent)."""
+    for d in ("registry", "policies", "contracts"):
         shutil.copytree(ROOT / d, tmp / d, ignore=shutil.ignore_patterns("MANIFEST.json"))
     return tmp / "policies" / "MANIFEST.json"
 
 
 def tree_settings(tmp, manifest, **kw):
-    return settings(tmp, policy_path=str(tmp / "policies/hris-default.yaml"),
-                    registry_path=str(registry(tmp, tmp / "contracts")), integrity_manifest=str(manifest), **kw)
+    """The repo's own registry (hr-helpdesk-pilot, all six contracts) served from a copied, sealed tree."""
+    base = dict(mode="production", trusted_config_pubkey=signing_key()[1], policy_path=str(tmp / "policies/hris-default.yaml"),
+                registry_path=str(tmp / "registry/apps.yaml"), integrity_manifest=str(manifest),
+                ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
+                master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"))
+    base.update(kw)
+    return Settings(**base)
 
 
-def test_repo_manifest_matches_the_shipped_policy_and_contracts(tmp_path):
-    create_app(settings(tmp_path))      # default integrity_manifest = policies/MANIFEST.json
+def signed(tmp):
+    m = sealed_tree(tmp)
+    integrity.seal(m, sign_key=signing_key()[0])
+    return m
+
+
+def test_repo_manifest_seals_the_shipped_registry_policy_and_contracts(tmp_path):
+    # The repo manifest is unsigned: it is valid for development only. Production needs the operator's signature.
+    dev = dict(registry_path=str(ROOT / "registry/apps.yaml"), policy_path=str(ROOT / "policies/hris-default.yaml"),
+               ledger_db_path=str(tmp_path / "l.sqlite"), egress_ledger_path=str(tmp_path / "e.jsonl"),
+               master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"))
+    create_app(Settings(mode="development", **dev))
+    files = json.loads((ROOT / "policies/MANIFEST.json").read_text())["files"]
+    assert "registry/apps.yaml" in files
+    with pytest.raises(integrity.IntegrityError, match="trusted config public key"):
+        create_app(Settings(**dev))                                   # production, no trust anchor
+    with pytest.raises(integrity.IntegrityError, match="not signed"):
+        create_app(Settings(trusted_config_pubkey=signing_key()[1], **dev))
 
 
 def test_integrity_digest_is_recorded_in_every_ledger_row(tmp_path):
     client = TestClient(create_app(settings(tmp_path)))
     call(client, TICKET)
     row = json.loads((tmp_path / "egress.jsonl").read_text().splitlines()[0])
-    assert len(row["integrity"]) == 16 and row["integrity"] != "unchecked"
+    assert len(row["integrity"]) == 16 and row["integrity"] != "unchecked" and row["mode"] == "production"
+
+
+def _edit(path, old, new):
+    t = path.read_text()
+    assert old in t
+    path.write_text(t.replace(old, new, 1))
 
 
 @pytest.mark.parametrize("tamper", [
-    lambda t: (t / "contracts/ticket_summary.yaml").write_text(
-        (t / "contracts/ticket_summary.yaml").read_text().replace("C2: GENERALIZE", "C2: REDACT")),
+    lambda t: _edit(t / "contracts/ticket_summary.yaml", "C2: GENERALIZE", "C2: REDACT"),
     lambda t: (t / "policies/hris-default.yaml").write_text((t / "policies/hris-default.yaml").read_text() + "\n# x\n"),
     lambda t: (t / "contracts/esi_letter.yaml").unlink() or (t / "contracts/esi_letter.yaml").write_text(
         __import__("re").sub(r"(?m)^version: \d+", "version: 99", (ROOT / "contracts/esi_letter.yaml").read_text(), 1)),
-], ids=["contract edited", "policy edited", "version changed"])
+    lambda t: _edit(t / "registry/apps.yaml", "models: [mock-1,", "models: [mock-1, gpt-4o,"),
+    lambda t: _edit(t / "registry/apps.yaml", "band_position]", "band_position, hr_case_summary]"),
+    lambda t: _edit(t / "registry/apps.yaml", "ticket_summary.yaml", "ticket_summary_any_script.yaml"),
+    lambda t: _edit(t / "registry/apps.yaml", "key_sha256: 3254", "key_sha256: 0254"),
+], ids=["contract edited", "policy edited", "version changed", "registry model added", "registry purpose added",
+        "registry task rebound", "registry key replaced"])
 def test_unreviewed_change_stops_startup(tmp_path, tamper):
-    m = sealed_tree(tmp_path)
-    integrity.seal(m)
-    create_app(tree_settings(tmp_path, m))              # sealed tree starts
+    m = signed(tmp_path)
+    create_app(tree_settings(tmp_path, m))              # sealed, signed tree starts in production
     tamper(tmp_path)
     with pytest.raises(integrity.IntegrityError):
         create_app(tree_settings(tmp_path, m))
 
 
-def test_unsealed_contract_stops_startup(tmp_path):
+def test_resealing_without_the_trusted_key_does_not_help(tmp_path):
+    m = signed(tmp_path)
+    _edit(tmp_path / "registry/apps.yaml", "models: [mock-1,", "models: [mock-1, gpt-4o,")
+    integrity.seal(m)                                    # attacker re-seals: unsigned
+    with pytest.raises(integrity.IntegrityError, match="not signed"):
+        create_app(tree_settings(tmp_path, m))
+    other, _ = integrity.generate_signing_key()
+    integrity.seal(m, sign_key=other)                    # attacker re-seals with their own key
+    with pytest.raises(integrity.IntegrityError, match="does not verify"):
+        create_app(tree_settings(tmp_path, m))
+    doc = json.loads(m.read_text())
+    integrity.seal(m, sign_key=signing_key()[0])         # the approver signs the reviewed change: starts
+    create_app(tree_settings(tmp_path, m))
+    doc2 = json.loads(m.read_text())
+    doc2["files"]["registry/apps.yaml"]["sha256"] = doc["files"]["registry/apps.yaml"]["sha256"][::-1]
+    m.write_text(json.dumps(doc2))                       # manifest edited after signing
+    with pytest.raises(integrity.IntegrityError):
+        create_app(tree_settings(tmp_path, m))
+
+
+def test_unsigned_config_is_development_only(tmp_path):
     m = sealed_tree(tmp_path)
     integrity.seal(m)
+    create_app(tree_settings(tmp_path, m, mode="development", trusted_config_pubkey=None))
+    with pytest.raises(integrity.IntegrityError):
+        create_app(tree_settings(tmp_path, m, trusted_config_pubkey=None))
+    with pytest.raises(ValueError, match="integrity manifest"):
+        create_app(tree_settings(tmp_path, m, integrity_manifest=None))
+    with pytest.raises(ValueError, match="PGW_MODE"):
+        create_app(tree_settings(tmp_path, m, mode="staging"))
+
+
+def test_unsealed_contract_stops_startup(tmp_path):
+    m = signed(tmp_path)
     doc = json.loads(m.read_text())
     del doc["files"]["contracts/esi_letter.yaml"]
     m.write_text(json.dumps(doc))
     with pytest.raises(integrity.IntegrityError):
         create_app(tree_settings(tmp_path, m))
+    integrity.seal(m, sign_key=signing_key()[0])
+    (tmp_path / "registry/apps.yaml").rename(tmp_path / "registry/other.yaml")
+    with pytest.raises((integrity.IntegrityError, OSError)):
+        create_app(tree_settings(tmp_path, m))
 
 
-def test_signed_manifest(tmp_path):
+def test_legacy_hmac_signature_still_verifies(tmp_path):
     m = sealed_tree(tmp_path)
     k = os.urandom(32)
-    integrity.seal(m, k)
+    integrity.seal(m, k, sign_key=signing_key()[0])
     create_app(tree_settings(tmp_path, m, policy_signing_key=k.hex(), require_signed_policy=True))
-    with pytest.raises(integrity.IntegrityError):          # wrong key
+    with pytest.raises(integrity.IntegrityError):          # wrong HMAC key
         create_app(tree_settings(tmp_path, m, policy_signing_key=os.urandom(32).hex()))
-    doc = json.loads(m.read_text())
-    doc["files"]["contracts/esi_letter.yaml"]["version"] = 9   # manifest edited after signing
-    m.write_text(json.dumps(doc))
-    with pytest.raises(integrity.IntegrityError):
-        create_app(tree_settings(tmp_path, m, policy_signing_key=k.hex()))
-    integrity.seal(m)                                     # unsigned manifest
-    with pytest.raises(integrity.IntegrityError):
-        create_app(tree_settings(tmp_path, m, require_signed_policy=True))
 
 
 def test_env_settings_have_no_integrity_off_switch():
@@ -198,7 +253,7 @@ def test_contracted_purposes_must_be_buffered(tmp_path):
     p = tmp_path / "pol.yaml"
     p.write_text(yaml.safe_dump(pol))
     with pytest.raises(ContractError):
-        create_app(settings(tmp_path, policy_path=str(p), integrity_manifest=None))
+        create_app(settings(tmp_path, policy=p))
 
 
 def test_streamed_contract_response_releases_nothing_before_the_upstream_finishes(tmp_path):
@@ -309,3 +364,22 @@ def test_no_raw_values_in_logs_errors_or_ledger(tmp_path, caplog):
                 assert r.status_code == 502 and not any(v in r.text for v in RAW + ["Suresh Menon"])
     logs = caplog.text + (tmp_path / "egress.jsonl").read_text()
     assert not any(v in logs for v in RAW + ["Suresh Menon", "PAY-88231"])
+
+
+def test_verified_bytes_are_the_parsed_bytes(tmp_path, monkeypatch):
+    """Race: the registry is tampered while it is parsed and restored before verification. The gateway must verify
+    the bytes it parsed, so this stops startup instead of serving an unverified registry."""
+    import pgw.gateway.app as gw
+    m = signed(tmp_path)
+    reg = tmp_path / "registry/apps.yaml"
+    good = reg.read_text()
+    reg.write_text(good.replace("models: [mock-1,", "models: [mock-1, gpt-4o,"))
+    real = gw.load_registry
+
+    def racing(path, data=None):
+        out = real(path, data)
+        reg.write_text(good)          # the valid file is back on disk before integrity.verify runs
+        return out
+    monkeypatch.setattr(gw, "load_registry", racing)
+    with pytest.raises(integrity.IntegrityError):
+        create_app(tree_settings(tmp_path, m))

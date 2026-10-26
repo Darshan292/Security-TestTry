@@ -33,17 +33,30 @@ def client(tmp):
                   "salary_comparison": str(ROOT / "contracts/salary_comparison.yaml")},
         "restore_output": True, "models": ["mock-1"]}]}))
     mock = MockLLMUpstream("summarise")
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
+    # Development mode: this throwaway registry is not sealed (production needs a signed manifest).
+    s = Settings(mode="development", integrity_manifest=None,
+                 policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
                  roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"), ledger_db_path=str(tmp / "l.sqlite"),
                  egress_ledger_path=str(tmp / "egress.jsonl"), master_key=os.urandom(32).hex(), upstream=mock)
     return TestClient(create_app(s)), mock
 
 
-def scene(title, purpose, content):
+def input_source(purpose: str) -> dict:
+    """These fixed synthetic inputs stand for the contract's allowlisted source-side export (SECURITY_BOUNDARY.md)."""
+    from pgw.product.contracts import load_contract
+    path = ROOT / f"contracts/{purpose}.yaml"
+    if not path.exists():   # an unregistered/uncontracted purpose: the gateway refuses it before this matters
+        return {}
+    return {"X-PGW-Input-Source": sorted(load_contract(path).external_input.sanitizers)[0]}
+
+
+def scene(title, purpose, content, attest=True):
     tmp = Path(tempfile.mkdtemp())
     c, mock = client(tmp)
-    r = c.post("/v1/chat/completions", headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose},
-               json={"model": "mock-1", "messages": [{"role": "user", "content": content}]})
+    r = c.post("/v1/chat/completions", headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose,
+                                                **(input_source(purpose) if attest else {})},
+               json={"model": "mock-1", "messages": [{"role": "user", "content": content}],
+                     **({"pgw_subjects": {"requester": {"name": "Imran Ansari"}}} if purpose == "ticket_summary" else {})})
     print("=" * 100, f"\n{title}\n" + "-" * 100)
     print("APP SENT:\n ", content.replace("\n", "\n  "))
     if mock.received:
@@ -69,3 +82,5 @@ if __name__ == "__main__":
           json.dumps({**PAYLOAD, "employees": PAYLOAD["employees"][:1]}))
     scene("FAIL CLOSED 2 - script the gateway cannot protect (C4)", "ticket_summary", "सारांश: रामलाल तिवारी का क्लेम")
     scene("FAIL CLOSED 3 - purpose the app is not registered for", "email_draft", "Draft an email")
+    scene("FAIL CLOSED 4 - free text without a source-side sanitizer attestation (NOT_EXPECTED boundary)",
+          "ticket_summary", TICKET, attest=False)

@@ -13,6 +13,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from pgw.gateway.app import create_app
+from tests.sealed import production, source
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream, OpenAICompatUpstream
 from pgw.private_llm import app as private_app
@@ -41,14 +42,12 @@ class LocalModel(OpenAICompatUpstream):
 
 
 def make(tmp, private=None, url=None, contract="ticket_summary_any_script"):
-    reg = tmp / "apps.yaml"
-    reg.write_text(yaml.safe_dump({"apps": [{
+    cfg = production(tmp, [{
         "app_id": "pilot", "tenant": "acme", "key_sha256": hashlib.sha256(KEY.encode()).hexdigest(),
         "restore_output": True, "models": ["mock-1"], "purposes": [contract],
-        "tasks": {contract: str(ROOT / f"contracts/{contract}.yaml")}}]}))
+        "tasks": {contract: str(ROOT / f"contracts/{contract}.yaml")}}])
     ext = MockLLMUpstream("summarise")
-    s = Settings(policy_path=str(ROOT / "policies/hris-default.yaml"), registry_path=str(reg),
-                 ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
+    s = Settings(**cfg, ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=ext, private_upstream=private, private_upstream_url=url)
     return TestClient(create_app(s)), ext
 
@@ -56,7 +55,7 @@ def make(tmp, private=None, url=None, contract="ticket_summary_any_script"):
 def call(client, text, purpose="ticket_summary_any_script", **extra):
     return client.post("/v1/chat/completions", json={"model": "mock-1", "pgw_subjects": SUBJ, **extra,
                        "messages": [{"role": "user", "content": text}]},
-                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose})
+                       headers={"Authorization": f"Bearer {KEY}", "X-PGW-Purpose": purpose, **source(purpose)})
 
 
 def test_c4_content_goes_only_to_the_private_model(tmp_path):

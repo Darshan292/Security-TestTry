@@ -7,6 +7,12 @@ reports, per case, PRIVACY and BUSINESS results separately; a case passes overal
 dependent judgements are listed from rubric.yaml as PENDING human review. `--judge` adds an LLM judge as a
 secondary signal (never pass/fail). The full report (with excerpts of synthetic text) is written next to the
 captures; a content-free summary goes to eval/results/.
+
+Scope: this is the FIXED-SCENARIO acceptance regression suite for the ten pilot scenarios, not a general evaluator.
+Its privacy checks look for the declared or expected canary values of each scenario (specs.py raw_values /
+never_returned), plus leftover aliases and markers. A privacy PASS does not mean the outbound text holds no other
+personal data. Privacy is NOT_EVALUABLE unless every captured outbound exchange is present and parseable
+(SECURITY_BOUNDARY.md §5).
 """
 from __future__ import annotations
 
@@ -40,7 +46,11 @@ def load_captures(d: Path) -> dict[str, dict]:
                 raw = json.loads(ib[0])["choices"][0]["message"]["content"] or ""
             except (ValueError, KeyError, IndexError, TypeError):
                 raw = ""
-        out[rec["scenario"]] = {"answer": rec.get("restored_response") or "", "outbound": ob[0] if ob else None,
+        # every exchange is kept: privacy is NOT_EVALUABLE unless all of them can be inspected (checks.py)
+        ob = list(ob)
+        if len(ib) > len(ob):   # an exchange with a response but no captured request: cannot be inspected
+            ob += [None] * (len(ib) - len(ob))
+        out[rec["scenario"]] = {"answer": rec.get("restored_response") or "", "outbound": ob or None,
                                 "provider_raw": raw}
     sheet = d / "human_review.md"
     if sheet.exists():
@@ -104,7 +114,8 @@ def main(argv=None) -> int:
         for it in items:
             lines.append(f"- [HUMAN REVIEW PENDING] `{it['id']}`: {it['question']}")
         if args.judge and cap and items:
-            jv = judge(cap["outbound"] or "", cap["provider_raw"] or "", items)
+            jv = judge("\n\n".join(o for o in (cap["outbound"] or []) if isinstance(o, str)),
+                       cap["provider_raw"] or "", items)
             for iid, v in jv.items():
                 lines.append(f"- [LLM judge, secondary only] `{iid}`: {v['verdict']} — {v['reason']}")
         lines.append("")
