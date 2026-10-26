@@ -55,6 +55,8 @@ def _tr(stage: str, **data) -> None:
     except Exception as e:  # a broken observer must never affect the request
         log.warning("event='trace_failed' error_type=%r", type(e).__name__)
 
+FORWARDED = ("model", "stream", "temperature", "max_tokens", "max_completion_tokens", "top_p", "stop", "tools",
+             "tool_choice", "n", "stream_options")   # what may reach the provider besides the protected messages
 ALLOWED_TOP = {"model", "messages", "stream", "temperature", "max_tokens", "max_completion_tokens", "top_p",
                "stop", "tools", "tool_choice", "n", "stream_options",
                "pgw_subjects"}   # gateway-only fields (pgw_*) are never forwarded
@@ -191,6 +193,60 @@ def _text_size(x) -> int:
     return 0
 
 
+_NUM = (int, float)
+_TOOL_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _is_num(v, lo, hi) -> bool:
+    return isinstance(v, _NUM) and not isinstance(v, bool) and lo <= v <= hi
+
+
+def _is_int(v, lo, hi) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+
+
+def check_parameters(body: dict, contracted: bool) -> None:
+    """Every non-message field leaves the building with the request, so each one is held to a strict type and
+    range: a parameter can never carry free text (audit finding: values in temperature/max_tokens went out raw).
+    Contracted purposes take no tools, tool_choice or stop at all: no contract needs them and they are free text.
+    Raises _Reject(400); the message never echoes a value."""
+    def bad(name):
+        raise _Reject(400, "invalid_parameter", f"{name}: invalid type or value")
+    if "stream" in body and not isinstance(body["stream"], bool):
+        bad("stream")
+    if "temperature" in body and not _is_num(body["temperature"], 0, 2):
+        bad("temperature")
+    if "top_p" in body and not _is_num(body["top_p"], 0, 1):
+        bad("top_p")
+    for k in ("max_tokens", "max_completion_tokens"):
+        if k in body and not _is_int(body[k], 1, 200_000):
+            bad(k)
+    if "n" in body and not _is_int(body["n"], 1, 1):
+        raise _Reject(400, "unsupported_parameter", "n must be 1")
+    if "stream_options" in body:
+        so = body["stream_options"]
+        if not isinstance(so, dict) or set(so) - {"include_usage"} or not isinstance(so.get("include_usage", False), bool):
+            bad("stream_options")
+    if "stop" in body:
+        st = body["stop"]
+        items = [st] if isinstance(st, str) else st
+        if not isinstance(items, list) or len(items) > 4 or not all(isinstance(x, str) and len(x) <= 32 for x in items):
+            bad("stop")
+    if contracted and any(k in body for k in ("tools", "tool_choice", "stop")):
+        # tools and stop sequences are free text that no detector here fully covers (NER does not scan them)
+        raise _Reject(400, "unsupported_parameter", "tools and stop are not available for contracted purposes")
+    if "tool_choice" in body:
+        tc = body["tool_choice"]
+        ok = tc in ("none", "auto", "required") or (
+            isinstance(tc, dict) and set(tc) == {"type", "function"} and tc["type"] == "function"
+            and isinstance(tc["function"], dict) and set(tc["function"]) == {"name"}
+            and isinstance(tc["function"]["name"], str) and _TOOL_NAME.fullmatch(tc["function"]["name"]))
+        if not ok:
+            bad("tool_choice")
+    if "tools" in body and not isinstance(body["tools"], list):
+        bad("tools")
+
+
 def _sealed_paths(settings: Settings, contracts_paths) -> list[str]:
     return [settings.registry_path, settings.policy_path, *sorted(set(contracts_paths))]
 
@@ -214,9 +270,9 @@ def check_startup_mode(settings: Settings, registry: list[AppEntry]) -> None:
                                     "(uncontracted purposes are not served)")
 
 
-def load_roster(path: str, key: bytes) -> RosterIndex:
+def load_roster(path: str, key: bytes, data: bytes | None = None) -> RosterIndex:
     idx = RosterIndex(key)
-    for line in Path(path).read_text().splitlines():
+    for line in (Path(path).read_text() if data is None else data.decode("utf-8")).splitlines():
         if line.strip():
             idx.add_employee(json.loads(line))
     return idx
@@ -257,6 +313,12 @@ def create_app(settings: Settings) -> Starlette:
 
     registry = load_registry(settings.registry_path, read(settings.registry_path))
     sealed = _sealed_paths(settings, [c for a in registry for _, c in a.tasks])
+    # The roster is a detection input: swapping it for an empty one silently disables roster matching (audit S4).
+    # Production seals it like the rest of the config; development may run an unsealed roster (warned).
+    if settings.roster_path and prod:
+        sealed.append(settings.roster_path)
+    elif settings.roster_path:
+        _log(logging.WARNING, event="roster_unsealed_development_only")
     for p in sealed:
         read(p)
     if settings.integrity_manifest is not None:
@@ -280,7 +342,8 @@ def create_app(settings: Settings) -> Starlette:
     for p in contracts:   # contracted (RESTRICTED-by-default) purposes never stream unrestored text
         if policy.stream_mode(p) != "buffered":
             raise ContractError(f"purpose {p!r}: contracted purposes must use buffered output")
-    roster = load_roster(settings.roster_path, keys.derive("*", "edm")) if settings.roster_path else None
+    roster = (load_roster(settings.roster_path, keys.derive("*", "edm"), read(settings.roster_path))
+              if settings.roster_path else None)
     ledger = RestoreLedger(keys.derive("*", "ledger"), settings.ledger_db_path, keys=keys)
     protector = Protector(policy, keys, roster, ledger)
     # Contracted purposes (Path A and the free-text field of Path B) also get the local NER. A model that does
@@ -441,8 +504,7 @@ def create_app(settings: Settings) -> Starlette:
         model = body.get("model")
         if not isinstance(model, str) or not isinstance(body.get("messages"), list) or not body["messages"]:
             raise _Reject(400, "invalid_request", "model (string) and non-empty messages (list) are required")
-        if body.get("n", 1) != 1:
-            raise _Reject(400, "unsupported_parameter", "n must be 1")
+        check_parameters(body, contract is not None)
         if model not in app.models:
             raise _Reject(403, "model_forbidden", "model not permitted for this app")
         if len(body["messages"]) > settings.max_messages:
@@ -598,7 +660,8 @@ def create_app(settings: Settings) -> Starlette:
                 except Exception as e:
                     _log(logging.ERROR, event="ledger_record_failed", request_id=rid, error_type=type(e).__name__)
                     raise _Reject(503, "ledger_unavailable", "conversation ledger unavailable; request not sent") from None
-        up_body = {k: v for k, v in body.items() if k != "messages" and not k.startswith("pgw_")}
+        # explicit allowlist: only parameters check_parameters() has typed ever reach the provider
+        up_body = {k: body[k] for k in FORWARDED if k in body}
         up_body["messages"] = prot.messages
         if contract is not None:   # tell the model how to treat placeholders (added after detection)
             note = PLACEHOLDER_NOTE + (("\n\n" + contract.guidance) if contract.guidance else "")

@@ -81,7 +81,7 @@ NER_MISS = ("Ticket PAY-90412 | Raised by: Imran Ansari (KD-11914)\n"
             "Reply from Nandini: the arrears file was re-run on 30 Sep 2026; the amount will be paid in October.\n")
 BAND = {"instruction": "Explain to the HR manager where this employee sits in their pay band, in two lines.",
         "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063", "annual_ctc": 2180000}],
-        "band": [{"name": "P3", "min_ctc": 1800000, "max_ctc": 2600000}]}
+        "band": [{"name": "P3"}]}
 ESI = {"instruction": "Explain to the employee whether ESI applies to them, in two lines.",
        "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063", "monthly_gross": 19800}]}
 

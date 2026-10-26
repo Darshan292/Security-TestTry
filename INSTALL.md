@@ -13,7 +13,7 @@ pip install --require-hashes -r requirements/ner.txt -r requirements/ner-model.t
 pip install --require-hashes -r requirements/dev.txt
 ```
 
-`ner.txt` and `dev.txt` are self-contained supersets of `runtime.txt` (they are compiled with it as a constraint), so installing them alone is enough.
+`ner.txt` and `dev.txt` are **not** supersets of `runtime.txt`: they are compiled with it only as a constraint (`-c`), so shared packages get the same pins but runtime packages are not included. Always install `runtime.txt` first, then the extras you need.
 
 ## The spaCy model is verified by hand
 

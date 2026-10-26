@@ -36,10 +36,12 @@ def _place(src: Path, dest_dir: Path) -> str:
     return name
 
 
-def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, sign: bool = True) -> dict:
-    """Settings kwargs for a production-mode gateway serving `apps` (task paths may be absolute anywhere)."""
+def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, sign: bool = True,
+               roster: str | Path | None = None) -> dict:
+    """Settings kwargs for a production-mode gateway serving `apps` (task paths may be absolute anywhere).
+    `roster` (optional) is sealed with the config, as production requires."""
     base = Path(tmp) / "cfg"
-    for d in ("registry", "policies", "contracts"):
+    for d in ("registry", "policies", "contracts", "roster"):
         (base / d).mkdir(parents=True, exist_ok=True)
     pol = Path(policy) if policy else ROOT / "policies/hris-default.yaml"
     pol_name = _place(pol, base / "policies")
@@ -51,11 +53,14 @@ def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, si
         out.append(a)
     reg = base / "registry/apps.yaml"
     reg.write_text(yaml.safe_dump({"version": 1, "apps": out}, sort_keys=False))
+    extra = {}
+    if roster:
+        extra["roster_path"] = str(base / "roster" / _place(Path(roster), base / "roster"))
     manifest = base / "policies/MANIFEST.json"
     priv, pub = signing_key()
     integrity.seal(manifest, sign_key=priv if sign else None)
     return {"mode": "production", "registry_path": str(reg), "policy_path": str(base / "policies" / pol_name),
-            "integrity_manifest": str(manifest), "trusted_config_pubkey": pub}
+            "integrity_manifest": str(manifest), "trusted_config_pubkey": pub, **extra}
 
 
 def legacy_dev(registry_path: str | Path) -> dict:

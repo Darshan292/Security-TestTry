@@ -1,7 +1,7 @@
 # Data contract: explain where an employee sits in their pay band (LOCAL_COMPUTE). The exact CTC stays inside
 # the gateway; only a coarse position (which third of the band) crosses, next to an aliased identity.
 contract: band_position
-version: 2
+version: 3
 task_type: pay_band_position_explanation
 route: LOCAL_COMPUTE
 compute: band_position
@@ -35,9 +35,14 @@ input_schema:
     min: 1
     max: 1
     items:
-      name: {type: str, max_len: 40, class: C0}
-      min_ctc: {type: int, min: 1, max: 1000000000, class: C0}
-      max_ctc: {type: int, min: 1, max: 1000000000, class: C0}
+      name: {type: str, max_len: 8, class: C0, one_of: pay_bands}   # limits come from the sealed table below
+# Company pay bands (public policy, C0). Sealed with the contract: callers name a band, they never supply limits.
+reference:
+  pay_bands:
+    P1: [600000, 1000000]
+    P2: [1000000, 1800000]
+    P3: [1800000, 2600000]
+    P4: [2600000, 4000000]
 outputs:
   employee_name: {derived_from: C1, egress: TRANSFORMED, entity: PERSON}
   employee_id: {derived_from: C1, egress: TRANSFORMED, entity: EMPLOYEE_ID}

@@ -31,7 +31,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "policies" / "MANIFEST.json"
-SEALED_GLOBS = ("registry/*.yaml", "policies/*.yaml", "contracts/*.yaml")
+SEALED_GLOBS = ("registry/*.yaml", "policies/*.yaml", "contracts/*.yaml", "roster/*.jsonl")
 _SIG_CONTEXT = b"pgw-config-manifest-v1\n"   # domain separation for the Ed25519 signature
 
 
@@ -52,6 +52,8 @@ def _rel(path: Path, base: Path) -> str:
 
 
 def _version(path: Path, data: bytes | None = None) -> int:   # a registry without a version seals as 0
+    if Path(path).suffix == ".jsonl":   # data files (the roster) carry no version; the hash is what is sealed
+        return 0
     raw = yaml.safe_load(path.read_text() if data is None else data.decode("utf-8"))
     return int(raw.get("version", 0)) if isinstance(raw, dict) else 0
 

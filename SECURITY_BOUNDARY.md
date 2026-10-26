@@ -189,3 +189,33 @@ M1–M3). It is not a general evaluator.
 5. **Provider behaviour.** Retention and region are attested by the operator (`PGW_PROVIDER_*`), not verified.
 6. **Tenant-specific policy.** Not supported (§3).
 7. **Declared subjects' completeness.** People the app does not declare rely on detection.
+8. **Gateway settings outside the manifest.** The NER model, the egress allowlist and timeouts come from the
+   environment, not from the signed config. Production with NER switched off starts with only a warning.
+9. **Values that cannot be declared.** Declared subjects cover name, employee ID, email and phone. A UAN, passport,
+   voter ID, home address, an unusual ID format or a salary written as plain digits ("21,00,000") in free text is
+   protected only if a detector finds it.
+
+## 7. Independent audit (2026-10): what was confirmed and what changed
+
+An external audit attacked the code merged in `a465d55`. Every claim was re-checked with our own probes against
+that commit (mock provider, synthetic data). The auditor's own scripts were not run.
+
+| # | Finding | Verified | Status |
+|---|---|---|---|
+| S1 | Request parameters (`temperature`, `max_tokens`, `top_p`, `stream_options`, `tool_choice`, …) carried data to the provider unchecked | Confirmed | **Fixed.** Every parameter now has a strict type and range. The outgoing request is built from an explicit allowlist. Contracted purposes refuse `tools`, `tool_choice` and `stop`, which are free text (`check_parameters`, `tests/test_audit_regressions.py`) |
+| S2 | `band_position`: the band name and limits were caller-supplied and crossed raw, so any text, or an exact salary to ₹1, could leave | Confirmed | **Fixed.** Pay bands are a sealed `reference` table in the signed contract; the caller only names a band. Contracts are refused if a C0 input is not a key of a sealed table, and table ranges must be at least 20% wide |
+| S3 | `X-PGW-Input-Source` is a public constant; any caller passes | Confirmed (already documented, §4) | **Open.** Proposed fix: the source system signs a hash of the content it cleaned with its own key |
+| S4 | The roster was not sealed; an emptied roster disabled name matching | Confirmed | **Fixed for the roster.** Production seals it with the config. The NER and env settings remain open (§6.8) |
+| S5 | Free-text leaks on realistic tickets (auditor 13/36; our re-check 8/11) | Confirmed | **Open, structural.** Lowercase or undeclared names, UAN, passport, voter ID, address and plain-digit salaries leak. Declaring people as subjects removed the name leaks |
+| S6 | ID formats missed (auditor 11/15; our re-check 5/18: bare Aadhaar, spaced PAN, uncued account number, phone in words, IFSC by policy) | Partly confirmed | **Open.** No detector tuning in this round |
+| S7 | Medical or harassment details sent | Confirmed (expected, §4) | **Open, by design.** Enforced only at the source |
+| C1 | Equal salaries were reported as one person "having the higher CTC" | Confirmed | **Fixed.** A fixed `ranking` sentence says "equal" on a tie |
+| C2 | "USD 142,000" was banded as ₹0–5L | Confirmed | **Fixed.** Foreign-currency amounts get no INR band |
+| C3/C4 | "Payment of Gratuity Act" aliased as a person; ₹7,000 statutory cap generalised | Confirmed | **Open.** These are detector false positives, deliberately not tuned in this round |
+| C5/C6 | Bands shown in drafted emails; honorific guessed from a placeholder ("Mr. Priya") | Confirmed | **Mitigated in guidance.** `hr_email_draft` now tells the model not to copy bands and not to use honorifics. Bands are not restored by design |
+| C7 | INSTALL.md said `dev.txt`/`ner.txt` include runtime packages | Confirmed | **Fixed** in INSTALL.md |
+
+**What this means.** The audit's main verdict stands. Detection in free text leaks, so free text must not go to an
+external model unless its source really reduces it. Run detection as a backstop, not as the control. The changes
+above close the side channels the gateway itself was responsible for.
+

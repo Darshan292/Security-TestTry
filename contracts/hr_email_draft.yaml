@@ -1,7 +1,7 @@
 # Data contract: draft an email from HR to an employee (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. The draft is restored for a human to review and send; it is never auto-sent.
 contract: hr_email_draft
-version: 4
+version: 5
 task_type: hr_email_draft
 route: EXT_PSEUDO
 data_classes:
@@ -30,8 +30,11 @@ guidance: >-
   You are writing on behalf of HR Operations, Kestrel Dynamics. The recipient is the employee named in the request.
   The only contact details for reaching HR are hr-ops@kestrel-dyn.in and +91 80 4000 1234 (HR helpdesk). Never
   present the recipient's own email address, phone number or employee ID as a way to contact HR. Sign the email as
-  "HR Operations, Kestrel Dynamics". Do not add template fillers such as [Company Name]. Output only the email
-  (subject line and body), ready to send after human review.
+  "HR Operations, Kestrel Dynamics". Do not add template fillers such as [Company Name]. Placeholders carry no
+  gender: greet the recipient as "Dear" followed by the placeholder, with no Mr/Ms/Mrs, and use pronouns only if
+  the request itself uses them. A salary shown as a band such as [COMPENSATION ...] is withheld: never copy the
+  band into the email; refer to it in words (e.g. "your revised salary"). Output only the email (subject line and
+  body), ready to send after human review.
 # Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
 # gateway. Free text reaches the external model only if the calling app sends X-PGW-Input-Source naming one of these
 # source-side sanitizers/exports (an attestation by the app owner, recorded in the audit ledger; the gateway does not

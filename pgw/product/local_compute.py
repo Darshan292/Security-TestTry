@@ -40,11 +40,13 @@ def restore_raw(text: str, raw: dict) -> str:
 
 # --- payload validation ------------------------------------------------------------------------------------
 
-def _check(value, spec: dict, path: str):
+def _check(value, spec: dict, path: str, reference: dict | None = None):
     t = spec.get("type")
     if t == "str":
         if not isinstance(value, str) or not value.strip() or len(value) > int(spec.get("max_len", 200)):
             raise PayloadError(f"{path}: expected a non-empty string within the length limit")
+        if "one_of" in spec and value not in (reference or {}).get(spec["one_of"], {}):
+            raise PayloadError(f"{path}: not a value from the contract's reference table")
     elif t == "int":
         if isinstance(value, bool) or not isinstance(value, int):
             raise PayloadError(f"{path}: expected an integer")
@@ -54,16 +56,16 @@ def _check(value, spec: dict, path: str):
         if not isinstance(value, list) or not int(spec.get("min", 0)) <= len(value) <= int(spec.get("max", 100)):
             raise PayloadError(f"{path}: expected a list of the allowed length")
         for i, item in enumerate(value):
-            _check_object(item, spec["items"], f"{path}[{i}]")
+            _check_object(item, spec["items"], f"{path}[{i}]", reference)
     else:
         raise PayloadError(f"{path}: unsupported schema type")
 
 
-def _check_object(obj, schema: dict, path: str = "payload"):
+def _check_object(obj, schema: dict, path: str = "payload", reference: dict | None = None):
     if not isinstance(obj, dict) or set(obj) != set(schema):
         raise PayloadError(f"{path}: fields do not match the data contract")
     for k, spec in schema.items():
-        _check(obj[k], spec, f"{path}.{k}")
+        _check(obj[k], spec, f"{path}.{k}", reference)
 
 
 def parse_payload(messages: list, contract: Contract) -> dict:
@@ -76,7 +78,7 @@ def parse_payload(messages: list, contract: Contract) -> dict:
         payload = json.loads(messages[0]["content"])
     except ValueError:
         raise PayloadError("payload is not valid JSON") from None
-    _check_object(payload, contract.input_schema)
+    _check_object(payload, contract.input_schema, reference=contract.reference)
     return payload
 
 
@@ -117,20 +119,23 @@ def surface_forms(v) -> list[str]:
 
 # --- functions (each returns {output name: value}; only contract-declared outputs can ever leave) ----------
 
-def salary_difference(payload: dict) -> dict:
+def salary_difference(payload: dict, contract=None) -> dict:
     a, b = payload["employees"]
     hi, lo = (a, b) if a["annual_ctc"] >= b["annual_ctc"] else (b, a)
     diff = hi["annual_ctc"] - lo["annual_ctc"]
     pct = (Decimal(diff) * 100 / Decimal(lo["annual_ctc"])).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    # Equal CTCs are reported as equal, never as one person "having the higher CTC" (audit finding).
+    ranking = ("Both have exactly the same annual CTC." if diff == 0
+               else "The first of these two has the higher annual CTC.")
     return {"higher_name": hi["name"], "higher_id": hi["employee_id"], "lower_name": lo["name"],
-            "lower_id": lo["employee_id"], "difference": inr(diff), "pct_of_lower": f"{pct}%",
+            "lower_id": lo["employee_id"], "difference": inr(diff), "pct_of_lower": f"{pct}%", "ranking": ranking,
             "difference_value": diff, "higher_ctc": hi["annual_ctc"], "lower_ctc": lo["annual_ctc"]}
 
 
 ESI_WAGE_CEILING = 21000   # statutory monthly gross ceiling for ESI coverage (public, C0)
 
 
-def esi_eligibility(payload: dict) -> dict:
+def esi_eligibility(payload: dict, contract=None) -> dict:
     e = payload["employee"][0]
     eligible = e["monthly_gross"] <= ESI_WAGE_CEILING
     return {"employee_name": e["name"], "employee_id": e["employee_id"],
@@ -139,10 +144,12 @@ def esi_eligibility(payload: dict) -> dict:
             "monthly_gross": e["monthly_gross"]}
 
 
-def band_position(payload: dict) -> dict:
-    """Where an employee's CTC sits in their pay band (band limits are company policy, C0)."""
+def band_position(payload: dict, contract=None) -> dict:
+    """Where an employee's CTC sits in their pay band. Band limits are company policy (C0) and come from the
+    contract's sealed `reference.pay_bands`, never from the caller (audit S2: caller-supplied limits crossed raw)."""
     e, b = payload["employee"][0], payload["band"][0]
-    lo, hi, ctc = b["min_ctc"], b["max_ctc"], e["annual_ctc"]
+    lo, hi = contract.reference["pay_bands"][b["name"]]
+    ctc = e["annual_ctc"]
     if hi <= lo:
         raise ValueError("band maximum must exceed band minimum")
     if ctc < lo:
@@ -172,7 +179,7 @@ def run(contract: Contract, messages: list) -> ComputeResult:
             declared.append((entity, str(value)))
         else:                                                # C2/C3 inputs never leave in any form
             withheld += [(entity, f) for f in surface_forms(value)]
-    outputs = FUNCTIONS[contract.compute](payload)           # function name validated at startup
+    outputs = FUNCTIONS[contract.compute](payload, contract)  # function name validated at startup
     fields, raw = {}, {}
     for name, value in outputs.items():
         spec = contract.outputs.get(name) or Output(name, DataClass.D, "INTERNAL")

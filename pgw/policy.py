@@ -62,6 +62,9 @@ class PolicyPack:
 
 _YEAR = re.compile(r"(19|20)\d{2}")
 _UNIT = re.compile(r"(lakhs?|lacs?|lpa|l|crores?|cr|k)\b", re.IGNORECASE)
+# Bands are INR bands; an amount in another currency gets no band rather than a wrong one (audit: "USD 142,000"
+# was banded as ₹0–5L).
+_FOREIGN = re.compile(r"\b(?:usd|eur|gbp|aed|sgd|cad|aud|jpy|chf)\b|[$€£¥]", re.IGNORECASE)
 
 
 def _inr_amount(s: str) -> float | None:
@@ -83,7 +86,7 @@ def generalize(t: EntityType, value: str) -> str:
         return f"[born {y.group()[:3]}0s]" if y else "[DATE_OF_BIRTH]"
     if t is EntityType.COMPENSATION:
         n = _inr_amount(value)
-        if n is None or n <= 0:
+        if n is None or n <= 0 or _FOREIGN.search(value):
             return "[COMPENSATION]"
         lakh = n / 1e5
         if lakh < 1:

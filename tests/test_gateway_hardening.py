@@ -45,7 +45,7 @@ def apps(contracts_dir=ROOT / "contracts"):
 
 def settings(tmp, upstream=None, policy=None, **kw):
     """Production mode over a sealed, signed copy of the config (tests/sealed.py)."""
-    base = dict(**production(tmp, apps(), policy=policy), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+    base = dict(**production(tmp, apps(), policy=policy, roster=ROOT / "tests/fixtures/slice_roster.jsonl"),
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                 master_key=os.urandom(32).hex(), upstream=upstream or MockLLMUpstream("summarise"))
     base.update(kw)

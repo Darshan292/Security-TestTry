@@ -43,9 +43,9 @@ def make(tmp, behaviour="summarise", ner=None, tasks=None):
                       for p in ("ticket_summary", "hr_case_explanation", "salary_comparison")}
     cfg = production(tmp, [{
         "app_id": "pilot", "tenant": "acme", "key_sha256": sha(KEY), "restore_output": True, "models": ["mock-1"],
-        "purposes": sorted(tasks), "tasks": tasks}])
+        "purposes": sorted(tasks), "tasks": tasks}], roster=ROOT / "tests/fixtures/slice_roster.jsonl")
     mock = MockLLMUpstream(behaviour)
-    s = Settings(**cfg, roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+    s = Settings(**cfg,
                  ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                  master_key=os.urandom(32).hex(), upstream=mock, ner_model=ner)
     return TestClient(create_app(s)), mock
@@ -396,7 +396,7 @@ def test_later_turn_reprotects_names_not_declared_again(tmp_path):
 def test_raw_c0_outputs_are_not_regeneralised(tmp_path):
     client, mock = make(tmp_path, tasks={"band_position": str(ROOT / "contracts/band_position.yaml")})
     body = {"instruction": "Explain.", "employee": [{"name": "Hetal Shah", "employee_id": "KD-11063",
-            "annual_ctc": 2180000}], "band": [{"name": "P3", "min_ctc": 1800000, "max_ctc": 2600000}]}
+            "annual_ctc": 2180000}], "band": [{"name": "P3"}]}
     r = call(client, json.dumps(body), purpose="band_position")
     assert r.status_code == 200, r.text
     w = wire(mock)

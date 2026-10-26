@@ -113,6 +113,7 @@ class Contract:
     guidance: str | None = None                   # task guidance for the model (system message, sealed)
     org_contacts: tuple[str, ...] = ()            # organisational C0 contacts (role mailbox, helpdesk number)
     redaction_text: dict = field(default_factory=dict)   # C3 type -> words shown instead of a "[TYPE]" marker
+    reference: dict = field(default_factory=dict)         # sealed public tables, e.g. pay_bands (C0)
     external_input: ExternalInput = ExternalInput(frozenset())   # required in every contract file
 
     @property
@@ -133,12 +134,35 @@ def template_fields(template: str) -> set[str]:
     return {f for _, f, _, _ in string.Formatter().parse(template) if f}
 
 
-def _parse_schema(schema: dict, path: str = "input_schema") -> None:
+_REF_KEY = re.compile(r"[A-Za-z0-9-]{1,8}")
+
+
+def _parse_reference(raw) -> dict:
+    """Sealed reference tables (company policy, C0), e.g. pay_bands: {P3: [min, max]}. Public constants live here,
+    in the signed contract, so callers never supply a number or label that crosses raw (audit finding S2)."""
+    out = {}
+    for table, rows in (raw or {}).items():
+        if not isinstance(rows, dict) or not 1 <= len(rows) <= 100:
+            raise ContractError(f"reference.{table}: 1-100 entries")
+        parsed = {}
+        for k, v in rows.items():
+            if not _REF_KEY.fullmatch(str(k)) or not (isinstance(v, list) and len(v) == 2 and all(
+                    isinstance(x, int) and not isinstance(x, bool) and x >= 1 for x in v)):
+                raise ContractError(f"reference.{table}.{k}: short key and [min, max] integers")
+            lo, hi = v
+            if hi * 5 < lo * 6:    # a narrow range would disclose the value it brackets
+                raise ContractError(f"reference.{table}.{k}: range must be at least 20% wide")
+            parsed[str(k)] = (lo, hi)
+        out[str(table)] = parsed
+    return out
+
+
+def _parse_schema(schema: dict, path: str = "input_schema", reference: dict | None = None) -> None:
     for name, spec in schema.items():
         if not isinstance(spec, dict) or spec.get("type") not in ("str", "int", "list"):
             raise ContractError(f"{path}.{name}: type must be str, int or list")
         if spec["type"] == "list":
-            _parse_schema(spec.get("items") or {}, f"{path}.{name}.items")
+            _parse_schema(spec.get("items") or {}, f"{path}.{name}.items", reference)
             continue
         cls = spec.get("class")
         if cls is None:
@@ -150,6 +174,12 @@ def _parse_schema(schema: dict, path: str = "input_schema") -> None:
             raise ContractError(f"{path}.{name}: invalid input class {cls}")
         if c is not DataClass.C0 and "entity" not in spec:
             raise ContractError(f"{path}.{name}: C1-C3 fields must name their entity type")
+        if c is DataClass.C0:
+            # A caller-supplied "public" value is never inspected, so it must not be able to carry anything:
+            # C0 inputs are only keys of a sealed reference table.
+            if spec["type"] != "str" or spec.get("one_of") not in (reference or {}):
+                raise ContractError(f"{path}.{name}: C0 inputs must be `one_of` a sealed reference table "
+                                    "(caller-supplied public numbers or free text would cross unchecked)")
         if "entity" in spec:
             T(spec["entity"])
 
@@ -245,7 +275,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                 raise ContractError(f"output {name}: values derived from C3/C4 never leave")
             outputs[name] = out
         schema = raw.get("input_schema") or {}
-        _parse_schema(schema)
+        reference = _parse_reference(raw.get("reference"))
+        _parse_schema(schema, reference=reference)
         c = Contract(name=raw["contract"], version=int(raw["version"]), task_type=raw["task_type"], route=route,
                      classes=classes, restore=restore, purpose_dependent=pdep, compute=raw.get("compute"),
                      input_schema=schema, outputs=outputs, prompt_template=raw.get("prompt_template"),
@@ -254,7 +285,7 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      guidance=_parse_guidance(raw.get("guidance")),
                      org_contacts=tuple(_parse_org_contacts(raw.get("org_contacts"))),
                      redaction_text=_parse_redaction_text(raw.get("redaction_text")),
-                     external_input=_parse_external_input(raw.get("external_input")))
+                     external_input=_parse_external_input(raw.get("external_input")), reference=reference)
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:

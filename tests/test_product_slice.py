@@ -53,7 +53,7 @@ def apps(tasks=None):
 
 def base(tmp, mock, tasks=None):
     """Production mode: a sealed, signed copy of the config (tests/sealed.py)."""
-    return Settings(**production(tmp, apps(tasks)), roster_path=str(ROOT / "tests/fixtures/slice_roster.jsonl"),
+    return Settings(**production(tmp, apps(tasks), roster=ROOT / "tests/fixtures/slice_roster.jsonl"),
                     ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                     master_key=os.urandom(32).hex(), upstream=mock)
 
@@ -176,7 +176,7 @@ def test_invalid_contract_payload_is_rejected_before_sending(tmp_path, payload):
 
 
 def test_compute_failure_fails_closed(tmp_path, monkeypatch):
-    def boom(payload):
+    def boom(payload, contract=None):
         raise RuntimeError("bug")
     monkeypatch.setitem(lc.FUNCTIONS, "salary_difference", boom)
     client, mock = make(tmp_path)
@@ -261,7 +261,7 @@ def test_ledger_records_route_and_contract_without_content(tmp_path):
     call(client, "salary_comparison", json.dumps(PAYLOAD))
     rows = [json.loads(line) for line in (tmp_path / "egress.jsonl").read_text().splitlines()]
     assert [(r["route"], r["contract"], r["decision"]) for r in rows] == [
-        ("EXT_PSEUDO", "ticket_summary@4", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@3", "SENT")]
+        ("EXT_PSEUDO", "ticket_summary@4", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@4", "SENT")]
     text = (tmp_path / "egress.jsonl").read_text()
     for v in TICKET_RAW + SALARY_FORMS + ["Amit Trivedi"]:
         assert v not in text
@@ -286,7 +286,7 @@ def test_esi_raw_output_crosses_only_by_contract_and_wage_never_does(tmp_path):
 
 def test_unlisted_compute_output_is_internal_and_checked_at_egress(tmp_path, monkeypatch):
     real = lc.FUNCTIONS["salary_difference"]
-    monkeypatch.setitem(lc.FUNCTIONS, "salary_difference", lambda p: {**real(p), "secret_note": "budget code ZZ-9931"})
+    monkeypatch.setitem(lc.FUNCTIONS, "salary_difference", lambda p, c=None: {**real(p, c), "secret_note": "budget code ZZ-9931"})
     from pgw.product.contracts import load_contract
     res = lc.run(load_contract(ROOT / "contracts/salary_comparison.yaml"),
                  [{"role": "user", "content": json.dumps(PAYLOAD)}])

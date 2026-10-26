@@ -2,7 +2,7 @@
 # Exact CTC values arrive as structured C2 fields, are used only inside the gateway, and never leave it.
 # Every computed output has an explicit egress rule; anything unlisted is INTERNAL.
 contract: salary_comparison
-version: 3
+version: 4
 task_type: salary_comparison
 route: LOCAL_COMPUTE
 compute: salary_difference
@@ -38,6 +38,7 @@ outputs:
   lower_id: {derived_from: C1, egress: TRANSFORMED, entity: EMPLOYEE_ID}
   difference: {derived_from: C2, egress: TRANSFORMED}     # aliased; the model never sees the amount
   pct_of_lower: {derived_from: C2, egress: TRANSFORMED}   # relative pay of two people is still personal
+  ranking: {derived_from: C2, egress: RAW, justification: "one of two fixed sentences: which listed employee earns more, or that both are equal; carries no amount"}
   difference_value: {derived_from: C2, egress: INTERNAL}
   higher_ctc: {derived_from: C2, egress: INTERNAL}
   lower_ctc: {derived_from: C2, egress: INTERNAL}
@@ -46,7 +47,7 @@ prompt_template: |
 
   Facts computed inside the privacy gateway from exact HRIS data (exact salaries are not shared with you):
   - Employees compared: {higher_name} ({higher_id}) and {lower_name} ({lower_id}).
-  - {higher_name} has the higher annual CTC.
+  - {ranking}
   - The difference is {difference} per year, which is {pct_of_lower} of the lower CTC.
   Write the answer for the HR manager using only these facts.
 # Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
