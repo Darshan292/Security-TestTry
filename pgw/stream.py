@@ -76,6 +76,8 @@ class Restorer:
     known_ids: frozenset = frozenset()  # compact identifier-shaped values this request sent in clear or restores
     events: list[GateEvent] = field(default_factory=list)
     restored: list = field(default_factory=list)   # (EntityType, value) actually emitted -> restore ledger
+    n_restored: int = 0      # aliases put back (counts only, for the transparency report)
+    n_kept: int = 0          # known aliases left in place because their type is never restored
     _buf: str = ""
     _released_aliased: str = ""
     _degraded: bool = False
@@ -265,8 +267,12 @@ class Restorer:
         parts, pos = [], 0
         for s, e, key, _strict in self._alias_matches(text):
             ent = self.alias_map.get(key)
-            if ent is None or not self.restore or ent.type in self.never_restore:
+            if ent is None:
                 continue
+            if not self.restore or ent.type in self.never_restore:
+                self.n_kept += 1
+                continue
+            self.n_restored += 1
             self.restored.append((ent.type, ent.value))
             # every way the request wrote this value (e.g. "Priya", "Ms Raghunathan" for one person): a later turn
             # that repeats any of them is re-protected from the restore ledger

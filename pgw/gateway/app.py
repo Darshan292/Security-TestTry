@@ -37,6 +37,7 @@ from ..product import attest, integrity, local_compute, subjects
 from ..product.content import unreliable_script
 from ..product.contracts import CLASS_OF, Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
+from . import report as _report
 from . import rollback
 from .settings import (MODES, Settings, apply_deployment_profile, check_destination, check_private_destination,
                        profile_location, profile_serial)
@@ -98,6 +99,7 @@ class AppEntry:
     restore_output: bool
     models: frozenset
     tasks: tuple = ()      # ((purpose, contract_path), ...): apps with tasks only use contracted purposes
+    transparency: bool = False   # return the pgw_report to this app (docs/TRANSPARENCY_REPORT.md); signed opt-in
 
 
 def load_registry(path: str, data: bytes | None = None) -> list[AppEntry]:
@@ -109,8 +111,11 @@ def load_registry(path: str, data: bytes | None = None) -> list[AppEntry]:
                              for p, c in (a.get("tasks") or {}).items()))
         if any(p not in a["purposes"] for p, _ in tasks):
             raise ValueError(f"app {a['app_id']}: every task purpose must be a registered purpose")
+        transparency = a.get("transparency", False)
+        if not isinstance(transparency, bool):   # a typo must not turn the report on (or silently off)
+            raise ValueError(f"app {a['app_id']}: transparency must be true or false")
         out.append(AppEntry(a["app_id"], a["tenant"], a["key_sha256"].lower(), frozenset(a["purposes"]),
-                            bool(a.get("restore_output", True)), frozenset(a["models"]), tasks))
+                            bool(a.get("restore_output", True)), frozenset(a["models"]), tasks, transparency))
     return out
 
 
@@ -132,6 +137,16 @@ def render_markers(text, contract) -> str:
         return text
     table = {**REDACTION_TEXT, **contract.redaction_text}
     return _MARKER.sub(lambda m: table.get(m.group(1), table["DEFAULT"]), text)
+
+
+def _withheld_markers(text, contract) -> int:
+    """Withheld-value markers in an answer before they are rendered as words (transparency report count)."""
+    return len(_MARKER.findall(text)) if isinstance(text, str) and contract is not None else 0
+
+
+def _c3_in(texts) -> bool:
+    """True if any C3 value (government/financial identifier, credential) is in these answer texts."""
+    return any(CLASS_OF.get(d.type) is DataClass.C3 for t in texts if t for d in detect_d2(t))
 
 
 PLACEHOLDER_NOTE = ("Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. "
@@ -537,34 +552,57 @@ def create_app(settings: Settings) -> Starlette:
     else:
         replay_cache = attest.ReplayCache(attest.REPLAY_CACHE_MAX)
 
+    def report_of(rep, outcome: str, error: dict | None = None) -> dict | None:
+        """The finished pgw_report, or None if building it failed (logged by type only; the response is not
+        otherwise affected). Never called for an app without transparency."""
+        try:
+            return rep.build(outcome, error)
+        except Exception as e:
+            _log(logging.ERROR, event="report_failed", request_id=rep.rid, error_type=type(e).__name__)
+            return None
+
+    def refused(rep, status: int, etype: str, message: str, extra: dict) -> dict:
+        if not rep.enabled:
+            return extra
+        rep.fail_open()
+        outcome = "refused" if status < 500 or etype == "PGW_EGRESS_VIOLATION" else "error"
+        return {**extra, "pgw_report": report_of(rep, outcome, {"type": etype, "message": message})}
+
     async def chat(request: Request) -> Response:
+        t_start = time.perf_counter()
         rid = "req_" + uuid.uuid4().hex[:24]
         token = None
+        box: list = [_report.NULL]   # the request's report once the app is authenticated and has opted in
         if settings.trace is not None and request.headers.get("x-pgw-trace"):
             run = request.headers["x-pgw-trace"]
             token = _TRACE.set(lambda stage, data: settings.trace(run, stage, data))
         try:
-            resp = await _chat(request, rid)
+            resp = await _chat(request, rid, box, t_start)
         except _Reject as r:
             _log(logging.INFO, event="reject", request_id=rid, status=r.status, error_type=r.etype)
             _tr("error", status=r.status, error_type=r.etype, message=r.message)
-            return _err(r.status, r.etype, r.message, rid, **r.extra)
+            return _err(r.status, r.etype, r.message, rid, **refused(box[0], r.status, r.etype, r.message, r.extra))
         except Exception as e:    # never include exception text: it may carry request data
             _log(logging.ERROR, event="internal_error", request_id=rid, error_type=type(e).__name__)
             _tr("error", status=500, error_type="internal_error", message="internal error")
-            return _err(500, "internal_error", "internal error", rid)
+            return _err(500, "internal_error", "internal error", rid,
+                        **refused(box[0], 500, "internal_error", "internal error", {}))
         finally:
             if token is not None:
                 _TRACE.reset(token)
         return resp
 
-    async def _chat(request: Request, rid: str) -> Response:
+    async def _chat(request: Request, rid: str, box: list, t_start: float) -> Response:
         app = authenticate(request)
+        # Nothing before this point (no app known: 401, pre-auth failures) ever carries a report.
+        rep = box[0] = _report.Report(rid, t_start) if app.transparency else _report.NULL
         purpose = request.headers.get("x-pgw-purpose", "").strip()
         if not purpose:
             raise _Reject(400, "purpose_required", "X-PGW-Purpose header is required")
         if purpose not in app.purposes:
             raise _Reject(403, "purpose_forbidden", "purpose not permitted for this app")
+        if rep.enabled:
+            rep.purpose = purpose
         # Mandatory data contract, resolved before the body is even read: an uncontracted purpose never reaches
         # detection, a provider or the ledger. The legacy path exists only in an explicit development mode.
         tasks = dict(app.tasks)
@@ -574,6 +612,8 @@ def create_app(settings: Settings) -> Starlette:
             contract = None
         else:
             raise _Reject(403, "no_data_contract", "purpose has no data contract for this app")
+        if rep.enabled:
+            rep.contract, rep.route = contract, contract.route if contract is not None else "EXT_PSEUDO"
         _tr("auth", app=app.app_id, tenant=app.tenant, purpose=purpose)
         conv = request.headers.get("x-pgw-conversation-id", "").strip() or None
         if conv and len(conv) > 128:
@@ -637,10 +677,15 @@ def create_app(settings: Settings) -> Starlette:
             _tr("subjects", declared_values=len(subj), roles=roles, matchers=len(declared))
             if subjects.found_in(aux, declared):
                 raise _Reject(400, "sensitive_data_in_parameters", "tools/stop contain data that must not be sent")
+        if contract is None:
+            rep.end("received")
+            rep.skip("verify_source", "compute")
         if contract is not None:
             texts = subjects.request_texts(messages)    # every string, incl. list-form content parts and tool args
             if _text_size(messages) > contract.max_chars:
                 raise _Reject(413, "content_too_large", "request exceeds the data contract's size limit")
+            rep.end("received")
+            rep.begin("verify_source")
             # NOT_EXPECTED attributes (medical, disciplinary, ...) are not detected by the gateway. Free text goes
             # to an external model only with a valid signature, by a source key this contract pins, over exactly
             # these messages and subjects; otherwise it is refused or kept in-boundary (SECURITY_BOUNDARY.md §4).
@@ -661,28 +706,42 @@ def create_app(settings: Settings) -> Starlette:
                 raise _Reject(503, "replay_store_unavailable",
                               "attestation replay store unavailable; request not sent") from None
             except attest.AttestationError as e:
+                rep.end("verify_source", "failed")
+                rep.check("source_verified", "fail")
                 _tr("input_source", attested=bool(h.get("x-pgw-input-source")), accepted=False,
                     reason=e.reason, unattested=contract.external_input.unattested)
                 if contract.external_input.unattested == "PRIVATE":
                     return await _private(rid, app, purpose, model, body, ctx, contract, t0, "input_not_sanitized",
-                                          e.reason, declared_ids(contract, subj))
+                                          e.reason, declared_ids(contract, subj), rep)
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                             "input_not_sanitized", contract, attestation=e.reason)
                 raise _Reject(422, "input_not_source_sanitized",
                               "this purpose only sends input signed by an allowlisted source-side sanitizer "
                               "(X-PGW-Input-Source/-Timestamp/-Nonce/-Signature); not sent externally",
                               attestation=e.reason) from None
+            rep.end("verify_source")
+            if rep.enabled:
+                rep.input_source, rep.verified = input_source, True
+                rep.check("source_verified", "pass")
             _tr("input_source", attested=True, accepted=True, verified=True, sanitizer=input_source)
+            t_c4 = time.perf_counter()
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
                 return await _private(rid, app, purpose, model, body, ctx, contract, t0,
-                                      declared=declared_ids(contract, subj))
+                                      declared=declared_ids(contract, subj), rep=rep)
             if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
+                if rep.enabled:   # the content check is part of protection: that is where the request stopped
+                    rep.skip("compute")
+                    rep.record("protect", "failed", (time.perf_counter() - t_c4) * 1000)
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                             "content_class_C4", contract)
                 raise _Reject(422, "content_requires_private_route",
                               "content in a script the gateway cannot protect reliably; not sent externally")
+            rep.carry("protect", (time.perf_counter() - t_c4) * 1000)
+            if contract.route != "LOCAL_COMPUTE":
+                rep.skip("compute")
             if contract.route == "LOCAL_COMPUTE":
                 _tr("route", route="LOCAL_COMPUTE", reason="contract computes inside the gateway")
+                rep.begin("compute")
                 try:
                     cr = await bounded(local_compute.run, contract, messages)
                 except _Reject:
@@ -692,6 +751,9 @@ def create_app(settings: Settings) -> Starlette:
                 except Exception as e:
                     _log(logging.ERROR, event="compute_failed", request_id=rid, error_type=type(e).__name__)
                     raise _Reject(503, "compute_unavailable", "local computation failed; request not sent") from None
+                rep.end("compute")
+                if rep.enabled:
+                    rep.compute = cr
                 messages = [{"role": "user", "content": cr.prompt}]
                 declared, withheld, raw_outputs = cr.declared, cr.withheld, cr.raw
                 _tr("local_compute", function=contract.compute,
@@ -699,6 +761,7 @@ def create_app(settings: Settings) -> Starlette:
                                                      else "INTERNAL")} for n in cr.outputs],
                     withheld_forms=len(cr.withheld), prompt_built=True)
 
+        rep.begin("protect")
         if subj:   # after all size checks, off the event loop, under the deadline
             n = await bounded(subjects.count_occurrences, subjects.request_texts(messages), declared)
             if n > subjects.MAX_OCCURRENCES:
@@ -716,18 +779,17 @@ def create_app(settings: Settings) -> Starlette:
             # put back after protection. Contacts match in any case; constants exactly, as whole numbers
             # ("Rs 7,000" is not held out of "Rs 7,000,000").
             messages = json.loads(json.dumps(messages))
-            for m in messages:
-                parts = [m] if isinstance(m.get("content"), str) else [
-                    p for p in (m.get("content") or []) if isinstance(p, dict) and isinstance(p.get("text"), str)]
-                for part in parts:
+            for mi, m in enumerate(messages):
+                if isinstance(m.get("content"), str):
+                    parts = [(None, m)]
+                else:
+                    parts = [(pi, p) for pi, p in enumerate(m.get("content") or [])
+                             if isinstance(p, dict) and isinstance(p.get("text"), str)]
+                for pi, part in parts:
                     key = "content" if part is m else "text"
-                    t = "".join(c for c in part[key] if not _ORG_SENTINEL <= ord(c) < _ORG_SENTINEL + 0x100)
-                    for i, oc in enumerate(held):
-                        if i < len(org):
-                            t = re.sub(re.escape(oc), chr(_ORG_SENTINEL + i), t, flags=re.IGNORECASE)
-                        else:
-                            t = re.sub(r"(?<![\w.,])" + re.escape(oc) + r"(?![\w]|[.,]\d)", chr(_ORG_SENTINEL + i), t)
-                    part[key] = t
+                    part[key], maps = _report.held_out(part[key], held, len(org), _ORG_SENTINEL, rep.enabled)
+                    if maps is not None:   # transparency only: offsets back to the caller's original string
+                        rep.held_maps[(mi, pi)] = maps
         try:
             prot = await (bounded(prot_impl.protect, messages, ctx) if declared is None
                           else bounded(prot_impl.protect, messages, ctx, declared))
@@ -779,17 +841,27 @@ def create_app(settings: Settings) -> Starlette:
         if contract is not None:   # tell the model how to treat placeholders (added after detection)
             note = PLACEHOLDER_NOTE + (("\n\n" + contract.guidance) if contract.guidance else "")
             up_body["messages"] = [{"role": "system", "content": note}] + list(prot.messages)
+        if rep.enabled:
+            rep.prot, rep.declared = prot, (declared if subj else ())
+        rep.end("protect")
+        rep.begin("egress_check")
         _tr("protect", entities=[{"type": e.type.value, "action": e.action.value, "replacement": e.replacement,
                                   "value": e.value} for e in prot.entities.values()],
             counts=prot.type_counts(), ner=bool(getattr(prot_impl, "ner", None)))
         wire = upstream.wire_bytes(up_body)
         body_hash = hashlib.sha256(wire).hexdigest()
+        check_id = "egress_clean"
         try:
             egress_check(wire, prot.sensitive_values + withheld)
+            rep.check("egress_clean", "pass")
+            check_id = "declared_absent"
             subjects.check_outbound(wire, declared if subj else [],
                                     (PLACEHOLDER_NOTE, model, *((contract.guidance,) if contract and contract.guidance
                                                                 else ()), *held))
+            if subj:
+                rep.check("declared_absent", "pass")
         except EgressViolation:
+            rep.check(check_id, "fail")
             ms = (time.perf_counter() - t0) * 1000
             ledger_line(rid, app, purpose, model, body_hash, prot.type_counts(), "VIOLATION", ms, "egress", contract)
             _log(logging.CRITICAL, event="egress_violation", request_id=rid, tenant=app.tenant, app=app.app_id)
@@ -797,6 +869,11 @@ def create_app(settings: Settings) -> Starlette:
         except Exception as e:
             _log(logging.ERROR, event="egress_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "detector_unavailable", "protection unavailable; request not sent") from None
+        rep.end("egress_check")
+        if rep.enabled:
+            rep.outbound = {"destination": "external", "provider": upstream.name, "model": model,
+                            "messages": up_body["messages"], "gateway_note_included": contract is not None,
+                            "sha256": body_hash, "bytes": len(wire)}
         ms = (time.perf_counter() - t0) * 1000
         _tr("egress", values_checked=len(prot.sensitive_values) + len(withheld),
             declared_matchers=len(declared) if subj else 0, result="passed")
@@ -831,8 +908,8 @@ def create_app(settings: Settings) -> Starlette:
                 ledger.record(ctx, items)
 
         if not stream:
-            return await _non_stream(rid, up_body, new_restorer, record, contract)
-        return await _stream(rid, up_body, new_restorer, record, contract)
+            return await _non_stream(rid, up_body, new_restorer, record, contract, rep)
+        return await _stream(rid, up_body, new_restorer, record, contract, rep)
 
     def declared_ids(contract, subj) -> frozenset:
         """Compact forms of the declared subjects' restorable values (e.g. the requester's employee id): the app
@@ -840,9 +917,12 @@ def create_app(settings: Settings) -> Starlette:
         return frozenset(compact_id(v) for _r, t, v in subj if isinstance(v, str) and contract.restorable(t))
 
     async def _private(rid, app, purpose, model, body, ctx, contract, t0, reason="content_class_C4",
-                       attestation=None, declared: frozenset = frozenset()) -> Response:
+                       attestation=None, declared: frozenset = frozenset(), rep=_report.NULL) -> Response:
         """C4 content the gateway cannot protect reliably goes, unprotected, ONLY to the in-boundary model.
         The external upstream is never called. The answer still passes the output gate (raw C3 is masked)."""
+        if rep.enabled:   # in-boundary: nothing is computed, replaced or egress-checked (nothing leaves)
+            rep.route = "PRIVATE_LOCAL"
+            rep.skip("compute", "protect", "egress_check")
         if body.get("stream"):
             raise _Reject(400, "unsupported_parameter", "streaming is not available on the private route")
         p_body = {k: v for k, v in body.items() if not k.startswith("pgw_") and k not in ("tools", "tool_choice")}
@@ -857,6 +937,11 @@ def create_app(settings: Settings) -> Starlette:
         ledger_line(rid, app, purpose, model, hashlib.sha256(private.wire_bytes(p_body)).hexdigest(), {},
                     "SENT_PRIVATE", ms, reason, dataclasses.replace(contract, route="PRIVATE_LOCAL"),
                     attestation=attestation)
+        if rep.enabled:
+            rep.outbound = {"destination": "in_house", "provider": "in_house", "model": settings.private_model,
+                            "messages": p_body["messages"], "gateway_note_included": False,
+                            "sha256": hashlib.sha256(p_wire).hexdigest(), "bytes": len(p_wire)}
+        rep.begin("provider")
         try:
             t_up = time.perf_counter()
             data = await private.complete(p_body)
@@ -865,12 +950,18 @@ def create_app(settings: Settings) -> Starlette:
         except Exception as e:
             _log(logging.ERROR, event="private_upstream_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(502, "private_upstream_error", "private model unavailable; nothing was sent externally") from None
+        rep.end("provider")
+        if rep.enabled and isinstance(data, dict) and isinstance(data.get("model"), str):
+            # the model id the in-boundary server itself reports (the stand-in says "extractive-standin")
+            rep.outbound["model"] = data["model"][:128]
         # A reply from the stand-in is marked (development) or withheld (production: the endpoint changed after the
         # startup probe). The marking depends on the endpoint's own fixed identity, never on configuration.
         standin = private_kind == "standin" or (isinstance(data, dict) and is_standin_entry(data))
         if standin and prod:
             _log(logging.CRITICAL, event="private_model_standin_reply_refused", request_id=rid)
             raise _Reject(503, "private_model_unavailable", "in-boundary model is a stand-in; response withheld")
+        rep.begin("restore")
+        n_masked = 0
         try:
             text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
             out = None
@@ -893,19 +984,27 @@ def create_app(settings: Settings) -> Starlette:
                     out = out[:s_] + f"[{t_}]" + out[e_:]
                 # Detectors cannot read C4 content reliably (that is why it is here): also mask every long digit
                 # run (account / Aadhaar / card lengths, any separators), whatever script surrounds it.
-                out = _LONG_DIGITS.sub("[NUMBER]", out)
+                out, n_long = _LONG_DIGITS.subn("[NUMBER]", out)
+                n_masked = len(taken) + n_long
             _tr("restore", restored=0, gate="C3 and long digit runs masked in the in-boundary model's answer",
                 answer=out)
         except Exception as e:
             _log(logging.ERROR, event="restore_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(503, "restore_unavailable", "response withheld") from None
-        return JSONResponse({"id": data.get("id"), "object": "chat.completion", "created": data.get("created"),
-                             "model": data.get("model"), "choices": [{"index": 0, "finish_reason": "stop",
-                             "message": {"role": "assistant", "content": out}}]},
+        resp_body = {"id": data.get("id"), "object": "chat.completion", "created": data.get("created"),
+                     "model": data.get("model"), "choices": [{"index": 0, "finish_reason": "stop",
+                     "message": {"role": "assistant", "content": out}}]}
+        if rep.enabled:
+            rep.end("restore")
+            rep.restore_done, rep.restored, rep.kept_withheld = True, 0, n_masked
+            rep.check("c3_not_returned", "fail" if _c3_in([out]) else "pass")
+            resp_body["pgw_report"] = report_of(rep, "kept_inside")
+        return JSONResponse(resp_body,
                             headers={"X-PGW-Request-Id": rid, "X-PGW-Route": "PRIVATE_LOCAL",
                                      "X-PGW-Private-Model": "standin" if standin else private_kind or "unverified"})
 
-    async def _non_stream(rid, up_body, new_restorer, record, contract=None) -> Response:
+    async def _non_stream(rid, up_body, new_restorer, record, contract=None, rep=_report.NULL) -> Response:
+        rep.begin("provider")
         try:
             t_up = time.perf_counter()
             data = await upstream.complete(up_body)
@@ -917,6 +1016,9 @@ def create_app(settings: Settings) -> Starlette:
             # demo trace only: UpstreamError messages are content-free by design ("upstream status 401", ...)
             _tr("provider_error", cause=str(e)[:120] if isinstance(e, UpstreamError) else type(e).__name__)
             raise _Reject(502, "upstream_error", "upstream provider error") from None
+        rep.end("provider")
+        rep.begin("restore")
+        n_restored = n_kept = 0
         try:
             restored: list = []
             events = 0
@@ -926,9 +1028,13 @@ def create_app(settings: Settings) -> Starlette:
                 msg: dict = {"role": "assistant", "content": None}   # unknown fields are dropped, not forwarded
                 if isinstance(m.get("content"), str):
                     r = new_restorer()
-                    msg["content"] = render_markers(r.feed(m["content"]) + r.finish(), contract)
+                    gated = r.feed(m["content"]) + r.finish()
+                    msg["content"] = render_markers(gated, contract)
                     restored += r.restored
                     events += len(r.events)
+                    if rep.enabled:
+                        n_restored += r.n_restored
+                        n_kept += r.n_kept + _withheld_markers(gated, contract)
                 calls = []
                 for tc in m.get("tool_calls") or []:
                     fn = tc.get("function") or {}
@@ -936,6 +1042,8 @@ def create_app(settings: Settings) -> Starlette:
                     args = r.feed(fn.get("arguments") or "") + r.finish()
                     restored += r.restored
                     events += len(r.events)
+                    n_restored += r.n_restored
+                    n_kept += r.n_kept
                     calls.append({"id": tc.get("id"), "type": "function",
                                   "function": {"name": fn.get("name"), "arguments": args}})
                 if calls:
@@ -952,9 +1060,19 @@ def create_app(settings: Settings) -> Starlette:
                "model": data.get("model"), "choices": out_choices}
         if isinstance(data.get("usage"), dict):
             out["usage"] = data["usage"]
+        if rep.enabled:
+            rep.end("restore")
+            rep.restore_done, rep.restored, rep.kept_withheld = True, n_restored, n_kept
+            texts = [c["message"]["content"] for c in out_choices if isinstance(c["message"]["content"], str)]
+            texts += [tc["function"]["arguments"] for c in out_choices for tc in c["message"].get("tool_calls") or []
+                      if isinstance(tc["function"]["arguments"], str)]
+            rep.check("c3_not_returned", "fail" if _c3_in(texts) else "pass")
+            out["pgw_report"] = report_of(rep, "sent")
         return JSONResponse(out, headers={"X-PGW-Request-Id": rid, "X-PGW-Gate-Events": str(events)})
 
-    async def _stream(rid, up_body, new_restorer, record, contract=None) -> Response:
+    async def _stream(rid, up_body, new_restorer, record, contract=None, rep=_report.NULL) -> Response:
+        rep.begin("provider")
+        t_up = time.perf_counter()
         it = upstream.stream(up_body).__aiter__()
         try:   # prime: a failure before the first event can still be a proper HTTP error
             first = await it.__anext__()
@@ -974,6 +1092,10 @@ def create_app(settings: Settings) -> Starlette:
             done = False
             restored: list = []
             events = 0
+            # transparency only: time spent restoring (the rest of the stream's wall time is the provider's), what
+            # was emitted (for the C3 check) and the restore counts
+            t_restore, emitted, n_kept = 0.0, [], 0
+            on = rep.enabled
 
             def chunk(idx, delta, finish=None):
                 return sse({"id": meta["id"], "object": "chat.completion.chunk", "created": meta["created"],
@@ -1005,7 +1127,13 @@ def create_app(settings: Settings) -> Starlette:
                             yield chunk(idx, {"role": "assistant", "content": ""})
                         delta = ch.get("delta") or {}
                         if isinstance(delta.get("content"), str) and delta["content"]:
-                            out = st.restorer.feed(delta["content"])
+                            if on:
+                                t_r = time.perf_counter()
+                                out = st.restorer.feed(delta["content"])
+                                t_restore += time.perf_counter() - t_r
+                                emitted.append(out)
+                            else:
+                                out = st.restorer.feed(delta["content"])
                             if out:
                                 yield chunk(idx, {"content": out})
                         for tc in delta.get("tool_calls") or []:
@@ -1020,9 +1148,16 @@ def create_app(settings: Settings) -> Starlette:
                             done = True
                 if not done:
                     raise UpstreamError("upstream stream ended early")
+                if on:
+                    rep.record("provider", "done", (time.perf_counter() - t_up - t_restore) * 1000)
+                    t_r = time.perf_counter()
                 # upstream finished cleanly: flush holdback, then whole tool calls, then finish
                 for idx, st in sorted(states.items()):
-                    tail = render_markers(st.restorer.finish(), contract)
+                    gated = st.restorer.finish()
+                    tail = render_markers(gated, contract)
+                    if on:
+                        emitted.append(tail)
+                        n_kept += _withheld_markers(gated, contract)
                     if tail:
                         yield chunk(idx, {"content": tail})
                     events += len(st.restorer.events)
@@ -1032,6 +1167,10 @@ def create_app(settings: Settings) -> Starlette:
                         args = r.feed("".join(t["args"])) + r.finish()
                         restored += r.restored
                         events += len(r.events)
+                        if on:
+                            emitted.append(args)
+                            rep.restored += r.n_restored
+                            n_kept += r.n_kept
                         yield chunk(idx, {"tool_calls": [{"index": ti, "id": t["id"], "type": "function",
                                                           "function": {"name": t["name"], "arguments": args}}]})
                     yield chunk(idx, {}, st.finish or "stop")
@@ -1040,6 +1179,13 @@ def create_app(settings: Settings) -> Starlette:
                     yield sse({"id": meta["id"], "object": "chat.completion.chunk", "created": meta["created"],
                                "model": meta["model"], "choices": [], "usage": usage})
                 yield f": pgw-gate-events={events}\n\n"
+                if on:
+                    rep.record("restore", "done", (t_restore + time.perf_counter() - t_r) * 1000)
+                    rep.restore_done = True
+                    rep.restored += sum(st.restorer.n_restored for st in states.values())
+                    rep.kept_withheld = n_kept + sum(st.restorer.n_kept for st in states.values())
+                    rep.check("c3_not_returned", "fail" if _c3_in(["".join(emitted)]) else "pass")
+                    yield sse({"pgw_report": report_of(rep, "sent")})
                 yield "data: [DONE]\n\n"
             except Exception as e:
                 # Held-back/unflushed text is dropped: unrestored aliases are never emitted as final.
@@ -1052,6 +1198,13 @@ def create_app(settings: Settings) -> Starlette:
                     # Not swallowed: a later turn of this conversation cannot re-protect what was released here.
                     _log(logging.CRITICAL, event="restore_ledger_record_failed", request_id=rid,
                          error_type=type(e2).__name__, stream=True)
+                if on:   # the report comes before the terminal error event, and carries no request text
+                    if "provider" not in rep.stages:
+                        rep.record("provider", "failed", (time.perf_counter() - t_up - t_restore) * 1000)
+                    else:
+                        rep.record("restore", "failed", 0.0)
+                    err = {"type": "stream_interrupted", "message": "stream interrupted; response incomplete"}
+                    yield sse({"pgw_report": report_of(rep, "error", err)})
                 yield sse({"error": {"type": "stream_interrupted", "message": "stream interrupted; response incomplete"}})
 
         return StreamingResponse(gen(), media_type="text/event-stream",

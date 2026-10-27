@@ -381,3 +381,49 @@ held-out data. `tests/fixtures/audit36.py` is a regression fixture, not a measur
   in-house-only purposes.
 - **The free-text external route is not safe for real employee data.**
 
+
+## 9. Transparency report
+
+The gateway can tell the calling app what it did with a request (`pgw_report` v1; schema and examples in
+[docs/TRANSPARENCY_REPORT.md](docs/TRANSPARENCY_REPORT.md)). It replaces the development-only trace hook
+(`Settings.trace`) as the source of truth for a production UI. The trace hook carries content and production still
+refuses it.
+
+**What it reveals, and to whom.** The report goes only to the authenticated app that sent the request, in that
+request's own response. It contains:
+
+- the stages that ran, with real measured timings;
+- for each protected span: its offsets into the caller's own message strings (on LOCAL_COMPUTE, the payload field
+  path instead), its type, class, action, source, and the placeholder that went upstream;
+- counts;
+- for the external route only, the exact messages that went upstream (protected text), with the sha256 and size
+  of the exact body bytes;
+- the results of the egress, declared-subject, source and C3 checks.
+
+**Why this is acceptable.** The caller already holds the raw input. Offsets into it, types and placeholders reveal
+nothing it does not already have. The outbound messages are its own input after protection, which is less than it
+sent. The report holds no restore-ledger value: restore appears only as counts, so no value from an earlier turn or
+another conversation can reach it. Every value appears only as offsets into this request's own strings or as a
+placeholder.
+
+| Property | Enforced by | Test (`tests/test_transparency_report.py`) |
+|---|---|---|
+| Opt-in per app in the **signed** registry (`transparency: true`; default false; a non-boolean stops startup). Shipped on for `hr-helpdesk-pilot` only (registry version 3, re-sealed) | `load_registry`, `AppEntry.transparency`, the manifest | `test_transparency_is_a_registry_flag_defaulting_to_false`, `test_shipped_pilot_app_has_it_on_and_the_registry_is_resealed`, `test_editing_the_flag_without_resealing_stops_startup` |
+| Truthful. The outbound messages equal what the provider received, and the sha256 and bytes are those of the exact upstream body. `input[start:end]` is the detected value (names, IDs, amounts, declared subjects; multi-message and list-form content; around held-out org contacts). Applying the placeholders at the offsets rebuilds the exact outbound text | `pgw/gateway/report.py` reads the pipeline's own final detections (`Protected.segments/detections`) and the bytes the egress check ran on | `test_non_stream_report_shape_and_outbound_is_exactly_what_went_upstream`, `test_spans_are_offsets_into_the_original_input_with_the_placeholders_that_left`, `test_multi_message_and_list_form_content`, `test_declared_subjects_are_reported_as_declared_at_their_original_offsets`, `test_offsets_stay_exact_around_held_out_organisational_contacts`, `test_stream_report_is_one_event_after_the_content_and_before_done`, `test_local_compute_reports_fields_not_offsets` |
+| Never logged, never in the egress ledger, never sent upstream | the report is built only into the response; `_log` is allow-listed; `ledger_line` has fixed fields | `test_report_never_reaches_logs_ledger_or_upstream` |
+| No value beyond what the caller sent in this request: no restore-ledger value, nothing from earlier turns or other conversations | restore is reported as counts; spans are offsets | `test_multi_turn_report_holds_no_value_from_earlier_turns_or_other_conversations` |
+| No text in error responses. A refusal carries the report inside the error object, with the stages up to the one that stopped. When something was already sent (provider failure, broken stream), `outbound.messages` is null and only the hash and size remain | `Report.build(error=...)` | `test_refusal_reports_stages_up_to_the_stop_and_never_echoes_content`, `test_c4_refusal_stops_at_protect`, `test_early_refusals_after_authentication_carry_a_report[*]`, `test_egress_violation_is_refused_with_the_failed_check_and_no_text`, `test_upstream_failure_after_sending_is_an_error_with_hash_but_no_text`, `test_stream_interrupted_mid_way_reports_an_error_without_text` |
+| The in-house route (PRIVATE_LOCAL) never echoes what went in-house. That text is the caller's **unprotected** input, C3 included, and the gateway never returns C3. The report gives the destination, the hash and size, and the model id the in-boundary server reports (`extractive-standin` for the development stand-in) | `Report.build` | `test_private_route_reports_in_house_destination_honestly`, `test_private_route_for_c4_content_after_a_valid_signature`, `test_private_route_names_the_stand_in_as_the_server_reports_it` |
+| No report before the app is known (401, pre-auth failures) | the report is created only after `authenticate` | `test_401_and_pre_auth_failures_carry_no_report[*]` |
+| Transparency off changes nothing: responses are byte-for-byte those of the gateway before this feature, and no report is built | `report.NULL` (no-op) | `test_transparency_off_matches_the_pre_feature_gateway_bytes`, `test_transparency_off_responses_are_byte_identical`, `test_transparency_off_never_builds_a_report` |
+| Bounded: at most 2000 `detected` entries (`truncated: true` past that; counts still cover every span). Building it adds no measurable latency | `report.MAX_DETECTED` | `test_detected_is_capped_and_counts_stay_true`, `test_size_is_bounded_for_a_huge_number_of_spans_and_building_is_fast`, `test_building_the_report_adds_no_measurable_latency` |
+
+**What the report does not do.**
+
+- It does not make the protection better. It shows what detection found, not what detection missed (§8): a value
+  that is absent from `detected` was not recognised, and it left raw.
+- The `egress_clean` check means only that no value detected or declared **in this request** appears in what left.
+  It is not a statement that the text holds no personal data.
+- The app is responsible for what it does with the report. Placeholders and offsets are harmless. The outbound
+  messages, however, are pseudonymised personal data, as the provider received them, and they need the same
+  handling as the input.
