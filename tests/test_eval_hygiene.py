@@ -53,7 +53,7 @@ def test_the_value_set_covers_the_auditor_literals_and_the_check_sees_them():
 
 # Files owned by a concurrent change whose COMMENTS still quote audit amounts as examples. Only '#' comment lines may
 # match there (checked below); the code may not. Remove an entry once its comments use fresh examples.
-COMMENT_ONLY_PENDING = {"pgw/detect/recognizers.py"}
+COMMENT_ONLY_PENDING: set[str] = set()   # no exemptions: no auditor literal anywhere in pgw/
 
 
 def _hits(text: str, vals: set[str]) -> list[str]:

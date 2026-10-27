@@ -842,7 +842,7 @@ def _comp_ctx_ok(text: str, s: int, e: int, radius: int = 80) -> bool:
 # ceiling"), or (c) the clause is statutory ("under the ... Act", "as per the Act", "prescribed", "statutory").
 # Never when a specific person anchors it in the same clause with no other amount in between: a pronoun ("her",
 # "his", "their"), a possessive ("the employee's", "Priya's") or a two-word personal name. So "her salary of Rs
-# 21,00,000 exceeds the ceiling" stays compensation, and so does "her bonus is capped at Rs 50,000".
+# 18,40,000 exceeds the ceiling" stays compensation, and so does "her bonus is capped at Rs 50,000".
 _LIMIT = (r"(?:ceilings?|caps?|capped|limits?|limited|thresholds?|maximum|minimum|max\.?|min\.?|floor|"
           r"not\s+exceeding|not\s+more\s+than|not\s+less\s+than|at\s+most|at\s+least)")
 _LIMIT_LEFT = re.compile(r"(?<![a-z])" + _LIMIT + r"(?![a-z])", re.I)
@@ -1029,17 +1029,17 @@ def _personal_amounts(text: str) -> list[Cand]:
     return out
 
 
-# --- amounts by shape: Indian digit grouping and Indian units (audit S5: "21,00,000", "twenty two lakh") ------------
+# --- amounts by shape: Indian digit grouping and Indian units (e.g. "18,40,000", "nineteen lakh") ------------
 # The lakh grouping d{1,2}(,dd)+,ddd is how Indian money is written; it is never a date, a phone or an ID format. Such a
 # number (>= 1,00,000 by construction) is an amount with or without a currency cue, and so is a Western-grouped number
 # >= 100,000 (_WESTERN_SHAPE). So is a number phrase, in words or
-# digits, with lakh / lac / crore ("twenty two lakh fifty thousand", "1.2 crore"; pgw.detect.numwords). Both are
+# digits, with lakh / lac / crore ("seventeen lakh forty thousand", "1.2 crore"; pgw.detect.numwords). Both are
 # COMPENSATION-class (C2: aliased and restored on EXT_PSEUDO, generalised elsewhere), except
 #   - a statutory or limit constant (_statutory_amount), and sealed public_constants (held out before detection);
 #   - a count: the amount is directly followed by a unit of count ("1,50,000 employees", "2 lakh users");
 #   - business money: a non-pay context (invoice, total, budget, revenue, purchase, ...) is nearer than any pay
 #     context, the same rule as currency-marked amounts (_comp_ctx_ok);
-#   - with a currency cue ("Rs 21,00,000", "INR 2 lakh", "21,00,000 INR") the amount is decided exactly as the
+#   - with a currency cue ("Rs 18,40,000", "INR 2 lakh", "18,40,000 INR") the amount is decided exactly as the
 #     currency-marked path decides it: pay context or per annum required.
 _LAKH_GROUPED = re.compile(r"(?<![\w,])(?<!\d\.)[1-9]\d?(?:,\d\d)+,\d{3}(?:\.\d{1,2})?(?![\w]|[.,]\d)")
 _WESTERN_GROUPED = re.compile(r"(?<![\w,])(?<!\d\.)[1-9]\d{0,2}(?:,\d{3})+(?:\.\d{1,2})?(?![\w]|[.,]\d)")
