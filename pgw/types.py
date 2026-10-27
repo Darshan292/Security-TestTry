@@ -23,7 +23,11 @@ class EntityType(str, Enum):
     EMPLOYEE_ID = "EMPLOYEE_ID"
     COMPENSATION = "COMPENSATION"
     DATE_OF_BIRTH = "DATE_OF_BIRTH"
-    IDENTIFIER = "IDENTIFIER"   # identifier-shaped value of no recognised scheme (pgw.detect.idshape); withheld like C3
+    # Shape backstop (pgw.detect.idshape). IDENTIFIER: identifier-shaped value of no recognised scheme (a ticket, a
+    # document number, a policy or passport number): a reference the request itself carries; class REF, aliased and
+    # restored on free-text purposes. AADHAAR_LIKE: a cue-less 12-digit number that passes the Aadhaar checksum; C3.
+    IDENTIFIER = "IDENTIFIER"
+    AADHAAR_LIKE = "AADHAAR_LIKE"
     DERIVED = "DERIVED"     # a value computed inside the gateway (LOCAL_COMPUTE); never produced by detectors
 
 

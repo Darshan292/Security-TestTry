@@ -1,11 +1,11 @@
 """Numbers written in words (audit S5/S6 residual): a digit-by-digit view, and amounts in Indian units.
 
-1. Digit-by-digit view (`digit_view`). An identifier spoken digit by digit ("two three four one, five six seven
-   eight, nine zero one two", "nine eight four five double zero ...") becomes digits in a D0 view, so every
+1. Digit-by-digit view (`digit_view`). An identifier spoken digit by digit ("seven one five two, eight three nine
+   zero, six four four one", "nine eight four five double zero ...") becomes digits in a D0 view, so every
    structured recognizer (phone, account, Aadhaar, ...) and the identifier-shape backstop see it exactly as if it had
    been written in digits. Tokens: the English digit words (zero / oh / nil / nought, one ... nine), "double X" and
    "triple X", and digit groups already written in digits, joined by spaces, hyphens or commas, in any case.
-   Spaces and hyphens join; a comma starts a new digit group ("2341 5678 9012"). Only a run that spells out at
+   Spaces and hyphens join; a comma starts a new digit group ("7152 8390 6441"). Only a run that spells out at
    least MIN_WORD_DIGITS digits in words is rewritten, so prose ("one or two days", "one two-day workshop") never
    is. A run longer than MAX_RUN_DIGITS digits (a flood, or a table of words) is left alone, like a digit run longer
    than any identifier.
@@ -15,7 +15,7 @@
 
 2. Amounts with Indian units (`unit_amounts`). A number phrase in words or digits that contains lakh / lac / crore
    (singular, plural or "cr"), with "thousand" and "hundred" allowed only around them, is a money amount:
-   "twenty two lakh fifty thousand", "1.2 crore", "one crore twenty lakh", "12 lakh 50 thousand".
+   "thirty one lakh eighty five thousand", "1.2 crore", "one crore twenty lakh", "12 lakh 50 thousand".
 
 Linear: each regex is applied once with possessive repetition; the per-run work is proportional to the run.
 """

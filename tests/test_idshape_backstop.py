@@ -1,8 +1,11 @@
 """Identifier-shape backstop (pgw.detect.idshape): generality, benign shapes, business ids from the signed contract.
 
-A fresh synthetic set, designed for this test and not taken from any corpus: 14 identifier schemes, each written
-plain, spaced and hyphenated, embedded in ticket-like sentences WITHOUT the cue words the scheme recognizers use.
-Every value is synthetic.
+A fresh synthetic set, designed for this test and not taken from any corpus or audit: 14 identifier schemes, each
+written plain, spaced and hyphenated, embedded in ticket-like sentences WITHOUT the cue words the scheme recognizers
+use. Every value is synthetic.
+
+Restore (N4): an IDENTIFIER (class REF) is aliased on the contracted free-text purposes and comes back exact in the
+answer; an AADHAAR_LIKE (cue-less, checksum-valid 12 digits) and every recognised C3 type are removed for good.
 """
 import json
 import os
@@ -48,12 +51,12 @@ SCHEMES = {
     "nps_pran": ("110045678912", [4, 4, 4]),
     "driving_licence": ("MH1220110012345", [4, 11]),
     "gstin": ("29AAGCB7383J1Z4", [2, 5, 4, 1, 3]),
-    "vehicle_registration": ("KA51AB4471", [2, 2, 2, 4]),
+    "vehicle_registration": ("TS09EQ7316", [2, 2, 2, 4]),
     "iban_like": ("NO9386011117947", [4, 4, 4, 3]),
     "insurance_policy": ("HLT4402918377", [3, 4, 4, 2]),
     "foreign_passport": ("X93821047", [1, 4, 4]),
-    "indian_passport": ("Z4872631", [1, 7]),
-    "voter_id": ("TNK4821937", [3, 7]),
+    "indian_passport": ("R6185092", [1, 7]),
+    "voter_id": ("WQX5093718", [3, 7]),
     "pan_spaced": ("BQRPS4417K", [5, 4, 1]),
 }
 TEMPLATES = [
@@ -68,12 +71,13 @@ IDENTIFIER_CASES = [(scheme, form, TEMPLATES[k % 3])
 BENIGN = [
     "12/03/2024", "2024-03-12", "12-Mar-2024", "12 MAR 2024 10:30", "26.10.2026 10.30 AM", "2026-01-04T20:56:55",
     "20240315103000", "FY 2024-25", "Q3FY25", "v2.10.3", "release 15.2.1158.16", "Section 80C", "Section 80CCD(1B)",
-    "Form 16", "Form 12BB", "ISO 9001", "HDFC0001234", "HDFC 0001234", "1800-266-4412",
+    "Form 16", "Form 12BB", "ISO 9001", "ICIC0004517", "ICIC 0004517", "1800-266-4412",
     "4c55c22e-6da7-4121-aaa6-535ef4d0cd02", "IALM 2012-14", "10.169.237.237",
 ]
 # Money is the COMPENSATION detector's job (aliased with pay context): never an IDENTIFIER.
 MONEY = ["Rs 15,00,000", "INR 1500000", "Rs 12500000.00", "USD 142,000", "1,12,400 pm", "18.5 LPA"]
-BUSINESS = ["PAY-88231", "OFR-2291", "CLM-5521", "IT-20417"]
+BUSINESS = ["PAY-88231", "OFR-3307", "CLM-5521", "IT-20417", "INC0048213", "CHG0031188", "KB0012094", "PRB0040071",
+            "REQ0019926", "HRIS-5120", "OPS-20451", "PO-40031876", "PO40031876", "INV-2026-0417", "SO7781203"]
 
 
 def _leaks(value: str, out: str) -> bool:
@@ -139,6 +143,8 @@ def test_aadhaar_with_wide_gaps_is_caught_by_its_checksum():
     a = AADHAAR
     out = _protect(f"number {a[:4]} - {a[4:8]} - {a[8:]} please")
     assert not _leaks(a, out)
+    for form in _variants(a, [4, 4, 4]) + [f"{a[:4]} - {a[4:8]} - {a[8:]}"]:   # C3 by its checksum: never restored
+        assert {d.type for d in idshape.detect(f"number {form} please")} == {EntityType.AADHAAR_LIKE}, form
     bad = a[:11] + str((int(a[11]) + 1) % 10)      # checksum-invalid: only the general shape rules apply
     assert [d for d in idshape.detect(f"x {bad[:4]} - {bad[4:8]} - {bad[8:]} y")] == []
 
@@ -163,9 +169,26 @@ def test_backstop_is_linear_on_floods():
 
 # --- business_identifiers: anchored, bounded, and unable to switch the backstop off --------------------------------
 
+def _sample_prefix_patterns() -> list[str]:
+    """Literal-prefix patterns built FROM the generated samples (letters of a sample, generic tail): each must be
+    refused, so the check holds for any letters, not for a list of known values."""
+    out = []
+    for g in idshape.GENERIC_SAMPLES:
+        m = re.fullmatch(r"([A-Z]{2,5})(\d{6,12})", g)
+        if m:
+            out.append(rf"^{m.group(1)}\d{{{len(m.group(2))}}}$")
+    return out
+
+
+SAMPLE_PATTERNS = _sample_prefix_patterns()
+
+
 @pytest.mark.parametrize("pattern", [
     r"^\d{12}$", r"^\d{9,12}$", r"^[A-Z]{5}\d{4}[A-Z]$", r"^[A-Z]\d{7}$", r"^[A-Z]{3}\d{7}$",
-    r"^(?:ABC|TNK)\d{7}$", r"^(?:KA)\d{2}[A-Z]{2}\d{4}$",
+    r"^[A-Z][A-Z0-9]{1,9}-\d{1,6}$",                      # the fully generic Jira key: an employee/member id shape
+    r"^HR[A-Z0-9]{0,8}-\d{1,6}$",                          # literal prefix, generic tail: "HR" + "<letters>-<digits>"
+    r"^PO-?\d{4,10}$", r"^(?:SAP|DOC)\d{9,12}$",           # a prefix glued to a generic 9-12 digit run
+    *SAMPLE_PATTERNS,
 ])
 def test_generic_patterns_are_refused(pattern):
     with pytest.raises(idshape.BusinessPatternError):
@@ -189,11 +212,38 @@ def test_contract_with_a_generic_pattern_does_not_load(tmp_path):
         load_contract(bad)
 
 
+def test_generic_samples_are_generated_valid_and_reproducible():
+    from pgw.detect.recognizers import luhn_valid, verhoeff_valid
+    g = idshape.GENERIC_SAMPLES
+    assert g == idshape._generic_samples() and len(g) >= 100 and len(set(g)) == len(g)
+    assert idshape._generic_samples(seed=1) != g                      # generated, not a fixed list
+    aadhaar = [x for x in g if re.fullmatch(r"[2-9]\d{11}", x) and verhoeff_valid(x)]
+    cards = [x for x in g if re.fullmatch(r"4\d{15}", x) and luhn_valid(x)]
+    gstins = [x for x in g if re.fullmatch(r"\d{2}[A-Z]{3}C[A-Z]\d{4}[A-Z]\dZ[0-9A-Z]", x)]
+    assert len(aadhaar) >= 3 and len(cards) >= 3 and len(gstins) >= 3
+    assert all(idshape._gstin_char(x[:14]) == x[14] for x in gstins)
+    ibans = [x for x in g if re.fullmatch(r"[A-Z]{2}\d{2}[A-Z]{4}\d{14}", x)]
+    assert ibans and all(int("".join(str(int(c, 36)) for c in x[4:] + x[:4])) % 97 == 1 for x in ibans)
+    # every sample of a scheme the backstop covers is withheld
+    assert sum(bool(idshape.detect(f"value {x} here")) for x in g if not x.islower()) >= 0.9 * len(g)
+
+
+def test_a_prefix_glued_to_a_generic_identifier_is_refused():
+    with pytest.raises(idshape.BusinessPatternError, match="written after its prefix"):
+        idshape.compile_business_identifiers([r"^PO-?\d{4,10}$"])
+    assert idshape.compile_business_identifiers([r"^(?:PO|INV)-?\d{4,8}$"])     # shorter than any generic run
+
+
 def test_shipped_contracts_declare_their_ticket_formats():
     for name in ("ticket_summary", "ticket_summary_any_script", "hr_case_explanation", "hr_email_draft"):
         c = load_contract(ROOT / f"contracts/{name}.yaml")
         assert all(any(rx.fullmatch(b) for rx in c.business_identifiers) for b in BUSINESS + ["DC-2026-041"])
-        assert c.actions()[EntityType.IDENTIFIER].value == "REDACT"
+        a = c.actions()
+        assert a[EntityType.IDENTIFIER].value == "TOKENIZE" and c.restorable(EntityType.IDENTIFIER)
+        assert a[EntityType.AADHAAR_LIKE].value == "REDACT" and not c.restorable(EntityType.AADHAAR_LIKE)
+        for t in (EntityType.AADHAAR, EntityType.PAN, EntityType.BANK_ACCOUNT, EntityType.CARD, EntityType.UPI_ID,
+                  EntityType.SECRET):
+            assert a[t].value == "REDACT" and not c.restorable(t)
 
 
 # --- end to end: production gateway, signed config, outbound bytes ------------------------------------------------
@@ -218,13 +268,16 @@ def _send(client, text):
         "Authorization": f"Bearer {KEY}", "X-PGW-Purpose": "ticket_summary", **attest("ticket_summary", body)})
 
 
+ORG_GSTIN = "29AAKCK5714D1ZH"      # the contract's own org_identifiers entry (synthetic company GSTIN)
+
+
 @pytest.mark.parametrize("form", [0, 1, 2], ids=["plain", "spaced", "hyphenated"])
 def test_gateway_sends_no_identifier_and_keeps_benign_text_and_business_ids(tmp_path, form):
     client, mock = _gateway(tmp_path)
     values = {s: _variants(p, g)[form] for s, (p, g) in SCHEMES.items()}
     lines = [f"Ticket {BUSINESS[i % len(BUSINESS)]}: for {s.replace('_', ' ')} the value is {v}."
              for i, (s, v) in enumerate(values.items())]
-    benign = "Context: " + "; ".join(BENIGN) + "."
+    benign = "Context: " + "; ".join(BENIGN) + f"; our GSTIN {ORG_GSTIN}.\nRelated: " + ", ".join(BUSINESS) + "."
     r = _send(client, "Raised by Ritika Banerjee.\n" + "\n".join(lines) + "\n" + benign)
     assert r.status_code == 200, r.text
     wire = mock.received[-1].decode("utf-8")
@@ -232,9 +285,19 @@ def test_gateway_sends_no_identifier_and_keeps_benign_text_and_business_ids(tmp_
     for s, v in values.items():
         assert not _leaks(v, sent), f"{s} crossed"
         assert not _leaks(v, wire)
-    for b in BENIGN + BUSINESS:
+    for b in BENIGN + BUSINESS + [ORG_GSTIN]:
         assert b in sent, f"benign text {b!r} was masked"
-    assert "[IDENTIFIER]" in sent and "Ritika" not in wire
-    # never restored: the echoing model gets the marker back, and the client sees no identifier either
+    assert "[IDENTIFIER_" in sent and "Ritika" not in wire
+    # The echoing model returns the placeholders. An IDENTIFIER (REF) comes back exact; AADHAAR_LIKE and recognised C3
+    # types do not.
     ans = r.json()["choices"][0]["message"]["content"]
-    assert not any(_leaks(v, ans) for v in values.values())
+    restored = []
+    for line, (s, v) in zip(lines, values.items(), strict=True):
+        at = line.index(" the value is ") + 14
+        types = {d.type for d in PROT.analyze([{"role": "user", "content": line}], CTX)[0] if d.end > at}
+        if types == {EntityType.IDENTIFIER}:
+            assert v in ans, f"{s} not restored"
+            restored.append(s)
+        else:
+            assert not _leaks(v, ans), f"{s} ({types}) restored"
+    assert "aadhaar_no_cue" not in restored and len(restored) >= 9, restored

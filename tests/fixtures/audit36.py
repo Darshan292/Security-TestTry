@@ -1,4 +1,10 @@
-"""The independent auditor's 36 realistic HR helpdesk tickets (2026-10), re-implemented here as DATA.
+"""REGRESSION FIXTURE ONLY. The independent auditor's 36 realistic HR helpdesk tickets (2026-10), re-implemented as DATA.
+
+This set is not a progress measure. Its tickets have been read while fixing the findings they produced, so a better
+score on them says nothing about unseen text (the auditor called tuning on it overfitting). It is kept to catch
+regressions on the reported cases. Progress is measured on held-out data only: the sealed held-out ticket sets and
+the pre-registered corpora (EVALUATION_PLAN.md), never on this file. No value from this file may appear in pgw/
+(tests/test_eval_hygiene.py), and nothing in pgw/ may be tuned on it.
 
 The auditor's own scripts were read as text and never executed or imported. This module rebuilds the same synthetic
 ticket set: the same 40-person synthetic roster and the same ticket texts, with the generated identifiers drawn from

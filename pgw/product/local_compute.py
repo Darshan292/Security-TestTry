@@ -5,6 +5,11 @@ declared class: C1 values are protected wherever they appear (aliased, independe
 withheld, so the egress invariant proves they never leave. A deterministic function computes outputs from exact
 values, and each output obeys its contract egress rule (RAW / TRANSFORMED / INTERNAL, default INTERNAL). Only the
 contract's prompt template, filled with non-INTERNAL outputs, is sent to the external model.
+
+The free-text `instruction` is the one caller-written part of the prompt. Every number in it is parsed to a value in
+any written unit (pgw.product.amounts) and compared numerically with every withheld C2/C3 input and every numeric
+output that does not leave raw; a number equal to one of them, or within ±0.5%, is replaced by a marker, so neither
+another written form ("2.45 million" for ₹24,50,000) nor rounding carries the value out (SECURITY_BOUNDARY §6 N6).
 """
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 from ..types import EntityType as T
+from . import amounts
 from .contracts import Contract, DataClass, Output
 
 
@@ -166,6 +172,38 @@ def band_position(payload: dict, contract=None) -> dict:
             "annual_ctc": ctc, "headroom": hi - ctc}
 
 
+# --- the free-text instruction ------------------------------------------------------------------------------
+
+def _value_of(v) -> float | None:
+    """The number a withheld input or a computed output stands for (an int, or one amount in a string)."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        found = amounts.numbers(v)
+        if len(found) == 1:
+            return found[0][2]
+    return None
+
+
+def mask_withheld_numbers(instruction: str, protected: list[tuple[T, float]]) -> tuple[str, int]:
+    """Replace every number in `instruction` that equals a protected value or lies within ±0.5% of it (in any written
+    unit, an implied one included) by "[TYPE]". Returns the new text and the number of replacements."""
+    if not protected:
+        return instruction, 0
+    hits = []
+    for s, e, value, unit in amounts.numbers(instruction):
+        for x in amounts.candidates(value, unit, instruction[s:e]):
+            t = next((t for t, v in protected if amounts.near(x, v)), None)
+            if t is not None:
+                hits.append((s, e, t))
+                break
+    for s, e, t in reversed(hits):
+        instruction = instruction[:s] + f"[{t.value}]" + instruction[e:]
+    return instruction, len(hits)
+
+
 FUNCTIONS = {"salary_difference": salary_difference, "esi_eligibility": esi_eligibility,
              "band_position": band_position}
 
@@ -174,15 +212,21 @@ def run(contract: Contract, messages: list) -> ComputeResult:
     payload = parse_payload(messages, contract)
     declared: list[tuple[T, str]] = []
     withheld: list[tuple[T, str]] = []
+    protected: list[tuple[T, float]] = []                    # numbers the instruction must not restate
     for cls, entity, value in _classified_inputs(payload, contract.input_schema):
         if cls is DataClass.C1:
             declared.append((entity, str(value)))
         else:                                                # C2/C3 inputs never leave in any form
             withheld += [(entity, f) for f in surface_forms(value)]
+            if (n := _value_of(value)) is not None:
+                protected.append((entity, n))
     outputs = FUNCTIONS[contract.compute](payload, contract)  # function name validated at startup
     fields, raw = {}, {}
     for name, value in outputs.items():
         spec = contract.outputs.get(name) or Output(name, DataClass.D, "INTERNAL")
+        if spec.egress != "RAW" and spec.derived_from not in (DataClass.C0, DataClass.C1):
+            if (n := _value_of(value)) is not None:          # an aliased or internal amount, count or percentage
+                protected.append((spec.entity, n))
         if spec.egress == "INTERNAL":
             withheld += [(T.DERIVED, f) for f in surface_forms(value) if len(f) >= 4]
             continue
@@ -199,5 +243,6 @@ def run(contract: Contract, messages: list) -> ComputeResult:
         if spec.egress == "TRANSFORMED":
             declared.append((spec.entity, str(value)))
     instruction = "".join(c for c in payload["instruction"] if not 0xE000 <= ord(c) <= 0xF8FF)
+    instruction, _ = mask_withheld_numbers(instruction, protected)
     prompt = contract.prompt_template.format(instruction=instruction, **fields)
     return ComputeResult(prompt=prompt, declared=declared, withheld=withheld, outputs=outputs, raw=raw)

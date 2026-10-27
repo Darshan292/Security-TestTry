@@ -1,4 +1,8 @@
-"""Shape backstop for number-shaped identifiers (audit S5/S6). One generic type: IDENTIFIER (C3-like, never restored).
+"""Shape backstop for number-shaped identifiers (audit S5/S6). Two types:
+  IDENTIFIER    a reference of no recognised scheme that the request itself carries (a ticket, document, PO, policy
+                or passport number). Data class REF: aliased and restored on free-text purposes (N4).
+  AADHAAR_LIKE  a cue-less 12-digit number that passes the Aadhaar (Verhoeff) checksum, in any grouping. The checksum
+                is positive evidence of a C3 scheme, so it is C3: removed, never restored.
 
 The scheme recognizers (recognizers.py) know Aadhaar, PAN, cards, bank accounts with a cue, ... An identifier of any
 other scheme (UAN, ESIC, passport, voter ID, driving licence, GSTIN, IBAN, a policy number) or a known scheme without
@@ -6,7 +10,7 @@ its cue word (a bare 12-digit Aadhaar, an account number with no "a/c") used to 
 scheme, this module withholds whatever is SHAPED like an identifier and is not recognisably benign.
 
 Candidates are chains of code-like chunks joined by single separators (space, hyphen, dot, slash). A chunk is
-code-like if it contains a digit, or is an upper-case word of at most five letters ("ABCDE 1234 F", "KA 51 AB 4471").
+code-like if it contains a digit, or is an upper-case word of at most five letters ("ABCDE 1234 F", "XY 07 QR 3150").
 Lower-case and Title-case words never join, so prose stays out.
   (a) digits only: 9-18 digits once the separators are removed;
   (b) a checksum-valid (Verhoeff) 12-digit Aadhaar in ANY grouping, also with wider gaps ("2345 - 6789 - 0123") or
@@ -22,8 +26,9 @@ Benign shapes are exempt by general rules, never by listing examples:
   base64-like tokens, codes carrying a run of six or more letters, which no personal identifier scheme has).
 Phone numbers and amounts that a scheme recognizer already found keep that recognizer's type: backstop spans score
 below every recognizer, so any overlapping detection wins resolution.
-Company reference formats (ticket and offer ids such as PAY-88231) are exempt only through the signed contract field
-`business_identifiers` (pgw.product.contracts), applied by the pipeline with `exempt_business`.
+Company reference formats (ticket and offer ids such as PAY-88231) are exempt only through the signed contract fields
+`business_identifiers` (patterns) and `org_identifiers` (the organisation's own GSTIN/CIN, exact), applied by the
+pipeline with `exempt_business`. AADHAAR_LIKE spans are never exempt.
 
 Linear in the input: one possessive chain regex, constant work per chain, and chains longer than _MAX_CHAIN characters
 (floods, tables) are skipped.
@@ -34,7 +39,7 @@ import re
 
 from pgw.types import Detection, EntityType as T
 
-from .recognizers import _DATE, _date_ok, verhoeff_valid
+from .recognizers import _DATE, _date_ok, verhoeff_check_digit, verhoeff_valid
 
 SOURCE = "D2c:idshape"
 SCORE = 0.4            # below every recognizer, cue, roster and NER score: a known type always wins an overlap
@@ -217,12 +222,21 @@ def _aadhaar_windows(text: str, out: list[Detection], taken: list[tuple[int, int
             if _benign_context(text, s) or any(_date_ok(d, run) for d in _DATE.finditer(run)
                                                if d.start() + m.start() < e and s < d.end() + m.start()):
                 continue
-            out.append(Detection(s, e, T.IDENTIFIER, SCORE, SOURCE))
+            out.append(Detection(s, e, T.AADHAAR_LIKE, SCORE, SOURCE))
             taken.append((s, e))
 
 
 def _benign_context(text: str, s: int) -> bool:
     return bool(_REFERENCE.search(text[max(0, s - 24):s]))
+
+
+def _type_of(span: str) -> T:
+    """AADHAAR_LIKE for digits and separators only that spell a checksum-valid 12-digit Aadhaar; else IDENTIFIER."""
+    digits = "".join(c for c in span if c.isdigit())
+    if (len(digits) == 12 and digits[0] not in "01" and all(c.isdigit() or c in _SEPS for c in span)
+            and verhoeff_valid(digits)):
+        return T.AADHAAR_LIKE
+    return T.IDENTIFIER
 
 
 def detect(text: str) -> list[Detection]:
@@ -238,7 +252,7 @@ def detect(text: str) -> list[Detection]:
             for a, b in _judge(chain, seg):
                 s, e = a + m.start(), b + m.start()
                 if not _benign_context(text, s):
-                    out.append(Detection(s, e, T.IDENTIFIER, SCORE, SOURCE))
+                    out.append(Detection(s, e, _type_of(text[s:e]), SCORE, SOURCE))
     _aadhaar_windows(text, out, [(d.start, d.end) for d in out])
     return out
 
@@ -261,14 +275,89 @@ _BID_QUANT = re.compile(r"\{(\d{1,2})(?:,(\d{1,2}))?\}|\?")
 _BID_PREFIX = re.compile(r"\^(?:[A-Z]{2,}|\(\?:[A-Z]{2,}[A-Z0-9]*(?:\|[A-Z]{2,}[A-Z0-9]*)*\))")
 BID_MAX_PATTERNS = 20
 BID_MAX_LEN = 64
-# Generic personal-identifier samples. A business pattern that fullmatches any of them would exempt that whole shape
-# from the backstop, so the contract is refused at load.
-GENERIC_SAMPLES = (
-    "123456789", "1234567890", "123456789012", "12345678901234", "234567890124", "1234 5678 9012", "1234-5678-9012",
-    "ABCPK1234F", "ABCPK 1234 F", "abcpk1234f", "Z4872631", "A1234567", "AB1234567", "TNK4821937", "ABC1234567",
-    "KA0520190012345", "KA05 20190012345", "KA51AB4471", "KA 51 AB 4471", "22ABCPK1234F1Z5", "GB29NWBK60161331926819",
-    "AB123456C", "MH/BAN/0012345/000/0001234", "ABC-1234567", "AB-123456", "XYZ-12345", "QX-2291", "1009123456789",
-)
+# Generic personal-identifier samples, GENERATED from scheme descriptions (seeded, checksum-valid where the scheme has
+# a checksum). No sample is a value from any evaluation or audit set (tests/test_eval_hygiene.py checks pgw/ for that).
+# A business pattern that fullmatches a sample, or a sample written after one of the pattern's literal prefixes
+# ("PO-" + a 10-digit run), would exempt that personal shape from the backstop, so the contract is refused at load.
+_SAMPLE_SEED = 20261027
+_UPPER = "ABCDEFGHJKLMNPRSTUVWXYZ"
+_B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _luhn_digit(payload: str) -> str:
+    total = 0
+    for i, ch in enumerate(reversed(payload)):
+        d = int(ch) * (2 if i % 2 == 0 else 1)
+        total += d - 9 if d > 9 else d
+    return str((10 - total % 10) % 10)
+
+
+def _gstin_char(first14: str) -> str:
+    total = 0
+    for i, ch in enumerate(first14):
+        p = _B36.index(ch) * (1 if i % 2 == 0 else 2)
+        total += p // 36 + p % 36
+    return _B36[(36 - total % 36) % 36]
+
+
+def _iban_digits(country: str, bban: str) -> str:
+    n = int("".join(str(_B36.index(c)) for c in bban + country + "00"))
+    return f"{98 - n % 97:02d}"
+
+
+def _generic_samples(seed: int = _SAMPLE_SEED, per_scheme: int = 3) -> tuple[str, ...]:
+    """Personal-identifier shapes, each written plain and in the groupings people use. Scheme descriptions only."""
+    import random
+    rng = random.Random(seed)   # noqa: S311 - reproducible test shapes, not secrets
+
+    def d(n: int) -> str:
+        return str(rng.randint(1, 9)) + "".join(str(rng.randint(0, 9)) for _ in range(n - 1))
+
+    def u(n: int) -> str:
+        return "".join(rng.choice(_UPPER) for _ in range(n))
+
+    def grouped(v: str, groups: list[int]) -> list[str]:
+        parts, i = [], 0
+        for g in groups:
+            parts.append(v[i:i + g])
+            i += g
+        return [v, " ".join(parts), "-".join(parts)]
+
+    out: list[str] = []
+    for _ in range(per_scheme):
+        out += [d(n) for n in range(9, 19)]                              # account / UAN / ESIC / PRAN / phone runs
+        a = str(rng.randint(2, 9)) + d(10)                               # Aadhaar: 12 digits, Verhoeff check
+        out += grouped(a + verhoeff_check_digit(a), [4, 4, 4])
+        c = "4" + d(14)                                                  # payment card: 16 digits, Luhn check
+        out += grouped(c + _luhn_digit(c), [4, 4, 4, 4])
+        pan = u(3) + rng.choice("PCHFATBLJG") + u(1) + d(4) + u(1)        # PAN: 5 letters, 4 digits, 1 letter
+        out += grouped(pan, [5, 4, 1]) + [pan.lower()]
+        out += [u(1) + d(7), u(2) + d(7), u(1) + d(8)]                   # passports (Indian, foreign)
+        out += [u(3) + d(7)]                                             # voter ID (EPIC)
+        dl = u(2) + f"{rng.randint(1, 99):02d}" + str(rng.randint(1990, 2025)) + d(7)   # driving licence
+        out += grouped(dl, [4, 11]) + grouped(dl, [2, 2, 4, 7])
+        veh = u(2) + f"{rng.randint(1, 99):02d}" + u(2) + d(4)          # vehicle registration
+        out += grouped(veh, [2, 2, 2, 4])
+        g14 = f"{rng.randint(1, 37):02d}" + u(3) + "C" + u(1) + d(4) + u(1) + str(rng.randint(1, 9)) + "Z"
+        out += [g14 + _gstin_char(g14)]                                  # GSTIN: state, PAN, entity, Z, mod-36 check
+        bban = u(4) + d(14)                                              # IBAN: country, mod-97 check, bank, account
+        cc = u(2)
+        out += grouped(cc + _iban_digits(cc, bban) + bban, [4, 4, 4, 4, 4, 2])
+        out += [u(2) + d(6) + rng.choice("ABCD")]                       # national insurance number
+        out += ["/".join([u(2), u(3), d(7), d(3), d(7)])]                # PF account path
+        out += [f"{u(2)}-{d(6)}", f"{u(3)}-{d(5)}", f"{u(3)}-{d(7)}", f"{u(2)}-{d(4)}"]   # personnel / member ids
+        out += [u(3) + d(10)]                                            # insurance policy / member number
+    return tuple(dict.fromkeys(out))
+
+
+GENERIC_SAMPLES = _generic_samples()
+_GRAFT_SEPS = ("", "-", "/", "#", ":", "_", ".")
+
+
+def _literal_prefixes(p: str) -> list[str]:
+    m = _BID_PREFIX.match(p)
+    head = m.group()[1:]
+    return head[3:-1].split("|") if head.startswith("(?:") else [head]
 
 
 class BusinessPatternError(ValueError):
@@ -311,6 +400,12 @@ def compile_business_identifiers(raw) -> tuple[re.Pattern, ...]:
             raise BusinessPatternError(f"business_identifiers: {p!r}: {e}") from None
         hit = [g for g in GENERIC_SAMPLES if rx.fullmatch(g)]
         if hit:
-            raise BusinessPatternError(f"business_identifiers: {p!r} also matches the generic identifier {hit[0]!r}")
+            raise BusinessPatternError(f"business_identifiers: {p!r} also matches a generic identifier shape "
+                                       f"({hit[0]!r})")
+        graft = next((x + sep + g for x in _literal_prefixes(p) for sep in _GRAFT_SEPS for g in GENERIC_SAMPLES
+                      if rx.fullmatch(x + sep + g)), None)
+        if graft:
+            raise BusinessPatternError(f"business_identifiers: {p!r} matches a generic identifier written after its "
+                                       f"prefix ({graft!r})")
         out.append(rx)
     return tuple(out)
