@@ -458,3 +458,7 @@ select { appearance: none; padding-right: 30px; background-repeat: no-repeat; ba
                            transition-duration: 1ms !important; scroll-behavior: auto !important; }
   .node[data-state="active"] .node-dot::after { display: none; }
 }
+
+/* pane titles never wrap; the meta line gives way instead */
+.pane-head h3, .pane-head h2 { white-space: nowrap; }
+.pane-head > :last-child:not(:first-child) { min-width: 0; text-align: right; }

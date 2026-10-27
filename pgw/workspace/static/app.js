@@ -483,7 +483,8 @@
     const inHouse = routeOf(v) === "in_house";
     const err = run.data.error;
     const failed = st.status === "failed";
-    const stopped = failed && err ? "Stopped here: " + err.title + "." : "Stopped here.";
+    // err.title already reads "Stopped: …"; don't repeat the word
+    const stopped = failed && err ? err.title.replace(/^Stopped:\s*/i, "Stopped here: ") + "." : "Stopped here.";
     switch (st.id) {
       case "received":
         return ["Request received", failed ? stopped : "The gateway identified the workspace and the task's data contract" +
@@ -682,7 +683,7 @@
       const instr = (v.fields || []).filter((f) => f.field === "instruction").length;
       if (instr) box.append(el("p", { cls: "pane-note", text: instr + " value(s) in the instruction were protected." }));
       body.replaceChildren(box);
-      meta.textContent = "Form · signed by the workspace";
+      meta.textContent = "Signed form";
     }
     enter(body);
   }
