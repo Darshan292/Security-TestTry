@@ -119,7 +119,11 @@ _LONG_DIGITS = re.compile(r"(?<!\d)\d(?:[\s\-./]?\d){8,}(?!\d)")
 # Words shown instead of a C3 redaction marker that the model copied into its answer (contract may override).
 # A neutral word reads correctly after any phrasing ("account (withheld)", "Aadhaar (withheld) was submitted").
 REDACTION_TEXT = {"DEFAULT": "(withheld)"}
-_MARKER = re.compile(r"\[(BANK_ACCOUNT|UPI_ID|AADHAAR|PAN|CARD|SECRET)\]")
+# Every withheld-value marker a reply can contain: all C3 types plus the identifier backstop's marker. Derived from
+# the type table, so a new protected type can never reach the user as a raw "[TYPE]" marker.
+_MARKER = re.compile(r"\[(" + "|".join(sorted(
+    {t.value for t, c in CLASS_OF.items() if c is DataClass.C3} | {EntityType.IDENTIFIER.value},
+    key=len, reverse=True)) + r")\]")
 _ORG_SENTINEL = 0xE100
 
 

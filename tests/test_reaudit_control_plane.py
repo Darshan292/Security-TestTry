@@ -2,6 +2,7 @@
 N9 mangled aliases). Synthetic data only."""
 import hashlib
 import json
+import re
 import logging
 import os
 from pathlib import Path
@@ -279,7 +280,8 @@ def test_identifier_shaped_tokens_the_model_wrote_are_masked(tmp_path, stream):
     assert r.status_code == 200
     text = streamed_text(r) if stream else r.json()["choices"][0]["message"]["content"]
     assert BARE_AADHAAR not in text and UAN not in text and "6789" not in text
-    assert text.count("[IDENTIFIER]") == 2
+    # contracted replies render every withheld-value marker as words, never as a raw "[TYPE]" marker
+    assert text.count("(withheld)") == 2 and "[IDENTIFIER" not in text and "[AADHAAR" not in text
     assert "PAY-88231" in text                     # contract business reference format: not personal
 
 
@@ -297,33 +299,34 @@ def test_incremental_stream_masks_identifiers_across_chunk_boundaries():
     for step in (1, 3, 7):
         r = Restorer({}, mode="incremental")
         out = "".join(r.feed(text[i:i + step]) for i in range(0, len(text), step)) + r.finish()
-        assert BARE_AADHAAR not in out and UAN not in out and out.count("[IDENTIFIER]") == 2
+        assert BARE_AADHAAR not in out and UAN not in out
+        assert len(re.findall(r"\[(?:IDENTIFIER|AADHAAR_LIKE)\]", out)) == 2     # the restorer emits markers
 
 
 def test_known_ids_and_business_formats_pass_the_gate():
     import re
-    r = Restorer({}, mode="buffered", known_ids=frozenset({"Z4872631"}),
+    r = Restorer({}, mode="buffered", known_ids=frozenset({"Q7305918"}),
                  business=(re.compile(r"^PAY-\d{4,6}$"),))
-    out = r.feed("passport Z4872631, ref PAY-88231, other K9182736") + r.finish()
-    assert "Z4872631" in out and "PAY-88231" in out and "K9182736" not in out and "[IDENTIFIER]" in out
+    out = r.feed("passport Q7305918, ref PAY-88231, other K9182736") + r.finish()
+    assert "Q7305918" in out and "PAY-88231" in out and "K9182736" not in out and "[IDENTIFIER]" in out
 
 
 def test_private_route_masks_identifier_shaped_tokens(tmp_path):
     class Echo(InBoundaryTestBackend):
         def __call__(self, messages, max_tokens):
-            return "पासपोर्ट Z4872631 दर्ज है।"
+            return "पासपोर्ट Q7305918 दर्ज है।"
     client = TestClient(start(private_cfg(tmp_path, LocalModel(backend=Echo())), tmp_path))
     r = call_private(client)
-    assert r.status_code == 200 and "Z4872631" not in r.text and "[IDENTIFIER]" in r.text
+    assert r.status_code == 200 and "Q7305918" not in r.text and "[IDENTIFIER]" in r.text
 
 
 def test_private_route_keeps_the_declared_requesters_employee_id(tmp_path):
     class Echo(InBoundaryTestBackend):
         def __call__(self, messages, max_tokens):
-            return "KD-11914 का अनुरोध; पासपोर्ट Z4872631 दर्ज है।"
+            return "KD-11914 का अनुरोध; पासपोर्ट Q7305918 दर्ज है।"
     client = TestClient(start(private_cfg(tmp_path, LocalModel(backend=Echo())), tmp_path))
     text = call_private(client).json()["choices"][0]["message"]["content"]
-    assert "KD-11914" in text and "Z4872631" not in text
+    assert "KD-11914" in text and "Q7305918" not in text
 
 
 # ---------------------------------------------------------------------------------------------- N9: mangled aliases
