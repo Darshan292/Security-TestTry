@@ -91,8 +91,9 @@ def tree_settings(tmp, manifest, **kw):
                 ledger_db_path=str(tmp / "ledger.sqlite"), egress_ledger_path=str(tmp / "egress.jsonl"),
                 replay_db_path=str(tmp / "replay.sqlite"),
                 master_key=os.urandom(32).hex(), upstream=MockLLMUpstream("summarise"),
-                private_upstream=MockLLMUpstream("summarise"))   # the shipped EXT_PSEUDO contracts keep unverified
-    base.update(kw)                                              # input in-boundary (unattested: PRIVATE)
+                private_upstream=MockLLMUpstream("summarise"),   # the shipped EXT_PSEUDO contracts keep unverified
+                min_config_serial=1, state_dir=str(tmp))         # input in-boundary (unattested: PRIVATE)
+    base.update(kw)
     return Settings(**base)
 
 

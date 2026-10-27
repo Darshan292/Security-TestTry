@@ -28,6 +28,35 @@ _CK = "0-9A-HJKMNP-TV-Z"
 ALIAS_RE = re.compile(rf"\[?\b({_TYPE_NAMES})_([0-9][{_CK}]{{5}}(?:[{_CK}]{{2}})?)\b\]?", re.IGNORECASE)
 MAX_ALIAS_LEN = 1 + max(len(t.value) for t in EntityType) + 1 + 8 + 1
 
+# Mangled forms a model produces (re-audit N9). Used by the restorer ONLY together with this request's alias map: a
+# match is restored only if its normalised key (TYPE_CODE, upper case, no whitespace) is a known alias. Three shapes:
+#   both brackets ([ or full-width ［ ... ] or ］): whitespace (also a newline) inside the brackets, a space, hyphen or
+#     underscore between type and code, whitespace inside the code ("[PERSON 2E68HT]", "[ person-2e68ht ]",
+#     "[PERSON_2E\n68HT]");
+#   one bracket missing ("[PERSON 2E68HT", "PERSON-2E68HT]"): separator variants only, no whitespace in the code, and
+#     the code must end (or start) at a word boundary.
+# The bare strict form ("person_2e68ht", both brackets missing) stays ALIAS_RE's.
+_OPEN, _CLOSE = "[\\[\uff3b]", "[\\]\uff3d]"
+_CODE_WS = rf"[0-9](?:\s{{0,2}}[{_CK}]){{5}}(?:(?:\s{{0,2}}[{_CK}]){{2}})?"
+_CODE = rf"[0-9][{_CK}]{{5}}(?:[{_CK}]{{2}})?"
+_SEP_WS = r"(?:\s{0,2}[_\-]\s{0,2}|\s{1,3})"
+_SEP = r"(?:[ \t]?[_\-][ \t]?|[ \t]{1,2})"
+LENIENT_ALIAS_RE = re.compile(
+    rf"{_OPEN}\s{{0,2}}(?P<t1>{_TYPE_NAMES}){_SEP_WS}(?P<c1>{_CODE_WS})\s{{0,2}}{_CLOSE}"
+    rf"|{_OPEN}[ \t]?(?P<t2>{_TYPE_NAMES}){_SEP}(?P<c2>{_CODE})(?![0-9A-Za-z_])"
+    rf"|(?<![0-9A-Za-z_])(?P<t3>{_TYPE_NAMES}){_SEP}(?P<c3>{_CODE})[ \t]?{_CLOSE}", re.IGNORECASE)
+# A tail that may still grow into a bracketed lenient alias (streaming hold-back; bounded by LENIENT_HOLD chars).
+LENIENT_PREFIX_RE = re.compile(rf"{_OPEN}\s{{0,2}}[A-Za-z_]{{0,12}}(?:[\s_\-]{{1,4}}[0-9A-Za-z\s]{{0,16}})?")
+LENIENT_HOLD = 40
+_WS = re.compile(r"\s+")
+
+
+def lenient_key(m: re.Match) -> str:
+    """'TYPE_CODE' (upper case, whitespace removed) of a LENIENT_ALIAS_RE match."""
+    t = m.group("t1") or m.group("t2") or m.group("t3")
+    c = m.group("c1") or m.group("c2") or m.group("c3")
+    return f"{t.upper()}_{_WS.sub('', c).upper()}"
+
 
 def scope_key(k_tenant_alias: bytes, scope_id: str) -> bytes:
     return HKDF(

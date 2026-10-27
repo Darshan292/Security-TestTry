@@ -17,6 +17,9 @@ Rules (`apply_deployment_profile`, called by `create_app` before anything else i
 - production: NER off (`ner_model: null`) is refused unless the profile also gives `ner_off_justification`, a
   written reason of at least 20 characters. It is a signed decision, not an environment switch.
 - development: the profile is optional; when present, differences are logged as warnings and the Settings win.
+- rollback (re-audit N5): the profile carries a monotonic integer `config_serial`. Production refuses a serial below
+  the pinned minimum (`min_config_serial`) or below the high-water mark recorded in `state_dir`
+  (pgw.gateway.rollback); both are required in production.
 
 Classification of every Settings field (`FIELD_CLASS`; a test fails if a field is missing):
 
@@ -34,13 +37,15 @@ Classification of every Settings field (`FIELD_CLASS`; a test fails if a field i
 | legacy_uncontracted, dev_allow_real_provider, trace | code | never read from env | Security-relevant development switches; production refuses them in code (`check_startup_mode`, `create_app`) |
 | upstream, private_upstream | code | never read from env | Injected objects (tests/demos). Only code already running in the process can set them, and such code is outside any configuration control |
 | mode | operational | PGW_MODE | Bootstrap: it decides whether the signed profile is required, so it cannot live in it. Logged, on every ledger line and /healthz (SECURITY_BOUNDARY.md §6.3) |
-| integrity_manifest | operational | PGW_INTEGRITY_MANIFEST | Path; whatever it names must verify under the trusted key (rollback limit: SECURITY_BOUNDARY.md §2) |
+| integrity_manifest | operational | PGW_INTEGRITY_MANIFEST | Path; whatever it names must verify under the trusted key, and its profile's config_serial must pass the rollback floors (SECURITY_BOUNDARY.md §2) |
 | trusted_config_pubkey | operational | PGW_TRUSTED_CONFIG_PUBKEY | The trust anchor cannot be inside what it verifies; must come from a store config authors cannot write |
+| min_config_serial | operational | PGW_MIN_CONFIG_SERIAL | Rollback floor next to the trust anchor (same custody): a signed tree whose config_serial is lower is refused. It cannot live in the profile it judges |
+| state_dir | operational | PGW_STATE_DIR | Holds the config high-water mark (config_serial.json); production requires an existing directory |
 | policy_signing_key, master_key, openai_api_key, anthropic_api_key | operational | PGW_POLICY_SIGNING_KEY, PGW_MASTER_KEY, *_API_KEY | Secrets: must stay out of the repo |
 | tenant_keys_file | operational | PGW_TENANT_KEYS_FILE | Path to secrets |
 | require_signed_policy | operational | PGW_REQUIRE_SIGNED_POLICY | Borderline: it can only add the legacy HMAC check; production already requires Ed25519 |
 | ledger_db_path, egress_ledger_path, replay_db_path | operational | PGW_LEDGER_DB, PGW_EGRESS_LEDGER, PGW_REPLAY_DB | State and log destinations (borderline for the audit log: its protection is the hash chain and shipping to WORM storage, OPERATIONS.md) |
-| private_model | operational | PGW_PRIVATE_MODEL | Borderline: the model name at the in-boundary endpoint; it does not change where data goes or what is inspected |
+| private_model | operational | PGW_PRIVATE_MODEL | Borderline: the model name at the in-boundary endpoint; it does not change where data goes or what is inspected. Whether the endpoint is a real model is probed (GET /v1/models), not taken from this name |
 """
 from __future__ import annotations
 
@@ -74,6 +79,15 @@ DEFAULT_MANIFEST = str(Path(__file__).resolve().parents[2] / "policies" / "MANIF
 
 def _off_or(v: str | None) -> str | None:
     return None if v is None or v.strip().lower() in ("", "none", "off") else v.strip()
+
+
+def _int_or_none(v: str | None) -> int | None:
+    """An unset/empty value is None; anything else must be a decimal integer (ValueError otherwise: startup stops)."""
+    if v is None or not v.strip():
+        return None
+    if not v.strip().isdigit():
+        raise ValueError("PGW_MIN_CONFIG_SERIAL must be a positive integer")
+    return int(v.strip())
 
 
 def parse_allowlist(raw: str | None) -> tuple[str, ...]:
@@ -174,6 +188,10 @@ class Settings:
     # Ed25519 public key (64 hex chars) that must have signed the manifest. Required in production. It must come
     # from deployment configuration the config authors cannot write (secret store / image), not from the repo.
     trusted_config_pubkey: str | None = None
+    # Rollback protection (pgw.gateway.rollback): the lowest config_serial accepted (kept with the trust anchor), and
+    # the directory holding the persisted high-water mark. Both required in production.
+    min_config_serial: int | None = None
+    state_dir: str | None = None
     policy_signing_key: str = field(default="", repr=False)   # legacy HMAC key (hex); if set, its MAC must verify
     require_signed_policy: bool = False
     # Private (C4) route: one in-boundary OpenAI-compatible endpoint. None = no private route (contracts that
@@ -226,6 +244,8 @@ class Settings:
             max_concurrent_protect=int(e.get("PGW_MAX_CONCURRENT_PROTECT", cls.max_concurrent_protect)),
             integrity_manifest=e.get("PGW_INTEGRITY_MANIFEST", cls.integrity_manifest),   # no off switch in env
             trusted_config_pubkey=e.get("PGW_TRUSTED_CONFIG_PUBKEY") or None,
+            min_config_serial=_int_or_none(e.get("PGW_MIN_CONFIG_SERIAL")),
+            state_dir=e.get("PGW_STATE_DIR") or None,
             policy_signing_key=e.get("PGW_POLICY_SIGNING_KEY", ""),
             require_signed_policy=e.get("PGW_REQUIRE_SIGNED_POLICY", "") == "1",
             private_upstream_url=e.get("PGW_PRIVATE_UPSTREAM_URL") or None,
@@ -248,6 +268,7 @@ FIELD_CLASS: dict[str, str] = {
     "max_body_bytes": PROFILE, "max_content_chars": PROFILE, "max_messages": PROFILE,
     "protect_timeout_s": PROFILE, "max_concurrent_protect": PROFILE,
     "integrity_manifest": OPERATIONAL, "trusted_config_pubkey": OPERATIONAL, "policy_signing_key": OPERATIONAL,
+    "min_config_serial": OPERATIONAL, "state_dir": OPERATIONAL,
     "require_signed_policy": OPERATIONAL, "private_upstream_url": PROFILE, "private_model": OPERATIONAL,
     "private_allowlist": PROFILE, "private_upstream": CODE, "upstream": CODE, "trace": CODE,
 }
@@ -336,10 +357,13 @@ def parse_profile(data: bytes) -> tuple[dict, str | None]:
         raise ProfileError("deployment profile is not valid YAML") from None
     if not isinstance(doc, dict) or doc.get("kind") != PROFILE_DOC_KIND:
         raise ProfileError(f"deployment profile must declare kind: {PROFILE_DOC_KIND}")
-    extra_top = set(doc) - {"kind", "version", "settings", "ner_off_justification"}
+    extra_top = set(doc) - {"kind", "version", "config_serial", "settings", "ner_off_justification"}
     if extra_top or not isinstance(doc.get("version"), int) or not isinstance(doc.get("settings"), dict):
         raise ProfileError("deployment profile needs exactly: kind, version (int), settings (mapping), "
-                           "and optionally ner_off_justification")
+                           "and optionally config_serial and ner_off_justification")
+    cs = doc.get("config_serial")
+    if cs is not None and (not isinstance(cs, int) or isinstance(cs, bool) or cs < 1):
+        raise ProfileError("deployment profile: config_serial must be an integer >= 1")
     raw = doc["settings"]
     unknown = sorted(set(raw) - set(PROFILE_FIELDS))
     missing = [f for f in PROFILE_FIELDS if f not in raw]
@@ -353,6 +377,15 @@ def parse_profile(data: bytes) -> tuple[dict, str | None]:
     if just is not None and not isinstance(just, str):
         raise ProfileError("deployment profile: ner_off_justification must be text")
     return vals, just
+
+
+def profile_serial(data: bytes | None) -> int | None:
+    """The profile's config_serial (None if absent or no profile). Call after parse_profile has validated it."""
+    if data is None:
+        return None
+    import yaml
+    doc = yaml.safe_load(data.decode("utf-8"))
+    return doc.get("config_serial") if isinstance(doc, dict) else None
 
 
 def _norm(kind: str, v, base: Path | None, from_profile: bool):

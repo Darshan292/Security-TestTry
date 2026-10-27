@@ -16,7 +16,7 @@ from pgw.gateway.app import create_app
 from tests.sealed import attest, production
 from pgw.gateway.settings import Settings
 from pgw.gateway.upstream import MockLLMUpstream, OpenAICompatUpstream
-from pgw.private_llm import app as private_app
+from pgw import private_llm
 from pgw.product.contracts import ContractError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,13 +25,23 @@ HINDI = "राहुल शर्मा (KD-11914) का वेतन खा�
 SUBJ = {"requester": {"name": "Rahul Sharma", "employee_id": "KD-11914"}}
 
 
+class InBoundaryTestBackend(private_llm._Extractive):
+    """A TEST double for a real in-boundary model: the extractive behaviour under a non-stand-in identity. Production
+    refuses the shipped stand-in (tests/test_reaudit_control_plane.py), so production routing tests name their own
+    backend explicitly; nothing in the shipped code can produce this identity."""
+    name = "test-inboundary-model"
+    backend = "test"
+
+
 class LocalModel(OpenAICompatUpstream):
-    """The real pgw.private_llm app, reached over HTTP (ASGI transport), recording what it received."""
+    """The pgw.private_llm endpoint (around InBoundaryTestBackend unless told otherwise), reached over HTTP (ASGI transport),
+    recording what it received. Its /v1/models identity probe goes through a synchronous ASGI client."""
     name = "private"
 
-    def __init__(self, fail=False):
-        transport = httpx.ASGITransport(app=private_app)
-        super().__init__("http://127.0.0.1:8090/v1", "", client=httpx.AsyncClient(transport=transport))
+    def __init__(self, fail=False, backend=None):
+        papp = private_llm.build_app(backend or InBoundaryTestBackend())
+        super().__init__("http://127.0.0.1:8090/v1", "", client=httpx.AsyncClient(transport=httpx.ASGITransport(app=papp)),
+                         sync_client=TestClient(papp, base_url="http://127.0.0.1:8090"))
         self.received, self.fail = [], fail
 
     async def complete(self, body):

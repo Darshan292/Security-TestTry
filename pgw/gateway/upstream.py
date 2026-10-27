@@ -31,6 +31,31 @@ class UpstreamError(Exception):
     """Provider failure. The message never contains request or response text."""
 
 
+# --- in-boundary model identity (re-audit N2) ------------------------------------------------------------------------
+# pgw.private_llm without model weights is an extractive stand-in, not a language model. It always identifies itself
+# with this id and backend marker (GET /v1/models and every reply); older builds used "local-extractive".
+STANDIN_MODEL_ID = "extractive-standin"
+STANDIN_BACKEND = "standin"
+STANDIN_IDS = frozenset({STANDIN_MODEL_ID, "local-extractive"})
+
+
+def is_standin_entry(entry) -> bool:
+    """A /v1/models entry or a chat reply that comes from the stand-in."""
+    return isinstance(entry, dict) and (entry.get("id") in STANDIN_IDS or entry.get("model") in STANDIN_IDS
+                                        or entry.get("pgw_backend") == STANDIN_BACKEND)
+
+
+def private_identity(payload) -> tuple[str, tuple[str, ...]]:
+    """Judge an in-boundary endpoint's /v1/models answer: ("standin" | "model", listed model ids).
+    Raises UpstreamError if the answer is not an OpenAI-style model list with at least one id."""
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list) or not data or not all(isinstance(e, dict) and isinstance(e.get("id"), str)
+                                                         and e["id"] for e in data):
+        raise UpstreamError("private endpoint identity probe: not a model list")
+    ids = tuple(e["id"] for e in data)
+    return ("standin" if any(is_standin_entry(e) for e in data) else "model"), ids
+
+
 @runtime_checkable
 class Upstream(Protocol):
     name: str
@@ -46,8 +71,11 @@ class OpenAICompatUpstream:
     name = "openai"
 
     def __init__(self, base_url: str, api_key: str, timeout: float = 120.0,
-                 client: httpx.AsyncClient | None = None):
+                 client: httpx.AsyncClient | None = None, sync_client: httpx.Client | None = None):
         self.url = base_url.rstrip("/") + "/chat/completions"
+        self.models_url = base_url.rstrip("/") + "/models"
+        self._sync_client = sync_client     # used only by identify() at startup (tests/demos inject one)
+        self._probe_timeout = min(timeout, 10.0)
         self._headers = {"Content-Type": "application/json"}
         if api_key:   # an in-boundary endpoint may need no key; "Bearer " alone is an illegal header
             self._headers["Authorization"] = f"Bearer {api_key}"
@@ -55,6 +83,23 @@ class OpenAICompatUpstream:
 
     def wire_bytes(self, body: dict) -> bytes:
         return serialize_body(body)
+
+    def identify(self) -> dict:
+        """GET <base>/models, synchronously (startup only; no proxy from the environment). Raises UpstreamError."""
+        try:
+            if self._sync_client is not None:
+                r = self._sync_client.get(self.models_url, headers=self._headers)
+            else:
+                with httpx.Client(timeout=self._probe_timeout, trust_env=False) as c:
+                    r = c.get(self.models_url, headers=self._headers)
+        except httpx.HTTPError as e:
+            raise UpstreamError(f"identity probe transport error: {type(e).__name__}") from None
+        if r.status_code != 200:
+            raise UpstreamError(f"identity probe status {r.status_code}")
+        try:
+            return r.json()
+        except ValueError:
+            raise UpstreamError("identity probe returned invalid JSON") from None
 
     async def complete(self, body: dict) -> dict:
         try:
@@ -246,6 +291,10 @@ class MockLLMUpstream:
 
     def wire_bytes(self, body: dict) -> bytes:
         return serialize_body(body)
+
+    def identify(self) -> dict:
+        """The mock is a code-injected test double (never configured from the environment or profile)."""
+        return {"object": "list", "data": [{"id": "mock", "object": "model", "owned_by": "pgw-mock"}]}
 
     # -- generation --
     @staticmethod

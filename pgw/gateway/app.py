@@ -26,19 +26,22 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
+from ..detect import idshape
 from ..detect.edm import RestoreLedger, RosterIndex
 from ..detect.recognizers import detect_d2
 from ..egress import check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
 from ..policy import PolicyPack, UnknownPurpose
-from ..stream import Restorer
+from ..stream import Restorer, compact_id
 from ..product import attest, integrity, local_compute, subjects
 from ..product.content import unreliable_script
 from ..product.contracts import CLASS_OF, Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
+from . import rollback
 from .settings import (MODES, Settings, apply_deployment_profile, check_destination, check_private_destination,
-                       profile_location)
-from .upstream import AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError
+                       profile_location, profile_serial)
+from .upstream import (AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError,
+                       is_standin_entry, private_identity)
 
 log = logging.getLogger("pgw.gateway")
 
@@ -290,6 +293,36 @@ def load_roster(path: str, key: bytes, data: bytes | None = None) -> RosterIndex
 from ..audit import ChainedLedger as _ChainedLedger   # noqa: E402
 
 
+def probe_private(private, private_model: str, production: bool) -> str:
+    """Identity of the in-boundary endpoint (re-audit N2): "model", "standin" or "unverified" (development only).
+
+    The endpoint answers GET /v1/models (OpenAI-compatible; vLLM, Ollama, llama.cpp server and pgw.private_llm all
+    do). pgw.private_llm without model weights always reports the stand-in id/backend marker, fixed in code.
+    Production refuses a stand-in, an endpoint that cannot be probed and a malformed answer (ValueError)."""
+    identify = getattr(private, "identify", None)
+    try:
+        if identify is None:
+            raise UpstreamError("private endpoint exposes no identity probe")
+        kind, ids = private_identity(identify())
+    except Exception as e:
+        if production:
+            raise ValueError("production refuses a private (in-boundary) endpoint whose identity cannot be verified "
+                             f"(GET /v1/models: {type(e).__name__}); see OPERATIONS.md") from None
+        _log(logging.WARNING, event="private_model_unverified_development_only", error_type=type(e).__name__)
+        return "unverified"
+    if kind == "standin":
+        if production:
+            raise ValueError("production refuses the extractive stand-in as the private (in-boundary) model: a "
+                             "contract routes content to PRIVATE, so a real model endpoint is required "
+                             "(OPERATIONS.md, 'In-boundary model')")
+        for _ in range(3):   # loud on purpose: answers on the private route are NOT from a language model
+            _log(logging.WARNING, event="PRIVATE_MODEL_IS_EXTRACTIVE_STANDIN_NOT_AN_LLM_development_only")
+        return "standin"
+    if private_model not in ids:
+        _log(logging.WARNING, event="private_model_not_listed_by_endpoint", model=private_model[:64])
+    return "model"
+
+
 class EgressLedger(_ChainedLedger):
     """Append-only JSONL, one line per upstream call. Metadata only, never content. Hash-chained, fsync'd and
     MAC'd with the platform audit key when a tenant key file is configured (pgw.audit); a log that does not
@@ -338,6 +371,11 @@ def create_app(settings: Settings) -> Starlette:
     settings, differs = apply_deployment_profile(settings, profile_bytes, loc[0] if loc else None)
     for name in differs:
         log.warning("event='deployment_profile_differs_development_only' setting=%r", name)
+    # Rollback (re-audit N5): an older, validly signed tree is refused by the pinned minimum serial and by the
+    # persisted high-water mark (pgw.gateway.rollback). Recorded only after every other startup check passed.
+    config_serial = profile_serial(profile_bytes)
+    for event in rollback.check(config_serial, settings.min_config_serial, settings.state_dir, prod):
+        _log(logging.WARNING, event=event)
 
     registry = load_registry(settings.registry_path, read(settings.registry_path))
     sealed = _sealed_paths(settings, [c for a in registry for _, c in a.tasks])
@@ -409,8 +447,14 @@ def create_app(settings: Settings) -> Starlette:
         if c.external_input.unattested == "PRIVATE" and private is None:
             raise ContractError(f"purpose {p!r} routes unattested input privately but no private endpoint is "
                                 "configured")
+    needs_private = any(c.classes[DataClass.C4] == "PRIVATE" or c.external_input.unattested == "PRIVATE"
+                        for c in contracts.values())
+    private_kind = probe_private(private, settings.private_model, prod) if needs_private else None
     egress_ledger = EgressLedger(settings.egress_ledger_path, keys if settings.tenant_keys_file else None)
     slots = threading.BoundedSemaphore(settings.max_concurrent_protect)
+    if prod:   # every startup check above passed: raise the high-water mark (atomic, fsync'd, locked)
+        if rollback.record(config_serial, settings.state_dir):
+            _log(logging.WARNING, event="config_high_water_initialised")
     _log(logging.INFO if prod else logging.WARNING, event="started", mode=settings.mode, integrity=integrity_ref,
          ner=settings.ner_model if contracts else None, provider=upstream.name)
 
@@ -617,7 +661,7 @@ def create_app(settings: Settings) -> Starlette:
                     reason=e.reason, unattested=contract.external_input.unattested)
                 if contract.external_input.unattested == "PRIVATE":
                     return await _private(rid, app, purpose, model, body, ctx, contract, t0, "input_not_sanitized",
-                                          e.reason)
+                                          e.reason, declared_ids(contract, subj))
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                             "input_not_sanitized", contract, attestation=e.reason)
                 raise _Reject(422, "input_not_source_sanitized",
@@ -626,7 +670,8 @@ def create_app(settings: Settings) -> Starlette:
                               attestation=e.reason) from None
             _tr("input_source", attested=True, accepted=True, verified=True, sanitizer=input_source)
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
-                return await _private(rid, app, purpose, model, body, ctx, contract, t0)
+                return await _private(rid, app, purpose, model, body, ctx, contract, t0,
+                                      declared=declared_ids(contract, subj))
             if contract.classes[DataClass.C4] == "REFUSE" and any(unreliable_script(t) for t in texts):
                 ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                             "content_class_C4", contract)
@@ -762,11 +807,20 @@ def create_app(settings: Settings) -> Starlette:
         if contract is not None:   # only the classes the contract lists are restored
             never = frozenset(never | {t for t in EntityType if not contract.restorable(t)})
 
+        # Identifier-shaped values the model may legitimately write back (N8): what this request sent it in clear,
+        # and the values restore will put back itself. Anything else identifier-shaped in the answer is masked.
+        sent_text = "\n".join(subjects.request_texts(prot.messages))
+        known_ids = {compact_id(sent_text[d.start:d.end]) for d in idshape.detect(sent_text)}
+        known_ids |= {compact_id(e.value) for e in prot.alias_map.values()
+                      if isinstance(e.value, str) and e.type not in never}
+
         def new_restorer() -> Restorer:
             return Restorer(prot.alias_map, restore=app.restore_output, never_restore=never,
                             roster=roster, mode=policy.stream_mode(purpose),
                             allowed=frozenset(o.lower() for o in ((*contract.org_contacts, *contract.public_constants)
-                                                                  if contract else ())))
+                                                                  if contract else ())),
+                            business=contract.business_identifiers if contract else (),
+                            known_ids=frozenset(known_ids))
 
         def record(items) -> None:
             if ctx.conversation_id:
@@ -776,8 +830,13 @@ def create_app(settings: Settings) -> Starlette:
             return await _non_stream(rid, up_body, new_restorer, record, contract)
         return await _stream(rid, up_body, new_restorer, record, contract)
 
+    def declared_ids(contract, subj) -> frozenset:
+        """Compact forms of the declared subjects' restorable values (e.g. the requester's employee id): the app
+        supplied them and would get them back restored on the external route, so the private gate lets them pass."""
+        return frozenset(compact_id(v) for _r, t, v in subj if isinstance(v, str) and contract.restorable(t))
+
     async def _private(rid, app, purpose, model, body, ctx, contract, t0, reason="content_class_C4",
-                       attestation=None) -> Response:
+                       attestation=None, declared: frozenset = frozenset()) -> Response:
         """C4 content the gateway cannot protect reliably goes, unprotected, ONLY to the in-boundary model.
         The external upstream is never called. The answer still passes the output gate (raw C3 is masked)."""
         if body.get("stream"):
@@ -802,14 +861,32 @@ def create_app(settings: Settings) -> Starlette:
         except Exception as e:
             _log(logging.ERROR, event="private_upstream_failed", request_id=rid, error_type=type(e).__name__)
             raise _Reject(502, "private_upstream_error", "private model unavailable; nothing was sent externally") from None
+        # A reply from the stand-in is marked (development) or withheld (production: the endpoint changed after the
+        # startup probe). The marking depends on the endpoint's own fixed identity, never on configuration.
+        standin = private_kind == "standin" or (isinstance(data, dict) and is_standin_entry(data))
+        if standin and prod:
+            _log(logging.CRITICAL, event="private_model_standin_reply_refused", request_id=rid)
+            raise _Reject(503, "private_model_unavailable", "in-boundary model is a stand-in; response withheld")
         try:
             text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
             out = None
             if isinstance(text, str):   # C3 never returns to the app, whichever model produced it
+                dets = detect_d2(text)
+                masks = [(d.start, d.end, d.type.value) for d in dets if CLASS_OF.get(d.type) is DataClass.C3]
+                # identifier-shaped tokens no recognizer typed (N8): a business reference format of the contract
+                # or a declared subject's restorable value stays, anything else is withheld like C3
+                typed = [(d.start, d.end) for d in dets]
+                masks += [(d.start, d.end, d.type.value)
+                          for d in idshape.exempt_business(text, idshape.detect(text), contract.business_identifiers)
+                          if not any(s < d.end and d.start < e for s, e in typed)
+                          and compact_id(text[d.start:d.end]) not in declared]
                 out = text
-                for d in sorted(detect_d2(text), key=lambda d: d.start, reverse=True):
-                    if CLASS_OF.get(d.type) is DataClass.C3:
-                        out = out[:d.start] + f"[{d.type.value}]" + out[d.end:]
+                taken: list[tuple[int, int]] = []
+                for s_, e_, t_ in sorted(masks, key=lambda x: (-x[0], x[0] - x[1])):
+                    if any(not (e_ <= a or s_ >= b) for a, b in taken):
+                        continue
+                    taken.append((s_, e_))
+                    out = out[:s_] + f"[{t_}]" + out[e_:]
                 # Detectors cannot read C4 content reliably (that is why it is here): also mask every long digit
                 # run (account / Aadhaar / card lengths, any separators), whatever script surrounds it.
                 out = _LONG_DIGITS.sub("[NUMBER]", out)
@@ -821,7 +898,8 @@ def create_app(settings: Settings) -> Starlette:
         return JSONResponse({"id": data.get("id"), "object": "chat.completion", "created": data.get("created"),
                              "model": data.get("model"), "choices": [{"index": 0, "finish_reason": "stop",
                              "message": {"role": "assistant", "content": out}}]},
-                            headers={"X-PGW-Request-Id": rid, "X-PGW-Route": "PRIVATE_LOCAL"})
+                            headers={"X-PGW-Request-Id": rid, "X-PGW-Route": "PRIVATE_LOCAL",
+                                     "X-PGW-Private-Model": "standin" if standin else private_kind or "unverified"})
 
     async def _non_stream(rid, up_body, new_restorer, record, contract=None) -> Response:
         try:

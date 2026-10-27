@@ -55,13 +55,18 @@ in `policies/MANIFEST.json`, with the sha256 and version of each file.
 | An edited, missing or unsigned profile, or a signed manifest that omits it, stops production | `integrity.verify`, `apply_deployment_profile` | `test_an_edited_profile_without_re_signing_stops_startup`, `test_a_missing_or_unsealed_profile_stops_production`, `test_malformed_profiles_are_refused[*]` |
 | NER off in production is a signed decision: `ner_model: null` needs `ner_off_justification` (at least 20 characters) in the profile. A model that does not load still stops startup | `apply_deployment_profile` | `test_ner_off_without_a_signed_justification_stops_production[*]`, `test_ner_off_with_a_signed_justification_starts`, `test_ner_model_that_does_not_load_stops_startup` |
 | In development the profile is optional; differences are logged as warnings and the Settings value is used | `apply_deployment_profile` | `test_development_tolerates_differences_with_warnings`, `test_development_without_a_profile_starts` |
+| **Rollback (re-audit N5).** The signed profile carries a monotonic integer `config_serial`. Production refuses an older, validly signed tree by two independent floors: (1) the pinned minimum `PGW_MIN_CONFIG_SERIAL` (operational, same custody as the trust anchor), which holds on a fresh host or an empty state directory; (2) the high-water mark `<PGW_STATE_DIR>/config_serial.json`, the highest serial this state directory has started with. Production requires a serial, the minimum and an existing state directory. Equal and higher serials start | `pgw/gateway/rollback.py`, `create_app` | `tests/test_reaudit_control_plane.py`: `test_audit_scenario_older_weaker_signed_tree_is_refused_by_both_mechanisms`, `test_equal_and_higher_serials_start_and_raise_the_mark`, `test_production_requires_serial_pinned_minimum_and_existing_state_dir` |
+| The high-water mark is written only after every other startup check passed, atomically (temp file, fsync, rename, directory fsync) under an exclusive lock, and re-checked under the lock. A missing file is initialised (logged `config_high_water_initialised`). An unreadable or corrupt file stops startup and is never rewritten. Development never writes it and only warns about a serial below a configured floor | `rollback.check`, `rollback.record` | `test_corrupt_high_water_mark_fails_closed_and_is_not_reset[*]`, `test_unreadable_high_water_mark_fails_closed`, `test_high_water_write_is_atomic_and_leaves_no_temp_file`, `test_development_warns_and_never_writes_the_mark` |
 
 **Workflow:**
 
 1. Run `python -m pgw.product.integrity keygen KEYFILE` once. It creates an offline private key and prints the
    public key.
 2. After each reviewed change, run `python -m pgw.product.integrity seal --sign-key KEYFILE`.
-3. Deploy with `PGW_TRUSTED_CONFIG_PUBKEY=<hex>`.
+3. Deploy with `PGW_TRUSTED_CONFIG_PUBKEY=<hex>`, `PGW_MIN_CONFIG_SERIAL=<the profile's config_serial>` and
+   `PGW_STATE_DIR=<existing persistent directory>`. Every signed change raises `config_serial` in
+   `registry/deployment.yaml`. A deliberate rollback is a new signed change: the old content, re-signed with a serial
+   above the current one (OPERATIONS.md).
 
 **The manifest committed in this repository is sealed but unsigned.** It is valid for development only, so a
 production deployment must be signed by its own approver. The older HMAC (`PGW_POLICY_SIGNING_KEY`) is still
@@ -72,10 +77,13 @@ verified if configured, but it is not a trust anchor: whoever holds the gateway'
 - Anyone who can replace `PGW_TRUSTED_CONFIG_PUBKEY` can make the gateway trust their own signature. That public
   key must come from configuration the config authors cannot write (secret store, image, admission policy).
 - Who may hold the private key, and how a change is reviewed before it is signed, is an organisational control.
-- **No rollback protection.** An older manifest that was validly signed, together with its older files, still
-  verifies. For example, a previous registry with a model or key hash that was later removed would be accepted. To
-  prevent this, the deployment must pin what it ships (an immutable image digest) or rotate the signing key when
-  revoking a configuration. The gateway keeps no monotonic config serial.
+- **Rollback limits.** The serial floors refuse an older signed tree only if the operator raises
+  `PGW_MIN_CONFIG_SERIAL` with each release or keeps the state directory. Whoever can lower
+  `PGW_MIN_CONFIG_SERIAL` *and* delete or replace `config_serial.json` (a host-level attacker, or a fresh host whose
+  minimum was left at an old value) can still start an older signed tree; so can anyone who re-signs with the
+  private key. Two different trees signed with the same serial are not told apart. The high-water mark is per state
+  directory, not shared between hosts. Pinning the shipped image digest and rotating the signing key when revoking a
+  configuration remain useful complements.
 - Every sealed file is read once at startup, and the bytes that are verified are the bytes that are parsed. A file
   swapped on disk during startup cannot be served unverified (`test_verified_bytes_are_the_parsed_bytes`). A change
   on disk after startup has no effect until restart, and the restart re-verifies it.
@@ -174,6 +182,27 @@ Every request for a contracted purpose must carry four headers, on every route. 
 - A verified request's ledger line records `input_source` (the id) and `input_verified: true`.
 - The shipped EXT_PSEUDO contracts default to `PRIVATE`. `PRIVATE` is allowed only on EXT_PSEUDO contracts, and the
   gateway does not start unless a private endpoint is configured. LOCAL_COMPUTE contracts keep `REFUSE`.
+- **The in-boundary endpoint must be a real model (re-audit N2).** `pgw/private_llm.py` without `PGW_PRIVATE_GGUF`
+  is an extractive stand-in that returns the ticket's first sentences; it is not a language model. When any contract
+  routes to PRIVATE (`unattested: PRIVATE` or `C4: PRIVATE`), startup probes the endpoint's identity with
+  `GET /v1/models` (`probe_private`, `pgw/gateway/app.py`). The stand-in always reports the id `extractive-standin`
+  and `pgw_backend: standin` (fixed in code, also on every reply), so a configuration value cannot make it pass.
+  - **Production** refuses the stand-in, an endpoint that cannot be probed or answers with something other than an
+    OpenAI-style model list, and an injected endpoint with no probe. A reply whose `model`/`pgw_backend` is the
+    stand-in's (the endpoint changed after startup) is withheld with 503 `private_model_unavailable`.
+  - **Development** allows the stand-in with a repeated `PRIVATE_MODEL_IS_EXTRACTIVE_STANDIN_NOT_AN_LLM` startup
+    warning. Every private-route reply carries `X-PGW-Private-Model: standin` (or `model`, or `unverified` when the
+    development probe failed).
+  - A real deployment runs an OpenAI-compatible model server inside the boundary (vLLM, Ollama, llama.cpp server)
+    whose `/v1/models` lists `PGW_PRIVATE_MODEL`. Answer quality of that model is not evaluated here; it must be
+    evaluated with HR staff before the route is relied on (OPERATIONS.md).
+  - Tests: `test_production_refuses_the_extractive_stand_in`,
+    `test_production_refuses_the_stand_in_even_when_the_model_name_claims_otherwise`,
+    `test_production_refuses_an_endpoint_whose_identity_cannot_be_verified[*]`,
+    `test_production_withholds_a_stand_in_reply_after_the_endpoint_changed`,
+    `test_development_allows_the_stand_in_loudly_and_marks_every_reply`.
+  - **Not verified:** that a model which is not the stand-in is any good, or that an endpoint lying about its
+    identity is not a stand-in. The probe stops an accident, not a deliberate fake.
 - **Demo keys.** The shipped contracts pin DEMO keys whose private halves are committed
   (`tests/fixtures/DEMO_ONLY_source_signing_keys.json`) so that demos and tests can sign. Production refuses to
   start with any of them (`pgw.product.attest.DEMO_PUBKEYS`). Development accepts them. Operators must replace them
@@ -236,8 +265,8 @@ M1–M3). It is not a general evaluator.
    attests the input. Recall is measured in `SECURITY_EVALUATION.md` and is not complete.
 2. **What a signed source did.** The gateway verifies which source key signed the input (§4). It does not
    verify that the source's sanitizer removed anything, or that only the source holds the key.
-3. **The trust anchor.** The gateway cannot verify where `PGW_TRUSTED_CONFIG_PUBKEY` came from, or whether
-   `PGW_MODE=development` is used outside development.
+3. **The trust anchor.** The gateway cannot verify where `PGW_TRUSTED_CONFIG_PUBKEY` and `PGW_MIN_CONFIG_SERIAL`
+   came from, or whether `PGW_MODE=development` is used outside development.
 4. **Network-level egress.** The app must not be able to reach the provider around the gateway. That is the
    network policy in `deploy/`, not application code.
 5. **Provider behaviour.** Retention and region are attested by the operator (`PGW_PROVIDER_*`), not verified.
@@ -245,8 +274,9 @@ M1–M3). It is not a general evaluator.
 7. **Declared subjects' completeness.** People the app does not declare rely on detection.
 8. **Gateway settings outside the signed profile.** Since the deployment profile, every security-relevant setting
    is signed and the environment can only repeat it. What still comes from the environment is operational: the
-   mode (6.3), the trust anchor (6.3), the manifest path (any manifest it names must verify; rollback limit in §2),
-   secrets and key files, ledger and audit-log locations, and the private model name. Code-only fields (injected
+   mode (6.3), the trust anchor and the rollback floor `PGW_MIN_CONFIG_SERIAL` (6.3), the manifest path (any
+   manifest it names must verify and pass the serial floors; limits in §2), the state directory, secrets and key
+   files, ledger and audit-log locations, and the private model name. Code-only fields (injected
    upstreams, development switches) are never read from the environment. The gateway also cannot tell whether the
    signed values are right for the deployment (e.g. that the profile's allowlist matches the network policy, or that
    a provider attestation is true): that is review before signing.
@@ -276,6 +306,15 @@ that commit (mock provider, synthetic data). The auditor's own scripts were not 
 | — | A partial name ("Priya", "Ms Raghunathan", "P. Raghunathan", "priya") got a different alias from the full name | Confirmed (mock provider) | **Fixed.** In a request, a partial mention takes the alias of the one detected or declared full name that contains it, and restores to that full name. Across turns, the restore ledger keeps keyed hashes of each full name's parts linked to its alias (`name_links`), so a later turn that writes only a part gets the same alias (and restores to the part it wrote: the ledger never stores names). **Ambiguity rule:** a part contained in two different full names (two people called Priya, now or earlier in the conversation) is never merged; it gets an alias of its own, stays replaced, and stays ambiguous for the rest of the conversation |
 | C5/C6 | Bands shown in drafted emails; honorific guessed from a placeholder ("Mr. Priya") | Confirmed | **Mitigated in guidance.** `hr_email_draft` now tells the model not to copy bands and not to use honorifics. Bands are not restored by design |
 | C7 | INSTALL.md said `dev.txt`/`ner.txt` include runtime packages | Confirmed | **Fixed** in INSTALL.md |
+
+### Re-audit (2026-10): control-plane findings
+
+| # | Finding | Status |
+|---|---|---|
+| N5 | Pointing `PGW_INTEGRITY_MANIFEST` at an older, validly signed tree (NER off with a justification, a 10M-character content limit) started | **Fixed in code (§2).** Monotonic `config_serial` in the signed profile; production refuses a lower serial by the pinned `PGW_MIN_CONFIG_SERIAL` and, independently, by the persisted high-water mark in `PGW_STATE_DIR` (atomic, fsync'd; corrupt or unreadable fails closed). Residual: an attacker who controls both the pinned minimum and the state directory, or holds the signing key (§2) |
+| N2 | The "in-house default" private model was an extractive stand-in | **Fixed honestly (§4).** Production refuses the stand-in (identity probe `GET /v1/models`, fixed stand-in id and marker) whenever a contract routes to PRIVATE, and withholds a stand-in reply; development allows it with a loud warning and `X-PGW-Private-Model: standin` on every private reply. No model ships. A real in-boundary model server is an operator obligation, and its answer quality must be evaluated with HR staff |
+| N8 | The output gate did not run the identifier backstop: a bare Aadhaar written by the model reached the user | **Fixed.** The output gate (non-stream, stream, private route) also runs `pgw.detect.idshape.detect`. An identifier-shaped token no scheme recognizer typed is masked `[IDENTIFIER]`, unless it lies inside an alias, is a declared organisational value, matches the contract's `business_identifiers`, or is a value this request sent to the model in clear or restores itself (external route) or a declared subject's restorable value such as the requester's employee id (private route) (`tests/test_reaudit_control_plane.py`: `test_identifier_shaped_tokens_the_model_wrote_are_masked[*]`, `test_incremental_stream_masks_identifiers_across_chunk_boundaries`, `test_private_route_masks_identifier_shaped_tokens`). Residual: the backstop's own limits (§6.9: identifiers split across lines, longer than 18 digits, or in words) |
+| N9 | Mangled aliases (`[PERSON 2E68HT]`, `[PERSON-8PESJS]`, split by a newline) were shown as-is | **Fixed.** The restorer accepts a space, hyphen or underscore separator, any case, whitespace or a newline inside the brackets, full-width brackets, and one missing bracket, and restores only when the normalised form is exactly a known alias of this request (`alias.LENIENT_ALIAS_RE`). Look-alikes that are not a known alias are left untouched (not marked fabricated). Streaming holds back at most 40 characters of an unclosed bracket that may still become an alias (`test_mangled_alias_of_this_request_is_restored[*]`, `test_lookalike_text_is_left_untouched[*]`, `test_streaming_holdback_for_an_unclosed_bracket_is_bounded`). Residual: other manglings (dropped characters, both brackets missing with a space or hyphen, a type name with spaces) still show as-is |
 
 **What this means.** The audit's main verdict stands. Detection in free text leaks, so free text must not go to an
 external model unless its source really reduces it. Run detection as a backstop, not as the control. The changes

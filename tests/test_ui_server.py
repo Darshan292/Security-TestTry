@@ -64,6 +64,7 @@ def test_private_withholding_check_fails_when_the_gate_is_broken(client, monkeyp
 
     import pgw.gateway.app as A
     monkeypatch.setattr(A, "_LONG_DIGITS", re.compile(r"(?!x)x"))       # simulate a broken output gate
+    monkeypatch.setattr(A.idshape, "detect", lambda text: [])           # (both layers: long digits and shapes)
     ev, steps, checks = run(client, "C4")
     assert "644748074748" in ev[-1]["panes"]["answer"]
     assert checks["private_withheld"]["status"] == "fail"

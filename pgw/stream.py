@@ -14,14 +14,24 @@ Modes (chosen per purpose by policy, see PolicyPack.stream_mode):
       - W5: a whitespace-free run longer than TOKEN_MAX is cut only at a delimiter that is not
             inside an alias or an alias prefix; if no safe cut exists, it is held.
       - text is released in batches (>= MIN_RELEASE chars or at a newline) to bound gate cost.
+
+Re-audit changes:
+  * N8: the gate also runs the number-shaped identifier backstop (pgw.detect.idshape) on model output. An
+    identifier-shaped token that no scheme recognizer typed is masked as [IDENTIFIER], unless it is a known alias,
+    a declared organisational value, a contract business reference format, or a value this request already sent to
+    the model in clear or will restore itself (`known_ids`, compact form).
+  * N9: mangled aliases ("[PERSON 2E68HT]", "[PERSON-8PESJS]", a newline inside the brackets, full-width brackets,
+    one bracket missing) are restored when, normalised, they are exactly a known alias of this request
+    (alias.LENIENT_ALIAS_RE). Anything else alias-like is left untouched. Streaming holds back at most
+    alias.LENIENT_HOLD characters of an unclosed bracket that could still become such an alias.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 
-from .alias import ALIAS_RE
-from .detect import recognizers
+from .alias import ALIAS_RE, LENIENT_ALIAS_RE, LENIENT_HOLD, LENIENT_PREFIX_RE, lenient_key
+from .detect import idshape, recognizers
 from .types import EntityType
 
 HOLD_MAX = 64            # max chars of trailing risky tokens held back (numbers/dates/amounts span spaces)
@@ -35,6 +45,15 @@ GATE_CONTEXT_MAX = 32_768  # beyond this much output, incremental degrades to bu
 _RISKY_WORD = re.compile(
     r"(?:\d|₹|rs\.?$|inr|lakh|lac|crore|lpa|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\+|@)", re.IGNORECASE)
 _SAFE_DELIMS = set(',;{}[]"\'<>=&|')
+_COMPACT = re.compile(r"[^0-9A-Za-z]")
+_CLOSERS = ("]", "\uff3d")
+
+
+def compact_id(s: str) -> str:
+    """Separator-free upper-case form used to compare identifier-shaped tokens."""
+    return _COMPACT.sub("", s).upper()
+
+
 _GATE_TYPES = {EntityType.AADHAAR, EntityType.PAN, EntityType.CARD, EntityType.SECRET,
                EntityType.BANK_ACCOUNT, EntityType.UPI_ID, EntityType.EMAIL, EntityType.PHONE}
 
@@ -53,6 +72,8 @@ class Restorer:
     roster: object | None = None   # RosterIndex, for names the model "knew"
     mode: str = "incremental"      # "incremental" | "buffered"
     allowed: frozenset = frozenset()   # contract org_contacts (C0, lowercase) the model may write in its answer
+    business: tuple = ()               # contract business_identifiers (compiled): reference formats, not personal
+    known_ids: frozenset = frozenset()  # compact identifier-shaped values this request sent in clear or restores
     events: list[GateEvent] = field(default_factory=list)
     restored: list = field(default_factory=list)   # (EntityType, value) actually emitted -> restore ledger
     _buf: str = ""
@@ -97,6 +118,8 @@ class Restorer:
         text = tail + self._buf
         off = len(tail)
         spans = [(d.start, d.end) for d in recognizers.detect_d2(text) if d.type in _GATE_TYPES]
+        spans += [(d.start, d.end) for d in idshape.detect(text)]
+        spans += [(m.start(), m.end()) for m in LENIENT_ALIAS_RE.finditer(text)]
         if self.roster is not None:
             spans += [(d.start, d.end) for d in self.roster.detect(text)]
         c = off + cut
@@ -106,7 +129,16 @@ class Restorer:
             for s, e in spans:
                 if s < c < e:
                     c, moved = s, True
-        return max(0, c - off)
+        return max(0, min(c - off, self._alias_prefix_hold(max(0, c - off))))
+
+    def _alias_prefix_hold(self, cut: int) -> int:
+        """Pull the cut back to an unclosed bracket (at most LENIENT_HOLD chars before the end of the buffer) whose
+        text could still grow into a mangled alias, e.g. "[PERSON" + newline + "2E68HT]" arriving across lines."""
+        b = self._buf
+        i = max(b.rfind("[", 0, cut), b.rfind("\uff3b", 0, cut))
+        if i < 0 or len(b) - i > LENIENT_HOLD or any(c in b[i:] for c in _CLOSERS):
+            return cut
+        return i if LENIENT_PREFIX_RE.fullmatch(b[i:]) else cut
 
     def _cut(self, b: str) -> int:
         ws = max(b.rfind(" "), b.rfind("\n"), b.rfind("\t"))
@@ -151,6 +183,7 @@ class Restorer:
         leaving at least TOKEN_MAX chars held. None if no safe position exists."""
         limit = len(b) - TOKEN_MAX
         busy = [(m.start(), m.end()) for m in ALIAS_RE.finditer(b, run_start)]
+        busy += [(m.start(), m.end()) for m in LENIENT_ALIAS_RE.finditer(b, run_start)]
         for p in range(limit, run_start, -1):
             if b[p - 1] not in _SAFE_DELIMS:
                 continue
@@ -170,23 +203,34 @@ class Restorer:
         text = ctx + region
         off = len(ctx)
         repl: list[tuple[int, int, str]] = []
-        # 1. alias-shaped strings that are not in scope were invented by the model
+        # 1. alias-shaped strings that are not in scope were invented by the model (mangled forms that normalise to
+        #    a known alias are aliases; mangled forms that do not are left alone, never treated as ours)
         alias_spans = []
-        for m in ALIAS_RE.finditer(text):
-            alias_spans.append((m.start(), m.end()))
-            if m.end() <= off:
+        for s, e, key, strict in self._alias_matches(text):
+            alias_spans.append((s, e))
+            if e <= off or not strict or key in self.alias_map:
                 continue
-            key = f"{m.group(1).upper()}_{m.group(2).upper()}"
-            if key not in self.alias_map:
-                self.events.append(GateEvent("fabricated_alias", m.group(1).upper()))
-                repl.append((max(m.start(), off), m.end(), f"[unknown {m.group(1).upper()}]"))
+            t = key.rsplit("_", 1)[0]
+            self.events.append(GateEvent("fabricated_alias", t))
+            repl.append((max(s, off), e, f"[unknown {t}]"))
         # 2. deterministic recognisers over the whole output so far (context-dependent types need it)
-        for d in recognizers.detect_d2(text):
+        dets = recognizers.detect_d2(text)
+        for d in dets:
             if d.end <= off or d.type not in _GATE_TYPES:
                 continue
             if text[d.start:d.end].lower() in self.allowed:   # declared organisational contact, not personal
                 continue
             if any(s <= d.start < e for s, e in alias_spans):
+                continue
+            self.events.append(GateEvent("raw_pii", d.type.value))
+            repl.append((max(d.start, off), d.end, f"[{d.type.value}]"))
+        # 2b. number-shaped identifier backstop (N8): what no scheme recognizer typed but is shaped like an identifier
+        typed = [(d.start, d.end) for d in dets]
+        for d in idshape.exempt_business(text, idshape.detect(text), self.business):
+            if d.end <= off or any(s < d.end and d.start < e for s, e in typed + alias_spans):
+                continue
+            v = text[d.start:d.end]
+            if v.lower() in self.allowed or compact_id(v) in self.known_ids:
                 continue
             self.events.append(GateEvent("raw_pii", d.type.value))
             repl.append((max(d.start, off), d.end, f"[{d.type.value}]"))
@@ -207,14 +251,26 @@ class Restorer:
             out = out[:s] + r + out[e:]
         return out[off:] if len(out) >= off else ""
 
+    def _alias_matches(self, text: str) -> list[tuple[int, int, str, bool]]:
+        """(start, end, key, strict) for every alias in `text`, non-overlapping, by position: mangled (lenient)
+        forms whose key is a known alias of this request, then strict ALIAS_RE forms (known or not) elsewhere."""
+        out = [(m.start(), m.end(), lenient_key(m), False) for m in LENIENT_ALIAS_RE.finditer(text)
+               if lenient_key(m) in self.alias_map]
+        for m in ALIAS_RE.finditer(text):
+            if not any(s < m.end() and m.start() < e for s, e, _k, _st in out):
+                out.append((m.start(), m.end(), f"{m.group(1).upper()}_{m.group(2).upper()}", True))
+        return sorted(out)
+
     def _restore(self, text: str) -> str:
-        def sub(m: re.Match) -> str:
-            ent = self.alias_map.get(f"{m.group(1).upper()}_{m.group(2).upper()}")
+        parts, pos = [], 0
+        for s, e, key, _strict in self._alias_matches(text):
+            ent = self.alias_map.get(key)
             if ent is None or not self.restore or ent.type in self.never_restore:
-                return m.group(0)
+                continue
             self.restored.append((ent.type, ent.value))
             # every way the request wrote this value (e.g. "Priya", "Ms Raghunathan" for one person): a later turn
             # that repeats any of them is re-protected from the restore ledger
-            self.restored.extend((ent.type, s) for s in sorted(ent.sources) if s != ent.value)
-            return ent.value
-        return ALIAS_RE.sub(sub, text)
+            self.restored.extend((ent.type, v) for v in sorted(ent.sources) if v != ent.value)
+            parts += [text[pos:s], ent.value]
+            pos = e
+        return "".join(parts) + text[pos:]
