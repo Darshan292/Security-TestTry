@@ -185,11 +185,15 @@ _SKIP = set(" .-/_‐‑‒–—−[](){}<>")
 _TOKEN = re.compile(r"[ ]*[\[({<]?[ ]*(?:at|dot)[ ]*[\])}>]?[ ]*", re.I)
 
 
-def _explains(view_sub: str, orig_norm: str, fold: bool) -> bool:
+_SWAPPED = {"O": "0", "o": "0", "I": "1", "l": "1"}
+
+
+def _explains(view_sub: str, orig_norm: str, fold: bool, swap: bool = False) -> bool:
     """view_sub must be derivable from the normalised original substring by only dropping separator
-    characters and rewriting a bracketed/spelled at/dot token to '@' / '.'."""
+    characters and rewriting a bracketed/spelled at/dot token to '@' / '.' (digit_swap: also O/o -> 0, l/I -> 1)."""
     i = 0
-    eq = (lambda a, b: a.casefold() == b.casefold()) if fold else (lambda a, b: a == b)
+    eq = (lambda a, b: a.casefold() == b.casefold()) if fold else \
+        (lambda a, b: a == b or _SWAPPED.get(a) == b) if swap else (lambda a, b: a == b)
     for pos, vc in enumerate(view_sub):
         last = pos == len(view_sub) - 1
         while True:
@@ -263,7 +267,7 @@ def _check(text: str, rng: random.Random, seen: set):
         for s, e in spans:
             os_, oe = to_original(om, s, e)
             assert 0 <= os_ < oe <= len(text), (name, text, s, e, os_, oe)
-            assert _explains(vt[s:e], normalize(text[os_:oe])[0], name == "casefold_titled"), \
+            assert _explains(vt[s:e], normalize(text[os_:oe])[0], name == "casefold_titled", name == "digit_swap"), \
                 (name, text, vt[s:e], text[os_:oe])
 
 

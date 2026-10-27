@@ -275,14 +275,44 @@ def _titled(s: str):
     return t if t != s else None
 
 
+# Letter-for-digit swaps inside digit-dominant tokens ("2O34 5l78 9O12", "98I0O 12345", "5010O2345678"): O/o -> 0 and
+# l/I -> 1. A token qualifies when it has at least two digits, digits are at least half of it, and it holds a swap
+# letter; words ("OIL", "lol"), codes with other letters ("X1") and long runs (> _SWAP_MAX: floods) are left alone.
+# Same length, so the view shares the base offset map.
+_SWAP_TOKEN = re.compile(r"(?<![A-Za-z0-9])[0-9OoIl]{3,}(?![A-Za-z0-9])")
+_SWAP = str.maketrans("OoIl", "0011")
+_SWAP_MAX = 24
+
+
+def _digit_swap(s: str) -> str | None:
+    if not any(c in s for c in "OoIl"):
+        return None
+    parts: list[str] = []
+    pos = 0
+    for m in _SWAP_TOKEN.finditer(s):
+        tok = m.group()
+        if len(tok) > _SWAP_MAX:
+            continue
+        digits = sum(c.isdigit() for c in tok)
+        if digits < 2 or digits * 2 < len(tok) or digits == len(tok):
+            continue
+        parts.append(s[pos:m.start()])
+        parts.append(tok.translate(_SWAP))
+        pos = m.end()
+    if not parts:
+        return None
+    parts.append(s[pos:])
+    return "".join(parts)
+
+
 def views(text: str) -> list[tuple[str, str, list[int]]]:
     """[(view_name, view_text, omap), ...]; the first is always ("base", *normalize(text)).
 
     Extra views are de-obfuscated renderings of the base (names: despaced, deobfuscated_email,
-    despaced_email, digits_joined, numwords, casefold_titled), emitted only when they differ from base. numwords
-    spells digit-by-digit word runs as digits (pgw.detect.numwords); a span ending inside a word there must be
-    extended to the word's end (word_end). Every
-    omap maps view chars to ORIGINAL indices (trailing len(text)), so to_original() works on any span.
+    despaced_email, digits_joined, numwords, casefold_titled, digit_swap), emitted only when they differ from base.
+    numwords spells digit-by-digit word runs as digits (pgw.detect.numwords); a span ending inside a word there must
+    be extended to the word's end (word_end). digit_swap reads O/o as 0 and l/I as 1 inside digit-dominant tokens.
+    Every omap maps view chars to ORIGINAL indices (trailing len(text)), so to_original() works on any span.
     """
     s, om = normalize(text)
     out: list[tuple[str, str, list[int]]] = [("base", s, om)]
@@ -307,4 +337,7 @@ def views(text: str) -> list[tuple[str, str, list[int]]]:
     t = _titled(s)
     if t:
         out.append(("casefold_titled", t, list(om)))
+    w = _digit_swap(s)
+    if w:
+        out.append(("digit_swap", w, list(om)))
     return out

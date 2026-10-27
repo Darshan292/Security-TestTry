@@ -19,6 +19,8 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from .alias import AliasAllocator, canon, scope_key
 from .detect import idshape, recognizers
+from .detect import names as _names
+from .detect.lexicon import ends_name, is_english
 from .detect.numwords import only_digit_words
 from .detect.edm import RestoreLedger, RosterIndex
 from . import ablation as _abl
@@ -95,7 +97,9 @@ _SIGNOFF = re.compile(rf"(?:Regards|Thanks|Thank you|Best|Sincerely|Cheers),?\s*
 # that costs utility, a miss costs a leak. Precision is measured in E-DET.
 _PREP = re.compile(rf"\b(?:to|for|from|with|cc|about|regarding|by|and|between|of)\s+((?:{_CAP})(?:\s+{_CAP}){{1,2}})")
 _NOT_NAMES = {"team", "all", "everyone", "sir", "madam", "there", "folks", "hr", "manager", "guys",
-              "support", "admin", "the", "this", "that", "please", "thanks", "regards"}
+              "support", "admin", "the", "this", "that", "please", "thanks", "regards",
+              # forms of address in Indian chat ("hi bhai", "thanks yaar")
+              "bhai", "bhaiya", "bhaiyya", "didi", "yaar", "ji", "bro", "dude", "mam", "maam", "dost", "sirji"}
 
 
 _NAME_TOKEN = re.compile(r"(?:[A-Z][a-z]+(?:-[A-Z][a-z]+)*|[A-Z]['’][A-Z][a-z]+|[A-Z][a-z]+['’][a-z]+|[A-Z]\.)$")
@@ -130,6 +134,31 @@ def _of_inside_proper_phrase(text: str, prep_start: int) -> bool:
     return not _SENT_START.search(text, max(0, m.start() - 4), m.start())
 
 
+_CUE_TOKEN = re.compile(r"\S+")
+
+
+def _cue_name(text: str, start: int, end: int, prep: bool) -> tuple[int, int] | None:
+    """The name inside a cue match: trailing role, document, time and function words and verb forms are not part of
+    it ("Leena Fernandes Head" -> "Leena Fernandes"; lexicon.ends_name); a sign-off name does not run on to a third
+    line. A preposition cue made only of English words, one of them such a word ("for Payroll Operations"), is no
+    name; English words that are also surnames ("with Rose Thomas") are kept."""
+    toks = [m.span() for m in _CUE_TOKEN.finditer(text, start, end)]
+    lines = 0
+    for i in range(1, len(toks)):
+        lines += "\n" in text[toks[i - 1][1]:toks[i][0]]
+        if lines > 1:
+            toks = toks[:i]
+            break
+    while len(toks) > 1 and ends_name(text[toks[-1][0]:toks[-1][1]]):
+        toks.pop()
+    words = [text[a:b].rstrip(".") for a, b in toks]
+    if prep and all(is_english(w) for w in words) and any(ends_name(w) for w in words):
+        return None
+    if all(_names.is_place(w) for w in words):
+        return None                 # "with Karnataka Shops and ... Act": a place, not a person
+    return (toks[0][0], toks[-1][1]) if toks else None
+
+
 def detect_person_cues(text: str) -> list[Detection]:
     out = []
     if not _abl.get().CUES:
@@ -141,7 +170,11 @@ def detect_person_cues(text: str) -> list[Detection]:
                 continue
             if rx is _PREP and text.startswith("of", m.start()) and _of_inside_proper_phrase(text, m.start()):
                 continue
-            out.append(Detection(m.start(1), m.end(1), EntityType.PERSON, score, "D2:person_cue"))
+            span = _cue_name(text, m.start(1), m.end(1), rx is _PREP)
+            if span is not None:
+                out.append(Detection(*span, EntityType.PERSON, score, "D2:person_cue"))
+    # kinship and honorific constructions ("s/o Late Anwar Qureshi", "Prof. Dr. Anirban Chakraborty")
+    out += _names.kinship_cues(text)
     return out
 
 
@@ -465,6 +498,11 @@ def _alias_label(ctx: Context) -> str:
     return f"alias/{ctx.alias_ns}" if ctx.alias_ns else "alias"
 
 
+# Grown names propagated per request: each costs one scan of every segment, so a flood of distinct name variants must
+# not multiply work (the grown names are still replaced where they were found).
+_MAX_GROWN = 32
+
+
 # --- the pipeline ---------------------------------------------------------------
 
 @dataclass
@@ -520,10 +558,19 @@ class Protector:
                 ner_res = dict(zip(ner_views if many is not None else dict.fromkeys(ner_views), res))
         for name, view, omap in views:
             dets = recognizers.detect_d2(view) + detect_person_cues(view)
-            if name in ("base", "numwords") and backstop:
+            if name in ("base", "numwords", "digit_swap") and backstop:
                 dets += idshape.detect(view)     # number-shaped identifier backstop (lowest score: loses overlaps)
+            if name == "base" and _abl.get().CUES:
+                dets += _names.lowercase_cues(view)      # "hi tejas", "ask devraj", "s/o ramprasad yadav"
             if self.roster is not None and _abl.get().D3:
                 dets += self.roster.detect(view)
+                if name == "base":
+                    # roster first/last names written in lower case ("ask devraj"): the roster's single-name rule needs
+                    # a capital, so it also reads a copy with non-English lower-case words capitalised (same offsets)
+                    titled = _names.titled_unknown(view)
+                    if titled is not None:
+                        dets += [d for d in self.roster.detect(titled) if d.type is EntityType.PERSON
+                                 and view[d.start:d.end] != titled[d.start:d.end]]
             if name in ("base", "casefold_titled", "despaced") and view in ner_res:
                 dets += [d for d in ner_res[view] if _name_shaped(view[d.start:d.end])]
             for d in dets:
@@ -590,6 +637,8 @@ class Protector:
         for i, seg in enumerate(segs):
             spans, per_seg[i] = legal_titles(seg.text, per_seg[i])
             titles.append(spans)
+            if _abl.get().CUES:     # a column of names in a pasted table: its other cells are names too
+                per_seg[i] += _names.table_columns(seg.text, _resolve(per_seg[i]))
 
         if not _abl.get().D5:   # ablation: no propagation step at all (still resolve overlaps)
             return [_resolve(_drop_possessive(seg.text, d)) for seg, d in zip(segs, per_seg, strict=True)]
@@ -618,6 +667,41 @@ class Protector:
         initials = _initials(s for t, s in known if t is EntityType.PERSON)
         if initials:
             per_seg = [_extend_initials(seg.text, dets, initials) for seg, dets in zip(segs, per_seg, strict=True)]
+        return self._grow_names(segs, per_seg, titles) if _abl.get().CUES else per_seg
+
+    def _grow_names(self, segs: list[Segment], per_seg: list[list[Detection]],
+                    titles: list[list[tuple[int, int]]]) -> list[list[Detection]]:
+        """Name words written next to a detected name join it ("Shalini" before an aliased "Phadnis", a middle name, a
+        surname on the next signature line); the grown names and their new words are then found everywhere else in
+        the request, as in step 3. Never inside a legal title."""
+        grown: dict[str, float] = {}
+        for i, seg in enumerate(segs):
+            dets = _names.expand(seg.text, per_seg[i])
+            sig = _names.signature_lines(seg.text, dets)
+            if sig:
+                dets = _resolve(dets + sig)
+            dets = [d for d in dets if d.type is not EntityType.PERSON or d.source.startswith(_STRONG_SOURCES)
+                    or not _overlaps_any(d.start, d.end, titles[i])]
+            before = {(d.start, d.end) for d in per_seg[i]}
+            for d in dets:
+                if d.type is EntityType.PERSON and (d.start, d.end) not in before and len(grown) < _MAX_GROWN:
+                    grown[seg.text[d.start:d.end]] = max(d.score, grown.get(seg.text[d.start:d.end], 0))
+            per_seg[i] = dets
+        if not grown:
+            return per_seg
+        extra: dict[str, float] = {}
+        for surface, sc in grown.items():
+            extra.setdefault(surface, sc)
+            for part in _partial_forms(surface):
+                extra.setdefault(part, sc - 0.05)
+            if len(extra) >= 4 * _MAX_GROWN:
+                break
+        for i, seg in enumerate(segs):
+            add = [Detection(s, e, EntityType.PERSON, sc, "D5:propagation") for surface, sc in extra.items()
+                   for s, e in _occurrences(seg.text, EntityType.PERSON, surface)
+                   if not _overlaps_any(s, e, titles[i])]
+            if add:
+                per_seg[i] = _resolve(_drop_possessive(seg.text, per_seg[i] + add))
         return per_seg
 
     def _alias_key_id(self, ctx: Context) -> str:
