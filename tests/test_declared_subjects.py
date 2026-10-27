@@ -89,7 +89,9 @@ def test_declared_subjects_are_protected_where_ner_misses_them(tmp_path):
     client, mock = make(tmp_path, ner="en_core_web_lg")
     assert call(client, TICKET, {"requester": SUBJECTS["requester"]}).status_code == 200
     w = wire(mock).lower()
-    assert "tejaswini" in w and "nandini" in w            # NER (secondary net) misses them: this is the gap
+    # Detection misses "Nandini" (a single given name; NER and the cues do not take it): this is the gap. (The
+    # lower-case "tejaswini kulkarni" after "loop in" is now found by the lower-case name cues, pgw.detect.names.)
+    assert "nandini" in w
     assert call(client, TICKET, SUBJECTS).status_code == 200
     w = wire(mock).lower()
     for v in ("imran", "ansari", "tejaswini", "kulkarni", "nandini", "kd-11914"):

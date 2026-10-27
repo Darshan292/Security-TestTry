@@ -28,8 +28,11 @@ from pgw import ablation as _ablation
 from pgw.types import Detection, EntityType as T
 
 from .numwords import unit_amounts
+from .lexicon import ends_name, is_english
+from .places import addresses
 
-__all__ = ["detect_d2", "detect_fields", "detect_field_context", "verhoeff_valid", "verhoeff_check_digit", "luhn_valid"]
+__all__ = ["detect_d2", "detect_fields", "detect_field_context", "verhoeff_valid", "verhoeff_check_digit", "luhn_valid",
+           "iban_valid"]
 
 _NA = r"(?<![A-Za-z0-9])"      # not inside a longer alnum token (left)
 _NZ = r"(?![A-Za-z0-9])"       # not inside a longer alnum token (right)
@@ -701,17 +704,70 @@ def _employee_id(text: str) -> list[Cand]:
 
 
 # --------------------------------------------------------------------------
+# IBAN (ISO 13616): country code, two check digits, a country-specific number of alphanumerics; mod-97 == 1
+# --------------------------------------------------------------------------
+# Total IBAN length per country (the SWIFT IBAN registry; structural knowledge, no account is listed).
+_IBAN_LEN = {cc: int(n) for cc, n in (x.split(":") for x in """
+AD:24 AE:23 AL:28 AT:20 AZ:28 BA:20 BE:16 BG:22 BH:22 BI:27 BR:29 BY:28 CH:21 CR:22 CY:28 CZ:24 DE:22 DJ:27 DK:18
+DO:28 EE:20 EG:29 ES:24 FI:18 FK:18 FO:18 FR:27 GB:22 GE:22 GI:23 GL:18 GR:27 GT:28 HN:28 HR:21 HU:28 IE:22 IL:23
+IQ:23 IS:26 IT:27 JO:30 KW:30 KZ:20 LB:28 LC:32 LI:21 LT:20 LU:20 LV:21 LY:25 MC:27 MD:24 ME:22 MK:19 MN:20 MR:27
+MT:31 MU:30 NI:28 NL:18 NO:15 OM:23 PK:24 PL:28 PS:29 PT:25 QA:29 RO:24 RS:22 RU:33 SA:24 SC:31 SD:18 SE:24 SI:19
+SK:24 SM:27 SO:23 ST:25 SV:28 TL:23 TN:24 TR:26 UA:29 VA:22 VG:24 XK:20 YE:30""".split())}
+# Start: two letters (one case) and two digits, not inside a longer token. The rest may be grouped any way: single
+# spaces or hyphens between any characters ("DE89 3704 0044 0532 0130 00", "SA03-8000-...", "AE07 033 123456 ...").
+_IBAN_START = re.compile(r"(?<![A-Za-z0-9])(?:[A-Z]{2}|[a-z]{2})[ \-]?\d{2}(?=[ \-]?[A-Za-z0-9])")
+
+
+def iban_valid(compact: str) -> bool:
+    """mod-97 check of an IBAN without separators (any case)."""
+    s = compact.upper()
+    if len(s) < 15 or not s[:2].isalpha() or not s[2:4].isdigit() or not s.isalnum() or not s.isascii():
+        return False
+    r = 0
+    for c in s[4:] + s[:4]:
+        for d in (str(int(c, 36)) if c.isalpha() else c):
+            r = (r * 10 + ord(d) - 48) % 97
+    return r == 1
+
+
+def _iban(text: str) -> list[Cand]:
+    out: list[Cand] = []
+    n = len(text)
+    for m in _IBAN_START.finditer(text):
+        need = _IBAN_LEN.get(text[m.start():m.start() + 2].upper())
+        if need is None:
+            continue
+        chars = [c for c in text[m.start():m.end()] if c.isalnum()]
+        p = m.end()
+        while p < n and len(chars) < need:
+            c = text[p]
+            if c.isascii() and c.isalnum():
+                chars.append(c)
+                p += 1
+            elif c in " -" and p + 1 < n and text[p + 1].isascii() and text[p + 1].isalnum() and text[p - 1].isalnum():
+                p += 1
+            else:
+                break
+        if len(chars) == need and (p == n or not text[p].isalnum()) and iban_valid("".join(chars)):
+            out.append((m.start(), p, T.BANK_ACCOUNT, 0.97, "D2:iban"))
+    return out
+
+
+# --------------------------------------------------------------------------
 # COMPENSATION
 # --------------------------------------------------------------------------
 _NUM = r"\d+(?:,\d{2,3})*(?:\.\d+)?"
 _CUR_PRE = (r"(?:₹|€|£|US\$|(?<![A-Za-z0-9])\$|"
             r"(?<![A-Za-z0-9])(?i:rs\.?|inr|usd|eur|gbp|aed|sgd|cad|aud|chf|jpy))")
-_UNIT = r"(?:(?i:lakhs?|lacs?|crores?|crs?|lpa|inr|usd|eur|gbp|aed|sgd|dollars?|euros?)|k|K|L)"
+_UNIT = r"(?:(?i:lakhs?|lacs?|crores?|crs?|lpa|inr|usd|eur|gbp|aed|sgd|dollars?|euros?|millions?|mn|billions?|bn)|k|K|L)"
+# A currency written AFTER the number: "48,500/-" (the Indian rupee dash), "62,300 rs", "82,400 rupees", "2.4 million
+# rupees". Such an amount is money by its structure alone (see _compensation).
+_SFX = r"(?:/-|[ \t]*(?i:rupees?|rs\.?|inr)(?![A-Za-z]))"
 _COMP_MARKED = re.compile(
     r"(?:(?P<pre>" + _CUR_PRE + r"[ \t]*)|(?<![A-Za-z0-9])(?<!\d[.,]))"
     r"(?P<num>" + _NUM + r")"
     r"(?P<unit>[ \t]*" + _UNIT + r")?"
-    r"(?:/-)?" + _NZ
+    r"(?P<sfx>" + _SFX + r")?" + r"(?:/-)?" + r"(?![A-Za-z0-9])"
 )
 _COMP_KW = re.compile(
     _NA + r"(?:salary|salaries|ctc|compensation|pay|basic|gross|net[ \t]+pay|bonus|increment|revision|stipend|hike)(?![A-Za-z])",
@@ -729,7 +785,7 @@ _PAY_CTX = re.compile(
     r"(?<![a-z])(?:salary|salaries|sal|ctc|comp|compensation|payroll|pay|payouts?|stipend|bonus|increment|hike|wages?|"
     r"award|incentive|reward|"
     r"remuneration|package|earnings?|lpa|per\s+annum|p\.a\.?|buyout|severance|gratuity|take[\s-]?home|"
-    r"offer(?:ed)?|fixed|variable|gross|net|basic|allowance|arrears|current|expected|revision|revised)(?![a-z])")
+    r"offer(?:ed)?|fixed|variable|gross|net|basic|allowance|arrears|current|expected|revision|revised|in[\s-]?hand)(?![a-z])")
 _NONCOMP_CTX = re.compile(
     r"(?<![a-z])(?:invoices?|gst\w*|igst|cgst|sgst|order(?!\s+to\b)s?|prices?|total|subtotal|shares?|stocks?|"
     r"closed\s+at|revenue|budget|actual|variance|turnover|sales|receipt|mrp|discount|tax|charges?|fees?|quotation|"
@@ -858,18 +914,52 @@ def _statutory_amount(text: str, s: int, e: int) -> bool:
     return bool(_STATUTE.search(masked))
 
 
+_MARKED_CHECKS = 512    # context checks per string for currency-marked amounts; beyond that an amount is kept (fail
+                        # closed, bounded time: a flood of "12,345/-" would otherwise cost ~0.2 ms per amount)
+
+
 def _compensation(text: str) -> list[Cand]:
     out: list[Cand] = _bank_file_amounts(text)
+    triggers: list[int] | None = None
+    checks = 0
     for m in _COMP_MARKED.finditer(text):
-        pre, unit = m.group("pre"), m.group("unit")
-        if not pre and not unit:
+        pre, unit, sfx = m.group("pre"), m.group("unit"), m.group("sfx")
+        if not pre and not unit and not sfx:
             continue
-        if not pre and unit != unit.lstrip() and unit.strip() in ("k", "K", "L"):
+        if not pre and not sfx and unit != unit.lstrip() and unit.strip() in ("k", "K", "L"):
             continue  # "12 L" / "5 k" without a currency marker: too ambiguous
-        annum = bool((unit and unit.strip().lower() == "lpa") or _PER_ANNUM.match(text, m.end()))
-        if not annum and not _comp_ctx_ok(text, m.start(), m.end()):
+        u = unit.strip().lower() if unit else ""
+        if not pre and not sfx and u.rstrip("s") in ("million", "mn", "billion", "bn"):
+            continue  # "5 million" alone is a count as often as money
+        checks += 1
+        if checks > _MARKED_CHECKS:
+            out.append((m.start(), m.end(), T.COMPENSATION, 0.9, "D2:compensation"))
             continue
-        if _statutory_amount(text, m.start(), m.end()):
+        annum = bool(u == "lpa" or _PER_ANNUM.match(text, m.end()))
+        if not annum and not _comp_ctx_ok(text, m.start(), m.end()):
+            # No pay word nearby. A currency written after the number ("48,500/-", "62,300 rs", "3,450 INR",
+            # "2.4 million rupees") is money by structure; a currency before it ("Rs 54,000") counts when its clause
+            # is about a person ("credited to her account"). Business money (invoice, GST, revenue, ...) and counts
+            # stay out either way.
+            after_cur = bool(sfx) or u == "inr"
+            if _business_ctx(text, m.start(), m.end()) or _count_follows(text, m.end()):
+                continue
+            if not pre and len(m.group("num").split(".")[0].replace(",", "")) < 3:
+                continue  # "12/-", "5 rs": too small to be pay, and too common in other notations
+            if not after_cur:
+                cs, ce = _clause(text, m.start(), m.end())
+                if not (pre and len(m.group("num").split(".")[0].replace(",", "")) >= 4
+                        and _OWN_PAY.search(text, cs, ce) and _MONEY_VERB.search(text, cs, ce)):
+                    continue
+        if triggers is None:
+            triggers = [t.start() for t in _STATUTORY_TRIGGER.finditer(text)]
+        i = bisect.bisect_left(triggers, m.start() - 200)      # the statutory rules all need a trigger word in reach
+        if i < len(triggers) and triggers[i] < m.end() + 200 and _statutory_amount(text, m.start(), m.end()):
+            continue
+        if sfx and not pre and not unit:
+            # only a currency after the number: the span is the number ("[alias]/-", "[alias] rupees"), scored like a
+            # pay-keyword amount
+            out.append((m.start(), m.start("sfx"), T.COMPENSATION, 0.8, "D2:compensation"))
             continue
         out.append((m.start(), m.end(), T.COMPENSATION, 0.9, "D2:compensation"))
     for kw in _COMP_KW.finditer(text):
@@ -904,6 +994,41 @@ def _compensation(text: str) -> list[Cand]:
     return out
 
 
+# --- amounts about a person's own pay, with no pay word ("I was paid 28,750 for March", "My in-hand is 71,250") ------
+# A thousands-grouped amount below one lakh (1,000-99,999; the Indian and Western groupings agree there) with no
+# currency or pay word is money about a person when its clause has BOTH a personal anchor (I, me, my, his, her, their,
+# a possessive name) and a word of receiving or deducting money. Business contexts, counts ("12,500 requests") and
+# statutory constants stay out.
+_OWN_PAY = re.compile(r"(?<![\w'’])(?:I|(?i:me|my|mine|his|her|hers|their|him|she|he))(?![\w'’])|[A-Z][a-z]+['’]s(?![\w])")
+_MONEY_VERB = re.compile(r"(?<![a-z])(?:credited|credit|received|receive|receiving|got|get|getting|deducted|came|"
+                         r"reached|arrived|landed|"
+                         r"(?:was|were|been|be|got|get|getting|being)\s+paid|paid\s+(?:me|him|her|us|them)|"
+                         r"deduction|debited|transferred|deposited|earn|earns|earned|earning|drew|draw|drawn|"
+                         r"in[\s-]?hand|take[\s-]?home|reimbursed|disbursed|withheld|cut)(?![a-z])", re.I)
+_SMALL_GROUPED = re.compile(r"(?<![\w.,/\-])[1-9]\d?,\d{3}(?:\.\d{1,2})?(?![\w%]|[.,/\-]\d)")
+
+
+def _personal_amounts(text: str) -> list[Cand]:
+    out: list[Cand] = []
+    if "," not in text:
+        return out
+    budget = _SHAPE_CHECKS
+    for m in _SMALL_GROUPED.finditer(text):
+        a, b = m.span()
+        if budget <= 0:
+            break
+        budget -= 1
+        if _count_follows(text, b) or _CUR_BEFORE.search(text, max(0, a - 6), a):
+            continue
+        cs, ce = _clause(text, a, b)
+        if not (_OWN_PAY.search(text, cs, ce) and _MONEY_VERB.search(text, cs, ce)):
+            continue
+        if _business_ctx(text, a, b) or _statutory_amount(text, a, b):
+            continue
+        out.append((a, b, T.COMPENSATION, 0.75, "D2:compensation_personal"))
+    return out
+
+
 # --- amounts by shape: Indian digit grouping and Indian units (audit S5: "21,00,000", "twenty two lakh") ------------
 # The lakh grouping d{1,2}(,dd)+,ddd is how Indian money is written; it is never a date, a phone or an ID format. Such a
 # number (>= 1,00,000 by construction) is an amount with or without a currency cue, and so is a Western-grouped number
@@ -928,7 +1053,8 @@ _COUNT_NOUNS = frozenset(
     "records rows entries lines files documents pages items units pieces copies transactions requests tickets calls "
     "messages emails sms downloads views visits clicks installs devices accounts shares votes hours days weeks months "
     "years minutes seconds km kms kilometres kilometers miles steps points sq sqft tonnes tons kg litres liters "
-    "seats jobs vacancies positions roles hires posts".split())
+    "seats jobs vacancies positions roles hires posts applications responses complaints queries orders cases "
+    "tickets issues".split())
 _COUNT_AFTER = re.compile(r"\+?[ \t]*(?:-[ \t]*)?(?:new|more|active|registered|total|odd|plus)?[ \t]*([A-Za-z]+)")
 
 
@@ -1032,17 +1158,39 @@ def _date_ok(m: re.Match, text: str) -> bool:
     return 1 <= int(m.group("md")) <= 31 and 1900 <= int(m.group("my")) <= 2100
 
 
+# Short and spoken forms, accepted only in a birth context (_dob): "23rd Jul '91", "14-Aug-89", "1st Jan'90",
+# "5th of March, 1988", "March 3rd, '95", "twenty-third of July 1991", "Thirty First December 1979".
+_ORD_WORD = (r"(?:(?:twenty|thirty)[ \t\-]?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)|first|second|"
+             r"third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|"
+             r"sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth)")
+_SDAY = r"(?:(?P<d>\d{1,2})(?:st|nd|rd|th)?|(?P<dw>" + _ORD_WORD + r"))"
+_SDAY2 = r"(?:(?P<d2>\d{1,2})(?:st|nd|rd|th)?|(?P<dw2>" + _ORD_WORD + r"))"
+_SYEAR = r"(?:['’][ \t]?\d{2}|(?:19|20)\d{2}|\d{2})"
+_DATE_SHORT = re.compile(
+    r"(?<![\w])(?:" + _SDAY + r"(?:[ \t]+of[ \t]+|[ \t\-./]*)" + _MON + r"\.?,?[ \t\-./]*" + _SYEAR +
+    r"|" + _MON + r"\.?[ \t\-]+" + _SDAY2 + r",?[ \t]*" + _SYEAR + r")(?![\w])", re.I)
+
+
+def _short_ok(m: re.Match) -> bool:
+    d = m.group("d") or m.group("d2")
+    return d is None or 1 <= int(d) <= 31
+
+
 def _dob(text: str) -> list[Cand]:
     out: list[Cand] = []
     for kw in _DOB_KW.finditer(text):
         if _in_header_cell(text, kw.start(), kw.end()) or _in_header_line(text, kw.start()):
             continue  # CSV/TSV header cell: the next cell is not its value
         end = min(len(text), kw.end() + 60 + 40)
-        for m in _DATE.finditer(text, kw.end(), end):
-            if m.start() > kw.end() + 60:
-                break
-            if not _date_ok(m, text):
-                continue
+        first = next((m for m in _DATE.finditer(text, kw.end(), end) if m.start() <= kw.end() + 60 and _date_ok(m, text)),
+                     None)
+        short = next((m for m in _DATE_SHORT.finditer(text, kw.end(), end) if m.start() <= kw.end() + 60 and _short_ok(m)),
+                     None)
+        if short is not None and (first is None or short.start() < first.start()
+                                  or (short.start() == first.start() and short.end() > first.end())):
+            out.append((short.start(), short.end(), T.DATE_OF_BIRTH, 0.9, "D2:dob"))
+            continue
+        for m in () if first is None else (first,):
             out.append((m.start(), m.end(), T.DATE_OF_BIRTH, 0.9, "D2:dob"))
             pos = m.end()
             for _ in range(2):
@@ -1709,6 +1857,11 @@ def _scan_csv(text: str, out: list, neg: list | None = None) -> None:
         if delim is None:
             i += 1
             continue
+        if i > 0 and lines[i - 1][1] > lines[i - 1][0] and _table_delim(text[lines[i - 1][0]:lines[i - 1][1]]) == delim \
+                and text[lines[i - 1][0]:lines[i - 1][1]].count(delim) == line.count(delim) \
+                and any(not is_english(w) for w in re.findall(r"[A-Z][a-z]{2,}", line)):
+            i += 1
+            continue    # a row inside a table holding a name ("Tushar Wagle,Pune,Manager") is data, not a header
         cells = _split_cells(text, s, e, delim)
         if delim == "|" and cells and not text[cells[0][0]:cells[0][1]].strip():
             cells = cells[1:]                                   # "| a | b |" tables
@@ -2086,6 +2239,10 @@ def _person_cues(text: str) -> list[Cand]:
             if n.lower() in _NOT_NAMES or len(n) < 3 or n.split()[0].lower() in _CUE_NOT_FIRST \
                     or (name == "possessive" and n.lower() in _ROLE_NOUNS):
                 continue
+            words = n.split()
+            while len(words) > 1 and ends_name(words[-1]):
+                words.pop()              # "Approved by Leena Fernandes Head of ...": "Head" is not part of the name
+            n = n[:n.rfind(words[-1]) + len(words[-1])] if len(words) < len(n.split()) else n
             out.append((m.start("n"), m.start("n") + len(n), T.PERSON, 0.85, "D2:person_" + name))
     return out
 
@@ -2274,8 +2431,8 @@ def detect_d2(text: str) -> list[Detection]:
     hdr = _header_spans(text)
     for part in () if not _ablation.get().D2 else (
         _email(text), _upi(text), phones, aadhaar, _pan(text), _ifsc(text), cards, bank,
-        _secret(text), _employee_id(text), _compensation(text), _amount_shapes(text), _dob(text),
-        _bank_file_names(text),
+        _secret(text), _employee_id(text), _compensation(text), _amount_shapes(text), _personal_amounts(text), _dob(text),
+        _bank_file_names(text), _iban(text), addresses(text),
     ):
         # header cells of a CSV/TSV are field names, never values
         cands.extend(c for c in part if not (hdr and any(a <= c[0] < b for a, b in hdr))
