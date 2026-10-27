@@ -29,7 +29,9 @@ is the table in `pgw/gateway/settings.py`.
   `ner_off_justification` (at least 20 characters). A model that does not load still stops startup.
 - **Development** (`PGW_MODE=development`): the profile is optional; differences are logged as
   `deployment_profile_differs_development_only` warnings and the environment value is used.
-- Changing any of these values = edit the profile, bump its `version`, review, re-seal and sign (OPERATIONS.md).
+- Changing any of these values = edit the profile, bump its `version`, raise its `config_serial`, review, re-seal and
+  sign (OPERATIONS.md). Production refuses a profile whose `config_serial` is below `PGW_MIN_CONFIG_SERIAL` or below
+  the high-water mark in `PGW_STATE_DIR` (rollback protection).
 
 The shipped profile holds the defaults below (provider `mock`, no provider attestation). A real deployment edits
 it (e.g. `upstream_kind: anthropic`, `provider_zero_retention: true`, `provider_region`) in a reviewed, signed change.
@@ -54,11 +56,13 @@ repo):
 | `PGW_MODE` | `production` | `production`: signed config and profile required, every purpose contracted, no development switches. `development` is for synthetic-data tests and demos only. The mode is on every audit line and on `/healthz`; check it in deployment review |
 | `PGW_REPLAY_DB` | unset (production will not start) | Persistent store of accepted source attestations, so each one is used once. Local persistent disk shared by all gateway processes on the host. Not for network filesystems. A store error refuses requests (503) |
 | `PGW_TRUSTED_CONFIG_PUBKEY` | unset (production will not start) | Ed25519 public key that must have signed `policies/MANIFEST.json`. Supply it from a secret store or image the config authors cannot write |
+| `PGW_MIN_CONFIG_SERIAL` | unset (production will not start) | Lowest `config_serial` (in the signed profile) accepted: a signed but older configuration tree is refused. Same custody as the trust anchor; set it to the serial being deployed |
+| `PGW_STATE_DIR` | unset (production will not start) | Existing directory on persistent local disk for the config high-water mark `config_serial.json` (highest serial started; a lower one is refused; an unreadable or corrupt file stops startup). Not created by the gateway |
 | `PGW_INTEGRITY_MANIFEST` | `policies/MANIFEST.json` | Registry, policy, contracts, roster and deployment profile must match their sealed sha256 and version, or the gateway does not start. No env switch turns this off |
 | `PGW_POLICY_SIGNING_KEY` / `PGW_REQUIRE_SIGNED_POLICY=1` | unset / off | Older HMAC check, still verified if set. Not a trust anchor (symmetric key) |
 | `PGW_MASTER_KEY` / `PGW_TENANT_KEYS_FILE`, `*_API_KEY` | unset | Secrets |
 | `PGW_LEDGER_DB` / `PGW_EGRESS_LEDGER` | local files | Restore ledger and audit log locations |
-| `PGW_PRIVATE_MODEL` | `local` | Model name at the in-boundary endpoint |
+| `PGW_PRIVATE_MODEL` | `local` | Model id at the in-boundary endpoint; should be one its `GET /v1/models` lists (a warning otherwise). Production refuses the extractive stand-in (`pgw.private_llm` without weights) when a contract routes to PRIVATE (OPERATIONS.md) |
 
 ## Verified 2026-10-02
 

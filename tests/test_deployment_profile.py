@@ -37,7 +37,8 @@ def env_for(cfg, tmp, **extra):
     return {"PGW_MODE": "production", "PGW_INTEGRITY_MANIFEST": cfg["integrity_manifest"],
             "PGW_TRUSTED_CONFIG_PUBKEY": cfg["trusted_config_pubkey"], "PGW_MASTER_KEY": os.urandom(32).hex(),
             "PGW_LEDGER_DB": str(tmp / "l.sqlite"), "PGW_EGRESS_LEDGER": str(tmp / "e.jsonl"),
-            "PGW_REPLAY_DB": str(tmp / "replay.sqlite"), **extra}
+            "PGW_REPLAY_DB": str(tmp / "replay.sqlite"), "PGW_MIN_CONFIG_SERIAL": str(cfg["min_config_serial"]),
+            "PGW_STATE_DIR": cfg["state_dir"], **extra}
 
 
 def different(field: str, tmp: Path):
@@ -138,8 +139,12 @@ def test_an_environment_value_differing_from_the_profile_stops_production(tmp_pa
     assert raw not in str(e.value)
 
 
-def test_unset_or_equal_environment_values_are_fine(tmp_path):
-    # ticket_summary keeps unattested input in-boundary, so the signed profile names the private endpoint
+def test_unset_or_equal_environment_values_are_fine(tmp_path, monkeypatch):
+    # ticket_summary keeps unattested input in-boundary, so the signed profile names the private endpoint. Production
+    # probes its identity at startup (GET /v1/models, re-audit N2); no server runs here, so the probe answers as a
+    # real in-boundary model would.
+    from pgw.gateway.upstream import OpenAICompatUpstream
+    monkeypatch.setattr(OpenAICompatUpstream, "identify", lambda self: {"data": [{"id": "local", "object": "model"}]})
     cfg = production(tmp_path, APPS, deployment={"private_upstream_url": "http://127.0.0.1:8090/v1"})
     create_app(Settings.from_env(env_for(cfg, tmp_path)))     # nothing pinned in env: the profile decides
     same = {"PGW_MAX_BODY_BYTES": str(DEFAULTS["max_body_bytes"]), "PGW_NER_MODEL": "none",

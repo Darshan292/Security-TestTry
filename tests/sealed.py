@@ -83,11 +83,14 @@ def profile_values(**overrides) -> dict:
 
 def write_profile(base: Path, deployment: dict | None = None) -> Path:
     """Write <base>/registry/deployment.yaml. `deployment` may override any profile setting and
-    `ner_off_justification` (default: TEST_NER_OFF when NER is off)."""
+    `ner_off_justification` (default: TEST_NER_OFF when NER is off) and `config_serial` (default 1; None omits it)."""
     dep = dict(deployment or {})
     just = dep.pop("ner_off_justification", TEST_NER_OFF)
+    serial = dep.pop("config_serial", 1)
     vals = profile_values(**dep)
     doc = {"kind": gw_settings.PROFILE_DOC_KIND, "version": 1, "settings": vals}
+    if serial is not None:
+        doc["config_serial"] = serial
     if vals["ner_model"] is None and just is not None:
         doc["ner_off_justification"] = just
     path = Path(base) / gw_settings.PROFILE_REL
@@ -103,7 +106,9 @@ def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, si
     `roster` (optional) is sealed with the config, as production requires. `deployment`: profile settings
     (e.g. {"max_body_bytes": 4096, "ner_model": "en_core_web_lg"}), sealed and signed with the rest.
     demo_keys=True keeps the contracts' demo source keys (which production must refuse).
-    private_upstream: by default a mock in-boundary model when a contract needs one; None for no private endpoint."""
+    private_upstream: by default a mock in-boundary model when a contract needs one; None for no private endpoint.
+    Rollback protection (pgw.gateway.rollback): the profile's config_serial is 1 unless `deployment` sets it; the
+    returned kwargs pin min_config_serial=1 and a per-test state directory <tmp>/state for the high-water mark."""
     base = Path(tmp) / "cfg"
     for d in ("registry", "policies", "contracts", "roster"):
         (base / d).mkdir(parents=True, exist_ok=True)
@@ -137,8 +142,11 @@ def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, si
         private_upstream = MockLLMUpstream("summarise") if needs_private else None
     if private_upstream is not None:
         extra["private_upstream"] = private_upstream
+    state = Path(tmp) / "state"
+    state.mkdir(parents=True, exist_ok=True)
     return {"mode": "production", "registry_path": str(reg), "policy_path": str(base / "policies" / pol_name),
             "integrity_manifest": str(manifest), "trusted_config_pubkey": pub,
+            "min_config_serial": 1, "state_dir": str(state),
             "replay_db_path": str(Path(tmp) / "replay.sqlite"), **extra}
 
 

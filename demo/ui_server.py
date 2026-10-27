@@ -174,8 +174,10 @@ def build(groq_key: str | None, tmp: Path, runs: Runs):
         upstream, model, provider = OpenAICompatUpstream(GROQ_URL, groq_key, timeout=120), GROQ_MODEL, "groq"
     else:
         upstream, model, provider = MockLLMUpstream("summarise"), "mock-1", "mock"
+    from starlette.testclient import TestClient   # synchronous ASGI client for the startup identity probe
     private = OpenAICompatUpstream("http://127.0.0.1:8090/v1", "",
-                                   client=httpx.AsyncClient(transport=httpx.ASGITransport(app=private_app)))
+                                   client=httpx.AsyncClient(transport=httpx.ASGITransport(app=private_app)),
+                                   sync_client=TestClient(private_app, base_url="http://127.0.0.1:8090"))
     try:
         import spacy
         ner = "en_core_web_lg" if spacy.util.is_package("en_core_web_lg") else None
@@ -281,7 +283,7 @@ def make_ui(groq_key: str | None, port: int = 8765, extra_origins: tuple[str, ..
                            "route": c.route, "task_type": c.task_type} for p in CONTRACTS],
             "integrity": integrity,
             "private_route": f"in-boundary endpoint, backend: {PRIVATE_BACKEND.name}"
-            + (" (extractive stand-in, NOT an LLM)" if PRIVATE_BACKEND.name == "local-extractive" else ""),
+            + (" (extractive stand-in, NOT an LLM)" if PRIVATE_BACKEND.backend == "standin" else ""),
             "warnings": warnings})
 
     async def scen_list(_):

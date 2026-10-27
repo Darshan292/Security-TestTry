@@ -1,10 +1,15 @@
 # Deployment profile (pgw/gateway/settings.py): every security-relevant gateway setting, sealed in
 # policies/MANIFEST.json by the registry/*.yaml glob and therefore Ed25519-signed in production.
 # In PGW_MODE=production these values are authoritative: an environment variable or Settings value that differs
-# stops startup. Changing a limit, the NER model or the egress allowlist = edit this file, bump `version`, have it
-# reviewed by a code owner, re-seal and sign (OPERATIONS.md). In development the profile is advisory (warnings).
+# stops startup. Changing a limit, the NER model or the egress allowlist = edit this file, bump `version`, raise
+# config_serial, have it reviewed by a code owner, re-seal and sign (OPERATIONS.md). In development the profile is
+# advisory (warnings).
 kind: pgw-deployment-profile
-version: 1
+version: 2
+# Monotonic rollback serial (pgw/gateway/rollback.py). Raise it in EVERY signed configuration change, including a
+# deliberate rollback (old content, new higher serial). Production refuses a serial below PGW_MIN_CONFIG_SERIAL or
+# below the high-water mark recorded in PGW_STATE_DIR.
+config_serial: 1
 settings:
   # Sealed configuration files (paths relative to the sealed tree; the roster is optional).
   registry_path: registry/apps.yaml
