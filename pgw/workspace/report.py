@@ -1,10 +1,17 @@
-"""Adapter: the gateway's transparency report (`pgw_report` v1) -> the view the workspace UI renders.
+"""Adapter: the gateway's transparency report (`pgw_report` v1, docs/TRANSPARENCY_REPORT.md) -> the UI's view.
 
 Everything the UI shows about a run comes from here, and everything here comes from the real gateway response:
 its `pgw_report` (stages with measured milliseconds, detected spans, placeholders, the protected outbound text,
 checks, outcome), its HTTP status and its X-PGW-Route header. Nothing is invented: a stage, timing or check that the
 gateway did not report is not shown. A response without a report (a gateway that predates it, or an app without
 `transparency: true`) yields `available: False` and only the outcome the status and route header prove.
+
+Handled deviations from the draft spec (docs/TRANSPARENCY_REPORT.md): `outbound.messages` is null on PRIVATE_LOCAL
+and in every error (`messages: None` here; hash and size kept); action "allow" (detected, crossed unchanged);
+`truncated` always present; `field` on EXT_PSEUDO spans in a message `name` or tool-call arguments (kept as fields,
+not drawn on the text); LOCAL_COMPUTE fields `outputs.<name>`, `instruction`, `prompt`; counts are occurrences;
+`purpose`/`contract`/`route` null on early refusals; on PRIVATE_LOCAL `verify_source` is `failed` although the
+request continued (the UI shows it as "kept inside", not as a stop). Streaming is not used by the workspace.
 
 The gateway report is another team's schema. Tolerated variations are listed in the ALIASES/_STATUS tables and in
 _num/_span below, so a small deviation (a renamed key, "ok" for "done", offsets as a pair) is a one-line change.
@@ -26,7 +33,7 @@ _STATUS = {"done": "done", "ok": "done", "passed": "done", "pass": "done", "skip
            "n/a": "skipped", "failed": "failed", "fail": "failed", "error": "failed", "blocked": "failed"}
 _CHECK = {"pass": "pass", "passed": "pass", "ok": "pass", "fail": "fail", "failed": "fail", "n/a": "n/a",
           "na": "n/a", "not_applicable": "n/a", "skipped": "n/a"}
-_ACTIONS = ("alias", "remove", "withhold", "generalize")
+_ACTIONS = ("alias", "remove", "withhold", "generalize", "allow")
 MAX_DETECTED = 2000
 MAX_TEXT = 200_000
 _PLACEHOLDER = re.compile(r"\[[A-Z][A-Z0-9_]{1,40}\]")
@@ -87,6 +94,7 @@ def _span(d: dict, texts: dict[int, str]) -> dict | None:
             "placeholder": _str(d.get("placeholder"), 80), "source": _str(d.get("source"), 20)}
     if isinstance(d.get("field"), str):
         item["field"] = d["field"][:120]
+        item["message"] = d.get("message") if isinstance(d.get("message"), int) else None
         return item
     start, end = d.get("start"), d.get("end")
     if "offsets" in d and isinstance(d["offsets"], list) and len(d["offsets"]) == 2:
@@ -126,10 +134,10 @@ def _spans(raw, texts: dict[int, str]) -> tuple[list[dict], list[dict], int]:
 def _outbound(raw) -> dict | None:
     if not isinstance(raw, dict):
         return None
-    msgs = []
-    for m in raw.get("messages") or []:
-        if isinstance(m, dict) and isinstance(m.get("content"), str):
-            msgs.append({"role": _str(m.get("role"), 20) or "user", "content": m["content"][:MAX_TEXT]})
+    msgs = None   # null on PRIVATE_LOCAL and in errors: the gateway does not echo that text
+    if isinstance(raw.get("messages"), list):
+        msgs = [{"role": _str(m.get("role"), 20) or "user", "content": m["content"][:MAX_TEXT]}
+                for m in raw["messages"] if isinstance(m, dict) and isinstance(m.get("content"), str)]
     dest = raw.get("destination")
     sha = raw.get("sha256")
     return {"destination": dest if dest in ("external", "in_house", "none") else None,
@@ -250,6 +258,14 @@ ERRORS: dict[str, tuple[str, str, bool | None]] = {
                                   "Nothing was sent outside the company.", False),
     "restore_unavailable": ("Answer withheld", "The answer was withheld because the real details could not be put "
                             "back safely.", None),
+    "invalid_request": ("Request not accepted", "The gateway could not read this request. Reload the page and "
+                        "try again; if it keeps happening, contact IT.", False),
+    "invalid_parameter": ("Request not accepted", "The gateway did not accept a setting of this request. Contact "
+                          "IT.", False),
+    "unsupported_parameter": ("Request not accepted", "The gateway did not accept a setting of this request. "
+                              "Contact IT.", False),
+    "invalid_conversation_id": ("Request not accepted", "The gateway did not accept this request.", False),
+    "purpose_required": ("Request not accepted", "The workspace did not name a task. Contact IT.", False),
     "unauthorized": ("Workspace not authorised", "The workspace is not authorised at the privacy gateway. Please "
                      "contact your administrator.", False),
     "purpose_forbidden": ("Task not enabled", "This task is not enabled for the workspace at the gateway.", False),

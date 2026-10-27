@@ -1,0 +1,241 @@
+{
+  "_comment": "Recorded from a real production-mode gateway (tests/workspace_harness.py record): synthetic data, mock model. Raw gateway response; its pgw_report is docs/TRANSPARENCY_REPORT.md v1.",
+  "request": {
+    "purpose": "esi_letter",
+    "attested": true,
+    "body": {
+      "model": "mock-1",
+      "messages": [
+        {
+          "role": "user",
+          "content": "{\"instruction\":\"Write a short, friendly letter explaining to the employee whether they are covered by ESI.\",\"employee\":[{\"name\":\"Meera Iyer\",\"employee_id\":\"KD-12077\",\"monthly_gross\":19500}]}"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "x-pgw-request-id": "req_f44745a8608b4ec4b5ed20a5",
+      "x-pgw-gate-events": "0"
+    },
+    "body": {
+      "id": "mock-1",
+      "object": "chat.completion",
+      "created": 0,
+      "model": "mock-1",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Summary: Meera Iyer raised an issue; see (withheld); see KD-12077."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 1,
+        "completion_tokens": 1,
+        "total_tokens": 2
+      },
+      "pgw_report": {
+        "version": 1,
+        "request_id": "req_f44745a8608b4ec4b5ed20a5",
+        "purpose": "esi_letter",
+        "contract": "esi_letter@5",
+        "route": "LOCAL_COMPUTE",
+        "outcome": "sent",
+        "input_source": {
+          "id": "hr-workspace-forms@1",
+          "verified": true
+        },
+        "stages": [
+          {
+            "id": "received",
+            "status": "done",
+            "ms": 0.153
+          },
+          {
+            "id": "verify_source",
+            "status": "done",
+            "ms": 0.952
+          },
+          {
+            "id": "compute",
+            "status": "done",
+            "ms": 0.858
+          },
+          {
+            "id": "protect",
+            "status": "done",
+            "ms": 4.598
+          },
+          {
+            "id": "egress_check",
+            "status": "done",
+            "ms": 0.244
+          },
+          {
+            "id": "provider",
+            "status": "done",
+            "ms": 0.141
+          },
+          {
+            "id": "restore",
+            "status": "done",
+            "ms": 0.59
+          }
+        ],
+        "detected": [
+          {
+            "message": 0,
+            "part": null,
+            "field": "employee[0].name",
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_0RJGV5]",
+            "source": "declared"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "employee[0].employee_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_0VBZX7]",
+            "source": "declared"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "employee[0].monthly_gross",
+            "type": "COMPENSATION",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "declared"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.employee_name",
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_0RJGV5]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.employee_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_0VBZX7]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.eligibility",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "allow",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.threshold",
+            "type": "DERIVED",
+            "class": "C0",
+            "action": "allow",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.margin",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.monthly_gross",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "computed"
+          }
+        ],
+        "truncated": false,
+        "counts": {
+          "replaced": 4,
+          "removed": 3,
+          "by_type": {
+            "PERSON": 2,
+            "EMPLOYEE_ID": 2,
+            "COMPENSATION": 1,
+            "DERIVED": 4
+          }
+        },
+        "outbound": {
+          "destination": "external",
+          "provider": "mock",
+          "model": "mock-1",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. Keep them exactly as written wherever you refer to them; do not guess what they stand for. A type name in brackets without a code, such as [BANK_ACCOUNT], marks a value that was withheld entirely: never copy it into your answer; refer to it in words (e.g. 'the registered bank account')."
+            },
+            {
+              "role": "user",
+              "content": "Write a short, friendly letter explaining to the employee whether they are covered by ESI.\n\nFacts computed inside the privacy gateway (the employee's wage is not shared with you):\n- Employee: [PERSON_0RJGV5] ([EMPLOYEE_ID_0VBZX7]).\n- Result: the employee is covered by ESI. The statutory monthly wage ceiling for ESI is ₹21,000.\nAddress the explanation to the employee by name ([PERSON_0RJGV5]) and write it for them, using only these facts.\n"
+            }
+          ],
+          "gateway_note_included": true,
+          "sha256": "aa1d62b812a0d5db49a2420fb67a6127f2c43b104a218dd4031f52135a268713",
+          "bytes": 917
+        },
+        "restore": {
+          "restored": 2,
+          "kept_withheld": 1
+        },
+        "checks": [
+          {
+            "id": "egress_clean",
+            "status": "pass",
+            "label": "No value detected or declared in THIS request appears in what left"
+          },
+          {
+            "id": "declared_absent",
+            "status": "n/a",
+            "label": "No declared subject appears in what left"
+          },
+          {
+            "id": "source_verified",
+            "status": "pass",
+            "label": "The input carries a valid signature from a source this contract allowlists"
+          },
+          {
+            "id": "c3_not_returned",
+            "status": "pass",
+            "label": "No government or financial identifier (C3) appears in the answer"
+          }
+        ],
+        "error": null
+      }
+    }
+  }
+}

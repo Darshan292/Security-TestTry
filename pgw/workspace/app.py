@@ -45,7 +45,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/static/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/static/app.css": ("app.css", "text/css; charset=utf-8"),
           "/static/icon.svg": ("icon.svg", "image/svg+xml")}
-CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; "
+CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; "
        "font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
        "require-trusted-types-for 'script'; trusted-types 'none'")
 SECURITY_HEADERS = {"content-security-policy": CSP, "x-frame-options": "DENY", "x-content-type-options": "nosniff",
@@ -56,7 +56,7 @@ CSRF_HEADER = "x-pgw-workspace"
 INTEGRATION_PATH = "/api/integrations/v1/tickets"
 PUBLIC_PATHS = {"/healthz"}
 MAX_GATEWAY_RESPONSE = 8 * 1024 * 1024
-_IDENTITY = re.compile(r"[\x21-\x7e][\x20-\x7e]{0,253}")
+_IDENTITY = re.compile(r"[\x21-\x2b\x2d-\x7e][\x20-\x2b\x2d-\x7e]{0,253}")   # printable, no comma (joined duplicates)
 _INPUT_HEADERS = (attest.H_SOURCE, attest.H_TIMESTAMP, attest.H_NONCE, attest.H_SIGNATURE)
 _INPUT_HEADER_FORMAT = re.compile(r"[A-Za-z0-9@._:+/=-]{1,200}")
 
@@ -137,6 +137,7 @@ class GatewayResult:
     request_id: str | None
     round_trip_ms: float
     failure: str | None = None     # gateway_timeout | gateway_unavailable | bad_gateway_response
+    private_model: str | None = None   # X-PGW-Private-Model on PRIVATE_LOCAL: model | standin | unverified
 
 
 def create_app(settings: WorkspaceSettings, *, transport: httpx.AsyncBaseTransport | None = None) -> Starlette:
@@ -185,8 +186,9 @@ def create_app(settings: WorkspaceSettings, *, transport: httpx.AsyncBaseTranspo
                    "Content-Type": "application/json", **extra_headers}
         t0 = time.perf_counter()
 
-        def done(status, data=None, route=None, rid=None, failure=None) -> GatewayResult:
-            return GatewayResult(status, data, route, rid, round((time.perf_counter() - t0) * 1000, 1), failure)
+        def done(status, data=None, route=None, rid=None, failure=None, private=None) -> GatewayResult:
+            return GatewayResult(status, data, route, rid, round((time.perf_counter() - t0) * 1000, 1), failure,
+                                 private if private in ("model", "standin", "unverified") else None)
         try:
             r = await client.post("/v1/chat/completions", content=json.dumps(body).encode(), headers=headers)
         except httpx.TimeoutException:
@@ -203,7 +205,8 @@ def create_app(settings: WorkspaceSettings, *, transport: httpx.AsyncBaseTranspo
         if not isinstance(data, dict):
             failure = "gateway_unavailable" if r.status_code in (502, 503, 504) else "bad_gateway_response"
             return done(r.status_code, rid=rid, failure=failure)
-        return done(r.status_code, data, r.headers.get("x-pgw-route"), rid)
+        return done(r.status_code, data, r.headers.get("x-pgw-route"), rid,
+                    private=r.headers.get("x-pgw-private-model"))
 
     def result_view(res: GatewayResult, texts: dict[int, str]) -> dict:
         """Answer, plain-language error and the report view of one gateway call."""
@@ -230,7 +233,7 @@ def create_app(settings: WorkspaceSettings, *, transport: httpx.AsyncBaseTranspo
             view["outcome"] = "error"
         return {"ok": res.status == 200 and error is None, "http_status": res.status,
                 "round_trip_ms": res.round_trip_ms, "gateway_request_id": (res.request_id or "")[:64] or None,
-                "answer": answer, "error": error, "view": view}
+                "answer": answer, "error": error, "view": view, "private_model": res.private_model}
 
     # --- routes ----------------------------------------------------------------------------------------------
 

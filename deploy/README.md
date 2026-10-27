@@ -64,6 +64,27 @@ repo):
 | `PGW_LEDGER_DB` / `PGW_EGRESS_LEDGER` | local files | Restore ledger and audit log locations |
 | `PGW_PRIVATE_MODEL` | `local` | Model id at the in-boundary endpoint; should be one its `GET /v1/models` lists (a warning otherwise). Production refuses the extractive stand-in (`pgw.private_llm` without weights) when a contract routes to PRIVATE (OPERATIONS.md) |
 
+## HR Workspace (staff UI)
+
+`hr-workspace` in `docker-compose.yml` runs `python -m pgw.workspace`: the staff-facing UI and its
+backend-for-frontend (full guide: [docs/WORKSPACE.md](../docs/WORKSPACE.md)).
+
+- **Network:** `appnet` only, like any app. It reaches `http://gateway:8080` and nothing else. It needs no internet
+  and no provider credential.
+- **Secrets:** the workspace's own gateway app key (`ws_gateway_key`, app `hr-workspace` in
+  `registry/apps.yaml`), and its form-source signing key (`ws_source_key`, source `hr-workspace-forms@1` in the three
+  LOCAL_COMPUTE contracts). Both are mounted as files. Neither ever reaches a browser. Production refuses the
+  repository's demo keys for both.
+- **Users and SSO:** users reach the workspace only through your SSO reverse proxy (for example oauth2-proxy). Attach
+  the proxy to `appnet` with a fixed address, put that address in `WS_TRUSTED_PROXIES`, and make the proxy overwrite
+  `X-Forwarded-Email`. The workspace answers 401 to any other peer, and to any request without exactly one identity.
+- **Startup:** it does not start in production without `WS_TRUSTED_PROXIES`, an https `WS_PUBLIC_ORIGIN` (the CSRF
+  origin) and the gateway key file.
+- **Transparency:** the gateway returns its `pgw_report` to the workspace only because `hr-workspace` has
+  `transparency: true` in the signed registry.
+- **Not verified with real containers:** this service was added after the 2026-10-02 network check below. Re-run
+  `verify_network.sh` with it before relying on the network isolation.
+
 ## Verified 2026-10-02
 
 Scope: compose network topology only (`deploy/verify_network.sh`, run as `./deploy/verify_network.sh`; exits 1 on any FAIL). Real containers on a real Docker 29.3.1 daemon (`docker compose` v5), using `deploy/docker-compose.yml` for networks/attachments plus `deploy/docker-compose.verify.yml` (test-only override: swaps images/commands, no code changes to the real compose file). Dummy credentials only. Result: 13/13 checks PASS.

@@ -1,0 +1,271 @@
+{
+  "_comment": "Recorded from a real production-mode gateway (tests/workspace_harness.py record): synthetic data, mock model. Raw gateway response; its pgw_report is docs/TRANSPARENCY_REPORT.md v1.",
+  "request": {
+    "purpose": "band_position",
+    "attested": true,
+    "body": {
+      "model": "mock-1",
+      "messages": [
+        {
+          "role": "user",
+          "content": "{\"instruction\":\"Explain where this employee sits in their pay band, in two sentences for the HR manager.\",\"employee\":[{\"name\":\"Rohan Mehta\",\"employee_id\":\"KD-10422\",\"annual_ctc\":2150000}],\"band\":[{\"name\":\"P3\"}]}"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "x-pgw-request-id": "req_eac4f508314b486f996d36df",
+      "x-pgw-gate-events": "0"
+    },
+    "body": {
+      "id": "mock-1",
+      "object": "chat.completion",
+      "created": 0,
+      "model": "mock-1",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Summary: Rohan Mehta raised an issue; see (withheld); see KD-10422."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 1,
+        "completion_tokens": 1,
+        "total_tokens": 2
+      },
+      "pgw_report": {
+        "version": 1,
+        "request_id": "req_eac4f508314b486f996d36df",
+        "purpose": "band_position",
+        "contract": "band_position@5",
+        "route": "LOCAL_COMPUTE",
+        "outcome": "sent",
+        "input_source": {
+          "id": "hr-workspace-forms@1",
+          "verified": true
+        },
+        "stages": [
+          {
+            "id": "received",
+            "status": "done",
+            "ms": 0.213
+          },
+          {
+            "id": "verify_source",
+            "status": "done",
+            "ms": 1.379
+          },
+          {
+            "id": "compute",
+            "status": "done",
+            "ms": 0.931
+          },
+          {
+            "id": "protect",
+            "status": "done",
+            "ms": 3.906
+          },
+          {
+            "id": "egress_check",
+            "status": "done",
+            "ms": 0.22
+          },
+          {
+            "id": "provider",
+            "status": "done",
+            "ms": 0.095
+          },
+          {
+            "id": "restore",
+            "status": "done",
+            "ms": 0.744
+          }
+        ],
+        "detected": [
+          {
+            "message": 0,
+            "part": null,
+            "field": "employee[0].name",
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_9SY5SF]",
+            "source": "declared"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "employee[0].employee_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_4NVB8D]",
+            "source": "declared"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "employee[0].annual_ctc",
+            "type": "COMPENSATION",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "declared"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.employee_name",
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_9SY5SF]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.employee_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_4NVB8D]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.band_name",
+            "type": "DERIVED",
+            "class": "C0",
+            "action": "allow",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.band_min",
+            "type": "DERIVED",
+            "class": "C0",
+            "action": "allow",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.band_max",
+            "type": "DERIVED",
+            "class": "C0",
+            "action": "allow",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.position",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "allow",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.pct_through_band",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.annual_ctc",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.headroom",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "computed"
+          }
+        ],
+        "truncated": false,
+        "counts": {
+          "replaced": 4,
+          "removed": 4,
+          "by_type": {
+            "PERSON": 2,
+            "EMPLOYEE_ID": 2,
+            "COMPENSATION": 1,
+            "DERIVED": 7
+          }
+        },
+        "outbound": {
+          "destination": "external",
+          "provider": "mock",
+          "model": "mock-1",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. Keep them exactly as written wherever you refer to them; do not guess what they stand for. A type name in brackets without a code, such as [BANK_ACCOUNT], marks a value that was withheld entirely: never copy it into your answer; refer to it in words (e.g. 'the registered bank account')."
+            },
+            {
+              "role": "user",
+              "content": "Explain where this employee sits in their pay band, in two sentences for the HR manager.\n\nFacts computed inside the privacy gateway (the employee's exact CTC is not shared with you):\n- Employee: [PERSON_9SY5SF] ([EMPLOYEE_ID_4NVB8D]), pay band P3 (₹18,00,000 to ₹26,00,000 per year).\n- Position: the employee's CTC is in the middle third of the band.\nWrite the explanation for the HR manager using only these facts.\n"
+            }
+          ],
+          "gateway_note_included": true,
+          "sha256": "5d83d7b842cbe2f4705a10ec92861184b10ec4fed265f907776524a66c39268e",
+          "bytes": 893
+        },
+        "restore": {
+          "restored": 2,
+          "kept_withheld": 1
+        },
+        "checks": [
+          {
+            "id": "egress_clean",
+            "status": "pass",
+            "label": "No value detected or declared in THIS request appears in what left"
+          },
+          {
+            "id": "declared_absent",
+            "status": "n/a",
+            "label": "No declared subject appears in what left"
+          },
+          {
+            "id": "source_verified",
+            "status": "pass",
+            "label": "The input carries a valid signature from a source this contract allowlists"
+          },
+          {
+            "id": "c3_not_returned",
+            "status": "pass",
+            "label": "No government or financial identifier (C3) appears in the answer"
+          }
+        ],
+        "error": null
+      }
+    }
+  }
+}

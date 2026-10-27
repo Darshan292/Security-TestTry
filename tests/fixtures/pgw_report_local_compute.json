@@ -1,5 +1,5 @@
 {
-  "_comment": "pgw_report v1 fixture (PGW_REPORT_SPEC.md). Recorded from a real gateway run (development mode, mock model, synthetic data): outbound text, placeholders, offsets and stage timings are what that run produced. A workspace form, signed by the workspace as hr-workspace-forms@1.",
+  "_comment": "Recorded from a real production-mode gateway (tests/workspace_harness.py record): synthetic data, mock model. Raw gateway response; its pgw_report is docs/TRANSPARENCY_REPORT.md v1.",
   "request": {
     "purpose": "salary_comparison",
     "attested": true,
@@ -16,7 +16,7 @@
   "response": {
     "status": 200,
     "headers": {
-      "x-pgw-request-id": "req_217ba3f2025d47efa4d4ec20",
+      "x-pgw-request-id": "req_da9e80c0a2ac40a282ed6e85",
       "x-pgw-gate-events": "0"
     },
     "body": {
@@ -41,7 +41,7 @@
       },
       "pgw_report": {
         "version": 1,
-        "request_id": "req_217ba3f2025d47efa4d4ec20",
+        "request_id": "req_da9e80c0a2ac40a282ed6e85",
         "purpose": "salary_comparison",
         "contract": "salary_comparison@6",
         "route": "LOCAL_COMPUTE",
@@ -54,57 +54,63 @@
           {
             "id": "received",
             "status": "done",
-            "ms": 1.82
+            "ms": 0.319
           },
           {
             "id": "verify_source",
             "status": "done",
-            "ms": 0.45
+            "ms": 1.402
           },
           {
             "id": "compute",
             "status": "done",
-            "ms": 1.1
+            "ms": 1.436
           },
           {
             "id": "protect",
             "status": "done",
-            "ms": 4.69
+            "ms": 13.394
           },
           {
             "id": "egress_check",
             "status": "done",
-            "ms": 0.24
+            "ms": 0.253
           },
           {
             "id": "provider",
             "status": "done",
-            "ms": 0.96
+            "ms": 0.086
           },
           {
             "id": "restore",
             "status": "done",
-            "ms": 0.92
+            "ms": 0.912
           }
         ],
         "detected": [
           {
+            "message": 0,
+            "part": null,
             "field": "employees[0].name",
             "type": "PERSON",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[PERSON_33T5CE]",
+            "placeholder": "[PERSON_4VAMJ1]",
             "source": "declared"
           },
           {
+            "message": 0,
+            "part": null,
             "field": "employees[0].employee_id",
             "type": "EMPLOYEE_ID",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[EMPLOYEE_ID_2NCBF1]",
+            "placeholder": "[EMPLOYEE_ID_51BTV6]",
             "source": "declared"
           },
           {
+            "message": 0,
+            "part": null,
             "field": "employees[0].annual_ctc",
             "type": "COMPENSATION",
             "class": "C2",
@@ -113,22 +119,28 @@
             "source": "declared"
           },
           {
+            "message": 0,
+            "part": null,
             "field": "employees[1].name",
             "type": "PERSON",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[PERSON_48QCFS]",
+            "placeholder": "[PERSON_7SNPAE]",
             "source": "declared"
           },
           {
+            "message": 0,
+            "part": null,
             "field": "employees[1].employee_id",
             "type": "EMPLOYEE_ID",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[EMPLOYEE_ID_1XMY6R]",
+            "placeholder": "[EMPLOYEE_ID_105ZAT]",
             "source": "declared"
           },
           {
+            "message": 0,
+            "part": null,
             "field": "employees[1].annual_ctc",
             "type": "COMPENSATION",
             "class": "C2",
@@ -137,30 +149,115 @@
             "source": "declared"
           },
           {
-            "field": "outputs",
-            "type": "DERIVED",
-            "class": "D",
+            "message": 0,
+            "part": null,
+            "field": "outputs.higher_name",
+            "type": "PERSON",
+            "class": "C1",
             "action": "alias",
-            "placeholder": "[DERIVED_4CKVNB]",
+            "placeholder": "[PERSON_4VAMJ1]",
             "source": "computed"
           },
           {
-            "field": "outputs",
-            "type": "DERIVED",
-            "class": "D",
+            "message": 0,
+            "part": null,
+            "field": "outputs.higher_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
             "action": "alias",
-            "placeholder": "[DERIVED_82ARR4]",
+            "placeholder": "[EMPLOYEE_ID_51BTV6]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.lower_name",
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_7SNPAE]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.lower_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_105ZAT]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.difference",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "alias",
+            "placeholder": "[DERIVED_502PGX]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.pct_of_lower",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "alias",
+            "placeholder": "[DERIVED_3G3RPV]",
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.ranking",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "allow",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.difference_value",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.higher_ctc",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "computed"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "field": "outputs.lower_ctc",
+            "type": "DERIVED",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
             "source": "computed"
           }
         ],
+        "truncated": false,
         "counts": {
-          "replaced": 6,
-          "removed": 2,
+          "replaced": 10,
+          "removed": 5,
           "by_type": {
-            "PERSON": 2,
-            "EMPLOYEE_ID": 2,
+            "PERSON": 4,
+            "EMPLOYEE_ID": 4,
             "COMPENSATION": 2,
-            "DERIVED": 2
+            "DERIVED": 6
           }
         },
         "outbound": {
@@ -174,16 +271,16 @@
             },
             {
               "role": "user",
-              "content": "Who earns more, and by how much? Write a two-line note for the HR manager.\n\nFacts computed inside the privacy gateway from exact HRIS data (exact salaries are not shared with you):\n- Employees compared: [PERSON_33T5CE] ([EMPLOYEE_ID_2NCBF1]) and [PERSON_48QCFS] ([EMPLOYEE_ID_1XMY6R]).\n- The first of these two has the higher annual CTC.\n- The difference is [DERIVED_4CKVNB] per year, which is [DERIVED_82ARR4] of the lower CTC.\nWrite the answer for the HR manager using only these facts.\n"
+              "content": "Who earns more, and by how much? Write a two-line note for the HR manager.\n\nFacts computed inside the privacy gateway from exact HRIS data (exact salaries are not shared with you):\n- Employees compared: [PERSON_4VAMJ1] ([EMPLOYEE_ID_51BTV6]) and [PERSON_7SNPAE] ([EMPLOYEE_ID_105ZAT]).\n- The first of these two has the higher annual CTC.\n- The difference is [DERIVED_502PGX] per year, which is [DERIVED_3G3RPV] of the lower CTC.\nWrite the answer for the HR manager using only these facts.\n"
             }
           ],
           "gateway_note_included": true,
-          "sha256": "fdb65067093069bbcd4905e94b3833aa9d53469af4e4926151b8962214b62c82",
+          "sha256": "b901731e8bdeafdd0b7a47ec2b4541ea19e11e22d7f6af4c53a523a61a20f9c8",
           "bytes": 963
         },
         "restore": {
           "restored": 6,
-          "kept_withheld": 2
+          "kept_withheld": 1
         },
         "checks": [
           {
@@ -193,18 +290,18 @@
           },
           {
             "id": "declared_absent",
-            "status": "pass",
-            "label": "No declared person's name, ID, email or phone appears in what left"
+            "status": "n/a",
+            "label": "No declared subject appears in what left"
           },
           {
             "id": "source_verified",
             "status": "pass",
-            "label": "The input was signed by a source this purpose allows"
+            "label": "The input carries a valid signature from a source this contract allowlists"
           },
           {
             "id": "c3_not_returned",
             "status": "pass",
-            "label": "No government or financial identifier is returned in the answer"
+            "label": "No government or financial identifier (C3) appears in the answer"
           }
         ],
         "error": null

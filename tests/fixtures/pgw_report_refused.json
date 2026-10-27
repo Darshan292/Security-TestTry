@@ -1,5 +1,5 @@
 {
-  "_comment": "pgw_report v1 fixture (PGW_REPORT_SPEC.md). Recorded from a real gateway run (development mode, mock model, synthetic data): outbound text, placeholders, offsets and stage timings are what that run produced. No requester declared: the contract requires one, so the gateway refuses before anything is sent.",
+  "_comment": "Recorded from a real production-mode gateway (tests/workspace_harness.py record): synthetic data, mock model. Raw gateway response; its pgw_report is docs/TRANSPARENCY_REPORT.md v1.",
   "request": {
     "purpose": "ticket_summary",
     "attested": false,
@@ -12,7 +12,7 @@
         },
         {
           "role": "user",
-          "content": "Ticket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748. Contact imran.ansari@kestrel-dyn.in if needed."
+          "content": "Ticket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748 (IFSC SBIN0095056). Contact imran.ansari@kestrel-dyn.in if needed."
         }
       ]
     }
@@ -20,7 +20,7 @@
   "response": {
     "status": 400,
     "headers": {
-      "x-pgw-request-id": "req_79d6d0be8cc943659358e4e6"
+      "x-pgw-request-id": "req_1569ea4947f340a6afbdffa7"
     },
     "body": {
       "error": {
@@ -28,7 +28,7 @@
         "message": "the data contract requires role(s): requester",
         "pgw_report": {
           "version": 1,
-          "request_id": "req_79d6d0be8cc943659358e4e6",
+          "request_id": "req_1569ea4947f340a6afbdffa7",
           "purpose": "ticket_summary",
           "contract": "ticket_summary@8",
           "route": "EXT_PSEUDO",
@@ -41,10 +41,11 @@
             {
               "id": "received",
               "status": "failed",
-              "ms": 2.65
+              "ms": 0.246
             }
           ],
           "detected": [],
+          "truncated": false,
           "counts": {
             "replaced": 0,
             "removed": 0,
@@ -61,17 +62,17 @@
             {
               "id": "declared_absent",
               "status": "n/a",
-              "label": "No declared person's name, ID, email or phone appears in what left"
+              "label": "No declared subject appears in what left"
             },
             {
               "id": "source_verified",
               "status": "n/a",
-              "label": "The input was signed by a source this purpose allows"
+              "label": "The input carries a valid signature from a source this contract allowlists"
             },
             {
               "id": "c3_not_returned",
               "status": "n/a",
-              "label": "No government or financial identifier is returned in the answer"
+              "label": "No government or financial identifier (C3) appears in the answer"
             }
           ],
           "error": {

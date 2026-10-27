@@ -26,7 +26,8 @@
                        COMPENSATION: "Pay", DERIVED: "Computed value", DATE_OF_BIRTH: "Date of birth", EMAIL: "Email",
                        PHONE: "Phone" };
   const ACTION_TEXT = { alias: "replaced with a placeholder", remove: "removed before sending",
-                        withhold: "withheld, never sent", generalize: "generalised before sending" };
+                        withhold: "withheld, never sent", generalize: "generalised before sending",
+                        allow: "found, sent unchanged (allowed by the contract)" };
   const PLACEHOLDER = /\[([A-Z][A-Z0-9_]*?)(?:_([0-9A-Z]{6,8}))?\]/g;
   const WITHHELD_WORD = "(withheld)";
 
@@ -214,7 +215,7 @@
     const idx = rows.children.length;
     const sel = el("select", { cls: "p-role", attrs: { "aria-label": "Role", "data-path": "people[" + idx + "].role" } });
     for (const r of t.roles) {
-      const o = el("option", { text: r.label + (r.required ? " (required)" : ""), attrs: { value: r.id } });
+      const o = el("option", { text: r.label, attrs: { value: r.id } });
       if (r.id === roleId) o.selected = true;
       sel.append(o);
     }
@@ -390,8 +391,11 @@
     state.history.unshift(entry);
     if (state.history.length > HISTORY_MAX) state.history.pop();
     renderHistory(entry.id);
-    await present(entry, true);
-    setRunning(false);
+    try {
+      await present(entry, true);
+    } finally {
+      setRunning(false);
+    }
   }
 
   /** A failure before the gateway answered (workspace unreachable, refused, timed out): shown, never hidden. */
@@ -422,6 +426,9 @@
       setNode(0, "active");
       $("journey-note").textContent = "Waiting for the privacy gateway…";
       $("journey-note").hidden = false;
+      if (window.matchMedia && window.matchMedia("(max-width: 1040px)").matches) {
+        $("results").scrollIntoView({ behavior: motion() ? "smooth" : "auto", block: "start" });
+      }
       for (const id of ["body-typed", "body-saw", "body-back"]) $(id).replaceChildren(skeleton());
     }
   }
@@ -467,6 +474,10 @@
     return "none";
   }
 
+  /** On PRIVATE_LOCAL the gateway reports verify_source "failed" and continues in-house: shown as diverted. */
+  function shown(st, view) {
+    return st.id === "verify_source" && st.status === "failed" && view.outcome === "kept_inside" ? "diverted" : st.status;
+  }
   function stageText(st, run) {
     const v = run.data.view, c = v.counts || {}, src = v.input_source || {}, o = v.outbound || {};
     const inHouse = routeOf(v) === "in_house";
@@ -478,6 +489,7 @@
         return ["Request received", failed ? stopped : "The gateway identified the workspace and the task's data contract" +
                 (v.contract ? " (" + v.contract + ")." : ".")];
       case "verify_source":
+        if (failed && v.outcome === "kept_inside") return ["Source check", "Not signed by an approved source system, so the gateway kept it inside the company."];
         if (failed) return ["Source check", stopped];
         if (st.status === "skipped") return ["Source check", "Not needed for this request."];
         return ["Source check", src.verified ? "Signed by an approved source: " + (src.id || "verified") + "."
@@ -517,9 +529,10 @@
     li._ms = ms;
     return li;
   }
-  function finishStep(li, st, animate) {
-    li.setAttribute("data-state", st.status);
-    li.querySelector(".step-icon").replaceChildren(icon(st.status === "done" ? "i-ok" : st.status === "failed" ? "i-x" : "i-dash"));
+  function finishStep(li, st, animate, view) {
+    const s = shown(st, view);
+    li.setAttribute("data-state", s);
+    li.querySelector(".step-icon").replaceChildren(icon(s === "done" ? "i-ok" : s === "failed" ? "i-x" : s === "diverted" ? "i-home" : "i-dash"));
     if (st.status !== "skipped") {
       if (animate) countUp(li._ms, st.ms, fmtMs); else li._ms.textContent = fmtMs(st.ms);
     }
@@ -575,8 +588,8 @@
       if (st.id === "provider" && st.status !== "skipped") showSaw("final");
       if (animate) await wait(st.status === "skipped" ? SKIP_MS : STAGE_MS);
       if (!live()) return;
-      finishStep(li, st, animate);
-      if (n != null) nodeStates.get(n).push(st.status);
+      finishStep(li, st, animate, v);
+      if (n != null) nodeStates.get(n).push(shown(st, v) === "diverted" ? "done" : st.status);
       if (st.id === "protect" && st.status === "done" && saw) saw.toPlaceholders();
       if (st.id === "provider" && st.status === "done") showBack();
       if (st.id === "restore" && st.status === "done") { showBack(); if (back) back.toValues(); }
@@ -585,8 +598,8 @@
         const ns = ss.includes("failed") ? "failed" : ss.every((x) => x === "skipped") ? "skipped" : "done";
         setNode(n, ns);
         const more = stages.slice(i + 1).some((x) => NODE_OF[x.id] != null && NODE_OF[x.id] > n);
-        if (ns !== "failed" && more && n < 4) {
-          for (let k = n; k < Math.min(4, Math.max(...stages.slice(i + 1).map((x) => NODE_OF[x.id] ?? n))); k++) drawSeg(k, true);
+        if (ns !== "failed" && more && n < 4) {   // draw only the connector to the next node
+          drawSeg(n, true);
           if (animate) await wait(SEG_MS);
         }
       }
@@ -655,6 +668,19 @@
         }
         box.append(el("div", { cls: "kv" }, el("span", { cls: "k", text: r.label }), el("span", null, shown)));
       }
+      const computed = (v.fields || []).filter((f) => /^outputs\./.test(f.field));
+      if (computed.length) {
+        box.append(el("div", { cls: "row-group", text: "Computed inside the gateway" }));
+        const what = { alias: ["sent as a placeholder", null], allow: ["sent as is", "other"], withhold: ["stays inside", "withheld"],
+                       remove: ["stays inside", "withheld"], generalize: ["sent generalised", null] };
+        for (const f of computed) {
+          const [label, cat] = what[f.action] || [f.action || "reported", "other"];
+          box.append(el("div", { cls: "kv" }, el("span", { cls: "k", text: f.field.slice(8).replace(/_/g, " ") }),
+                        el("span", null, chip(label, cat || f.category, { title: "Computed output: " + (ACTION_TEXT[f.action] || label) }))));
+        }
+      }
+      const instr = (v.fields || []).filter((f) => f.field === "instruction").length;
+      if (instr) box.append(el("p", { cls: "pane-note", text: instr + " value(s) in the instruction were protected." }));
       body.replaceChildren(box);
       meta.textContent = "Form · signed by the workspace";
     }
@@ -665,10 +691,24 @@
     const d = run.data, v = d.view, body = $("body-saw"), meta = $("meta-saw"), o = v.outbound;
     const route = routeOf(v);
     const result = { toPlaceholders() {} };
+    if (route === "in_house" && o) {
+      // The gateway does not echo what went in-house (it is the unprotected input): show where it went instead.
+      const kids = [el("p", { cls: "pane-note in", text: "Kept inside. Your text went only to the company's in-house model and was not sent to an external AI." }),
+                    dl([["Model", o.model || "not reported", true], ["Body size", o.bytes != null ? fmtInt(o.bytes) + " bytes" : null, true],
+                        ["SHA-256", o.sha256, true]])];
+      if (d.private_model === "standin") {
+        kids.push(el("p", { cls: "pane-note", text: "This in-house endpoint is the development stand-in: it extracts sentences and is not a language model." }));
+      }
+      body.replaceChildren(...kids);
+      meta.textContent = "In-house";
+      enter(body);
+      return result;
+    }
     if (!o || !o.messages || !o.messages.length) {
       const nothing = v.outcome === "refused" || (d.error && d.error.sent === false);
       body.replaceChildren(el("p", { cls: "pane-note" + (nothing ? " stop" : ""),
-        text: nothing ? "Nothing was sent to an AI." : v.available ? "The gateway did not report any outgoing text."
+        text: nothing ? "Nothing was sent to an AI." : o && o.sha256 ? "The gateway does not return the outgoing text on errors. It sent " + fmtInt(o.bytes || 0) + " bytes (SHA-256 in the technical details)."
+          : v.available ? "Nothing left the gateway for this request."
           : "The gateway did not report the outgoing text for this request." }));
       enter(body);
       return result;
@@ -676,12 +716,6 @@
     const users = o.messages.filter((m) => m.role === "user");
     const main = (users.length ? users[users.length - 1] : o.messages[o.messages.length - 1]).content;
     meta.textContent = (o.bytes != null ? fmtInt(o.bytes) + " bytes" : "") + (o.provider ? " · " + o.provider : "");
-    if (route === "in_house") {
-      body.replaceChildren(el("p", { cls: "pane-note in", text: "Kept inside: the in-house model received your text as typed. It runs within the company; nothing was sent to an external AI." }),
-                           document.createTextNode(main));
-      enter(body);
-      return result;
-    }
     const orig = originals(run);
     const valuesFirst = phase === "values";
     const { frag, chips } = markPlaceholders(main, valuesFirst ? (ph) => orig.get(ph) ?? null : null);
@@ -798,21 +832,27 @@
     box.hidden = false;
   }
 
-  function checkItem(c) {
+  function checkItem(c, view) {
     const word = c.status === "pass" ? "Passed" : c.status === "fail" ? "Failed" : c.status === "n/a" ? "Not applicable" : "Unknown";
     const cls = c.status === "pass" ? "pass" : c.status === "fail" ? "fail" : c.status === "n/a" ? "na" : "unknown";
-    return el("li", { cls: "check " + cls },
+    // Pasted text is unsigned by design: on the in-house route this failure is the reason it stayed inside.
+    const expected = c.status === "fail" && c.id === "source_verified" && view && view.outcome === "kept_inside";
+    const li = el("li", { cls: "check " + cls + (expected ? " expected" : "") },
               el("span", { cls: "check-icon" }, icon(cls === "pass" ? "i-ok" : cls === "fail" ? "i-x" : "i-dash")),
               el("div", null, el("div", { cls: "check-label", text: c.label }),
                  el("div", { cls: "check-id" }, el("span", { cls: "check-status", text: word }),
                     document.createTextNode(" · " + c.id))));
+    if (expected) {
+      li.lastChild.append(el("div", { cls: "check-note", text: "Expected for pasted text: this is why the gateway kept it inside the company." }));
+    }
+    return li;
   }
   function renderChecks(v) {
     const checks = v.checks || [];
     if (!checks.length) { $("checks-card").hidden = true; return; }
     const main = checks.filter((c) => c.status !== "n/a"), na = checks.filter((c) => c.status === "n/a");
-    $("check-list").replaceChildren(...main.map(checkItem));
-    $("na-list").replaceChildren(...na.map(checkItem));
+    $("check-list").replaceChildren(...main.map((c) => checkItem(c, v)));
+    $("na-list").replaceChildren(...na.map((c) => checkItem(c, v)));
     $("na-count").textContent = String(na.length);
     $("na-wrap").hidden = !na.length;
     $("checks-card").hidden = false;
@@ -858,12 +898,18 @@
         ["Destination", o.destination, true], ["Provider", o.provider, true], ["Model", o.model, true],
         ["Body size", o.bytes != null ? fmtInt(o.bytes) + " bytes" : null, true], ["SHA-256 of the exact body", o.sha256, true],
         ["Gateway placeholder note included", o.gateway_note_included ? "yes" : "no", true]])));
-      const pre = el("pre", { cls: "raw" });
-      o.messages.forEach((m, i) => {
-        if (i) pre.append(document.createTextNode("\n\n"));
-        pre.append(el("span", { cls: "raw-role", text: m.role + ":" }), document.createTextNode("\n" + m.content));
-      });
-      kids.push(el("section", null, el("h3", { text: "Raw outbound messages" }), pre));
+      if (o.messages) {
+        const pre = el("pre", { cls: "raw" });
+        o.messages.forEach((m, i) => {
+          if (i) pre.append(document.createTextNode("\n\n"));
+          pre.append(el("span", { cls: "raw-role", text: m.role + ":" }), document.createTextNode("\n" + m.content));
+        });
+        kids.push(el("section", null, el("h3", { text: "Raw outbound messages" }), pre));
+      } else {
+        kids.push(el("p", { cls: "hint", text: o.destination === "in_house"
+          ? "The gateway does not return the text it sent to the in-house model (it is your unprotected input)."
+          : "The gateway does not return the outgoing text on errors; the size and hash above are of the exact bytes." }));
+      }
     }
     $("tech-body").replaceChildren(...kids);
   }

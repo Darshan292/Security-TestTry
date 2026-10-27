@@ -1,5 +1,5 @@
 {
-  "_comment": "pgw_report v1 fixture (PGW_REPORT_SPEC.md). Recorded from a real gateway run (development mode, mock model, synthetic data): outbound text, placeholders, offsets and stage timings are what that run produced. A helpdesk ticket signed by its source (helpdesk-ticket-export@1) and passed through the workspace's integration endpoint.",
+  "_comment": "Recorded from a real production-mode gateway (tests/workspace_harness.py record): synthetic data, mock model. Raw gateway response; its pgw_report is docs/TRANSPARENCY_REPORT.md v1.",
   "request": {
     "purpose": "ticket_summary",
     "attested": true,
@@ -7,12 +7,8 @@
       "model": "mock-1",
       "messages": [
         {
-          "role": "system",
-          "content": "Summarise this HR helpdesk ticket in three short lines: the issue, what was done, and what happens next. Use only what the ticket states."
-        },
-        {
           "role": "user",
-          "content": "Ticket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748. Contact imran.ansari@kestrel-dyn.in if needed."
+          "content": "Summarise this ticket.\n---\nTicket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748 (IFSC SBIN0095056). Contact imran.ansari@kestrel-dyn.in if needed."
         }
       ],
       "pgw_subjects": {
@@ -28,7 +24,7 @@
   "response": {
     "status": 200,
     "headers": {
-      "x-pgw-request-id": "req_61afb49b3d25485d93869926",
+      "x-pgw-request-id": "req_92f1b80d32294e08bc1474ba",
       "x-pgw-gate-events": "0"
     },
     "body": {
@@ -53,7 +49,7 @@
       },
       "pgw_report": {
         "version": 1,
-        "request_id": "req_61afb49b3d25485d93869926",
+        "request_id": "req_92f1b80d32294e08bc1474ba",
         "purpose": "ticket_summary",
         "contract": "ticket_summary@8",
         "route": "EXT_PSEUDO",
@@ -66,12 +62,12 @@
           {
             "id": "received",
             "status": "done",
-            "ms": 16.51
+            "ms": 1.513
           },
           {
             "id": "verify_source",
             "status": "done",
-            "ms": 2.67
+            "ms": 1.199
           },
           {
             "id": "compute",
@@ -81,74 +77,74 @@
           {
             "id": "protect",
             "status": "done",
-            "ms": 28.03
+            "ms": 40.873
           },
           {
             "id": "egress_check",
             "status": "done",
-            "ms": 0.83
+            "ms": 1.139
           },
           {
             "id": "provider",
             "status": "done",
-            "ms": 1.36
+            "ms": 0.117
           },
           {
             "id": "restore",
             "status": "done",
-            "ms": 0.82
+            "ms": 1.284
           }
         ],
         "detected": [
           {
-            "message": 1,
+            "message": 0,
             "part": null,
-            "start": 40,
-            "end": 52,
+            "start": 67,
+            "end": 79,
             "type": "PERSON",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[PERSON_72Z6WV]",
+            "placeholder": "[PERSON_1HFWKA]",
             "source": "declared"
           },
           {
-            "message": 1,
+            "message": 0,
             "part": null,
-            "start": 54,
-            "end": 62,
+            "start": 81,
+            "end": 89,
             "type": "EMPLOYEE_ID",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[EMPLOYEE_ID_05CNN0]",
+            "placeholder": "[EMPLOYEE_ID_88E55S]",
             "source": "declared"
           },
           {
-            "message": 1,
+            "message": 0,
             "part": null,
-            "start": 73,
-            "end": 85,
+            "start": 100,
+            "end": 112,
             "type": "PERSON",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[PERSON_72Z6WV]",
+            "placeholder": "[PERSON_1HFWKA]",
             "source": "declared"
           },
           {
-            "message": 1,
+            "message": 0,
             "part": null,
-            "start": 141,
-            "end": 149,
+            "start": 168,
+            "end": 176,
             "type": "COMPENSATION",
             "class": "C2",
             "action": "alias",
-            "placeholder": "[COMPENSATION_0NDH4C]",
+            "placeholder": "[COMPENSATION_8P5X1E]",
             "source": "detected"
           },
           {
-            "message": 1,
+            "message": 0,
             "part": null,
-            "start": 219,
-            "end": 229,
+            "start": 246,
+            "end": 256,
             "type": "PAN",
             "class": "C3",
             "action": "remove",
@@ -156,10 +152,10 @@
             "source": "detected"
           },
           {
-            "message": 1,
+            "message": 0,
             "part": null,
-            "start": 327,
-            "end": 339,
+            "start": 354,
+            "end": 366,
             "type": "BANK_ACCOUNT",
             "class": "C3",
             "action": "remove",
@@ -167,17 +163,29 @@
             "source": "detected"
           },
           {
-            "message": 1,
+            "message": 0,
             "part": null,
-            "start": 349,
-            "end": 376,
+            "start": 373,
+            "end": 384,
+            "type": "IFSC",
+            "class": "C0",
+            "action": "allow",
+            "placeholder": null,
+            "source": "detected"
+          },
+          {
+            "message": 0,
+            "part": null,
+            "start": 395,
+            "end": 422,
             "type": "EMAIL",
             "class": "C1",
             "action": "alias",
-            "placeholder": "[EMAIL_7N26Z2]",
+            "placeholder": "[EMAIL_9H63EW]",
             "source": "detected"
           }
         ],
+        "truncated": false,
         "counts": {
           "replaced": 5,
           "removed": 2,
@@ -187,6 +195,7 @@
             "COMPENSATION": 1,
             "PAN": 1,
             "BANK_ACCOUNT": 1,
+            "IFSC": 1,
             "EMAIL": 1
           }
         },
@@ -200,21 +209,17 @@
               "content": "Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. Keep them exactly as written wherever you refer to them; do not guess what they stand for. A type name in brackets without a code, such as [BANK_ACCOUNT], marks a value that was withheld entirely: never copy it into your answer; refer to it in words (e.g. 'the registered bank account')."
             },
             {
-              "role": "system",
-              "content": "Summarise this HR helpdesk ticket in three short lines: the issue, what was done, and what happens next. Use only what the ticket states."
-            },
-            {
               "role": "user",
-              "content": "Ticket PAY-88231 | Payroll | Raised by: [PERSON_72Z6WV] ([EMPLOYEE_ID_05CNN0])\n[28 Sep] [PERSON_72Z6WV]: My October TDS projection shows an extra deduction of [COMPENSATION_0NDH4C]. I uploaded rent receipts but the HRA exemption was not applied. PAN [PAN].\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account [BANK_ACCOUNT]. Contact [EMAIL_7N26Z2] if needed."
+              "content": "Summarise this ticket.\n---\nTicket PAY-88231 | Payroll | Raised by: [PERSON_1HFWKA] ([EMPLOYEE_ID_88E55S])\n[28 Sep] [PERSON_1HFWKA]: My October TDS projection shows an extra deduction of [COMPENSATION_8P5X1E]. I uploaded rent receipts but the HRA exemption was not applied. PAN [PAN].\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account [BANK_ACCOUNT] (IFSC SBIN0095056). Contact [EMAIL_9H63EW] if needed."
             }
           ],
           "gateway_note_included": true,
-          "sha256": "cd61bf520969c69d5b66130a214f96e1dea9923fc9865cbc5f7e79b8714175e2",
-          "bytes": 1039
+          "sha256": "7e389efb43347b2d9e5f5c654226d132453efb2763df0f9226248ab5416644ae",
+          "bytes": 919
         },
         "restore": {
-          "restored": 5,
-          "kept_withheld": 2
+          "restored": 4,
+          "kept_withheld": 1
         },
         "checks": [
           {
@@ -225,17 +230,17 @@
           {
             "id": "declared_absent",
             "status": "pass",
-            "label": "No declared person's name, ID, email or phone appears in what left"
+            "label": "No declared subject appears in what left"
           },
           {
             "id": "source_verified",
             "status": "pass",
-            "label": "The input was signed by a source this purpose allows"
+            "label": "The input carries a valid signature from a source this contract allowlists"
           },
           {
             "id": "c3_not_returned",
             "status": "pass",
-            "label": "No government or financial identifier is returned in the answer"
+            "label": "No government or financial identifier (C3) appears in the answer"
           }
         ],
         "error": null

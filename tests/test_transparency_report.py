@@ -337,7 +337,7 @@ def test_local_compute_reports_fields_not_offsets(tmp_path):
     r = post(client, "salary_comparison", user(json.dumps(payload)))
     assert r.status_code == 200, r.text
     rep = r.json()["pgw_report"]
-    assert rep["route"] == "LOCAL_COMPUTE" and rep["contract"] == "salary_comparison@5"
+    assert rep["route"] == "LOCAL_COMPUTE" and rep["contract"] == "salary_comparison@6"
     assert {s["id"]: s["status"] for s in rep["stages"]}["compute"] == "done"
     assert all("start" not in d and "end" not in d and d["field"] for d in rep["detected"])
     by = {d["field"]: d for d in rep["detected"]}

@@ -52,6 +52,34 @@ services:
     networks: [appnet]                # appnet ONLY; never add egressnet to an app service
     depends_on: [gateway]
 
+  hr-workspace:
+    # HR Workspace (docs/WORKSPACE.md): the staff UI and its backend. Like every app it sits on `appnet` ONLY: it
+    # reaches the gateway and nothing else (no internet, no provider). It holds the workspace's gateway app key and
+    # its form-source signing key as secrets; browsers never see either.
+    # Users reach it only through your SSO reverse proxy (oauth2-proxy or similar), which must also be attached to
+    # appnet, strip any client-sent identity header and set X-Forwarded-Email. Give the proxy a fixed address and
+    # list it (only it) in WS_TRUSTED_PROXIES: a request from any other peer gets 401.
+    image: pgw-gateway:local          # same image as the gateway (the workspace is pgw/workspace)
+    command: ["python", "-m", "pgw.workspace"]
+    environment:
+      WS_MODE: production
+      WS_HOST: "0.0.0.0"
+      WS_PORT: "8090"
+      WS_GATEWAY_URL: "http://gateway:8080"
+      WS_GATEWAY_KEY_FILE: /run/secrets/ws_gateway_key       # bearer key of app `hr-workspace` (registry/apps.yaml)
+      WS_SOURCE_KEY_FILE: /run/secrets/ws_source_key         # hr-workspace-forms@1 private key (omit: forms off)
+      WS_APP_ID: hr-workspace
+      WS_MODEL: "${WS_MODEL:-claude-opus-5-5}"
+      WS_PUBLIC_ORIGIN: "${WS_PUBLIC_ORIGIN:?the https origin users open, e.g. https://hr-workspace.example.com}"
+      WS_TRUSTED_PROXIES: "${WS_TRUSTED_PROXIES:?the SSO reverse proxy address(es) on appnet}"
+      WS_IDENTITY_HEADER: X-Forwarded-Email
+      # WS_INTEGRATIONS_FILE: /run/secrets/ws_integrations   # helpdesk integrations allowed to submit signed tickets
+    secrets: [ws_gateway_key, ws_source_key]
+    networks: [appnet]                # appnet ONLY; never add egressnet
+    depends_on: [gateway]
+    read_only: true
+    restart: unless-stopped
+
 networks:
   appnet:
     internal: true                    # no route out: the core of the T13 control
@@ -64,3 +92,7 @@ volumes:
 secrets:
   pgw_master_key:
     environment: PGW_MASTER_KEY       # compose >= 2.23; or use `file: ./secrets/pgw_master_key`
+  ws_gateway_key:
+    file: ./secrets/ws_gateway_key    # issue a key; register its sha256 for app hr-workspace; re-seal and sign
+  ws_source_key:
+    file: ./secrets/ws_source_key     # python -m pgw.product.attest keygen; pin its public key (docs/WORKSPACE.md)

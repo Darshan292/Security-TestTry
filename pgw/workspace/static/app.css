@@ -74,7 +74,7 @@ kbd { font-size: 11px; padding: 1px 5px; border: 1px solid var(--hairline-strong
 .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: #fff;
               background: linear-gradient(160deg, #4f46e5, #3730a3); box-shadow: 0 4px 12px -4px rgba(55, 48, 163, .5); }
 .brand-mark .icon { width: 17px; height: 17px; stroke-width: 1.9; }
-.brand-name { font-weight: 650; font-size: 15px; letter-spacing: -0.015em; }
+.brand-name { white-space: nowrap; font-weight: 650; font-size: 15px; letter-spacing: -0.015em; }
 .brand-sub { color: var(--ink-3); font-size: 13px; padding-left: 10px; border-left: 1px solid var(--hairline-strong);
              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -170,12 +170,15 @@ select { appearance: none; padding-right: 30px; background-repeat: no-repeat; ba
 .person { display: grid; grid-template-columns: 112px repeat(2, minmax(0, 1fr)) 30px; gap: 6px; align-items: center;
           padding: 8px; border-radius: 11px; background: rgba(255, 255, 255, .55); border: 1px solid var(--hairline);
           animation: rise .3s var(--ease) both; }
-.person .wide { grid-column: 2 / 4; }
+.person .p-role { grid-area: 1 / 1; } .person .p-name { grid-area: 1 / 2; } .person .p-id { grid-area: 1 / 3; }
+.person .remove { grid-area: 1 / 4; color: var(--ink-3); }
+.person .p-email { grid-area: 2 / 1 / 3 / 3; } .person .p-phone { grid-area: 2 / 3 / 3 / 5; }
 .person input, .person select { padding: 7px 9px; font-size: 13px; }
 .person select { padding-right: 26px; }
-.person .remove { grid-row: 1; grid-column: 4; color: var(--ink-3); }
 .form-group { border: 1px solid var(--hairline); border-radius: 12px; padding: 12px; margin: 0 0 10px;
-              background: rgba(255, 255, 255, .55); display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+              background: rgba(255, 255, 255, .55); display: grid; gap: 10px; grid-template-columns: 1fr 1fr;
+              align-items: start; }
+.form-group-lead { margin-bottom: 14px; }
 .form-group legend { font-size: 12px; font-weight: 600; color: var(--ink-3); padding: 0 4px; }
 .form-field { display: grid; gap: 5px; min-width: 0; }
 .form-field.full { grid-column: 1 / -1; }
@@ -262,6 +265,8 @@ select { appearance: none; padding-right: 30px; background-repeat: no-repeat; ba
 .step-icon .icon { width: 12px; height: 12px; stroke-width: 2.4; }
 .step[data-state="done"] .step-icon { background: var(--accent); border-color: var(--accent); color: #fff; }
 .step[data-state="failed"] .step-icon { background: var(--stop); border-color: var(--stop); color: #fff; }
+.step[data-state="diverted"] { opacity: 1; }
+.step[data-state="diverted"] .step-icon { background: var(--in-soft); border-color: var(--in-line); color: var(--in); }
 .step[data-state="active"] .step-icon { border-color: var(--accent); }
 .step-title { font-size: 13.5px; font-weight: 580; color: var(--ink); }
 .step-text { font-size: 12.5px; color: var(--ink-3); }
@@ -355,6 +360,11 @@ select { appearance: none; padding-right: 30px; background-repeat: no-repeat; ba
 .check-label { font-size: 13.5px; color: var(--ink); }
 .check-id { font-family: var(--mono); font-size: 11.5px; color: var(--ink-4); }
 .check-status { font-weight: 600; }
+.check.fail.expected .check-icon { background: var(--in-soft); color: var(--in); border: 1px solid var(--in-line); }
+.check.fail.expected .check-status { color: var(--in); }
+.check-note { font-size: 12.5px; color: var(--in); margin-top: 2px; }
+.pane-body .dl { grid-template-columns: 1fr; gap: 1px; margin-top: 4px; }
+.pane-body .dl dd { margin-bottom: 8px; white-space: normal; }
 .check.pass .check-status { color: var(--ok); } .check.fail .check-status { color: var(--stop); }
 .na-checks { margin-top: 10px; }
 .na-checks summary { cursor: pointer; font-size: 12.5px; color: var(--ink-3); padding: 4px 0; }
@@ -418,9 +428,9 @@ select { appearance: none; padding-right: 30px; background-repeat: no-repeat; ba
   .panes { grid-template-columns: 1fr; }
   .task-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .person { grid-template-columns: 1fr 1fr 30px; }
-  .person select { grid-column: 1 / 3; }
-  .person .wide { grid-column: 1 / 3; }
-  .person .remove { grid-column: 3; }
+  .person .p-role { grid-area: 1 / 1 / 2 / 3; } .person .remove { grid-area: 1 / 3; }
+  .person .p-name { grid-area: 2 / 1; } .person .p-id { grid-area: 2 / 2 / 3 / 4; }
+  .person .p-email { grid-area: 3 / 1; } .person .p-phone { grid-area: 3 / 2 / 4 / 4; }
   .form-group { grid-template-columns: 1fr; }
   .dl { grid-template-columns: 1fr; gap: 2px; }
   .dl dd { margin-bottom: 8px; }
@@ -430,6 +440,7 @@ select { appearance: none; padding-right: 30px; background-repeat: no-repeat; ba
   .card { padding: 16px; }
   .user-pill { max-width: 150px; }
   #how-open { padding: 6px 8px; }
+  .how-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .node-dot { width: 38px; height: 38px; }
   .node { transform: translate(-50%, -19px); }
   .node-label { font-size: 11px; }

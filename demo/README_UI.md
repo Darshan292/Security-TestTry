@@ -1,5 +1,9 @@
 # Privacy Gateway — Live Inspector (local demo UI)
 
+> **This is a development-only demo.** The real staff-facing UI is the **HR Workspace** (`python -m pgw.workspace`,
+> [docs/WORKSPACE.md](../docs/WORKSPACE.md)). It runs against a production gateway behind SSO and is driven only by
+> the gateway's transparency report (`pgw_report`).
+
 **Synthetic data only.** The inspector shows original values next to their aliases. It binds to `127.0.0.1` only; never expose it.
 
 ## Run
