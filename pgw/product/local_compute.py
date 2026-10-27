@@ -33,6 +33,10 @@ class ComputeResult:
     withheld: list[tuple[T, str]]                 # exact values that must never appear in egress bytes
     outputs: dict                                 # all computed outputs (stays inside; for tests/audit only)
     raw: dict = None                              # sentinel -> RAW output, put back after detection (see run)
+    # For the transparency report (stays inside; the report carries paths, types and classes, never these values):
+    fields: list = None        # (path, DataClass, entity, value) for every classified input field
+    masked: list = None        # entity type of every number masked in the instruction
+    instruction_at: tuple = None   # (start, end) of the masked instruction inside `prompt`
 
 
 _SENTINEL_BASE = 0xE010    # Unicode private-use characters: no detector matches them, no user text needs them
@@ -88,14 +92,20 @@ def parse_payload(messages: list, contract: Contract) -> dict:
     return payload
 
 
-def _classified_inputs(obj: dict, schema: dict):
-    """Yield (class, entity, value) for every leaf field that declares a class."""
+def _classified_fields(obj: dict, schema: dict, prefix: str = ""):
+    """Yield (path, class, entity, value) for every leaf field that declares a class ("employees[0].annual_ctc")."""
     for k, spec in schema.items():
         if spec["type"] == "list":
-            for item in obj[k]:
-                yield from _classified_inputs(item, spec["items"])
+            for i, item in enumerate(obj[k]):
+                yield from _classified_fields(item, spec["items"], f"{prefix}{k}[{i}].")
         elif spec.get("class") and spec["class"] != "C0":
-            yield DataClass(spec["class"]), T(spec["entity"]), obj[k]
+            yield f"{prefix}{k}", DataClass(spec["class"]), T(spec["entity"]), obj[k]
+
+
+def _classified_inputs(obj: dict, schema: dict):
+    """Yield (class, entity, value) for every leaf field that declares a class."""
+    for _path, cls, entity, value in _classified_fields(obj, schema):
+        yield cls, entity, value
 
 
 # --- formatting ---------------------------------------------------------------------------------------------
@@ -190,8 +200,13 @@ def _value_of(v) -> float | None:
 def mask_withheld_numbers(instruction: str, protected: list[tuple[T, float]]) -> tuple[str, int]:
     """Replace every number in `instruction` that equals a protected value or lies within ±0.5% of it (in any written
     unit, an implied one included) by "[TYPE]". Returns the new text and the number of replacements."""
+    instruction, hits = _mask_numbers(instruction, protected)
+    return instruction, len(hits)
+
+
+def _mask_numbers(instruction: str, protected: list[tuple[T, float]]) -> tuple[str, list[T]]:
     if not protected:
-        return instruction, 0
+        return instruction, []
     hits = []
     for s, e, value, unit in amounts.numbers(instruction):
         for x in amounts.candidates(value, unit, instruction[s:e]):
@@ -201,7 +216,7 @@ def mask_withheld_numbers(instruction: str, protected: list[tuple[T, float]]) ->
                 break
     for s, e, t in reversed(hits):
         instruction = instruction[:s] + f"[{t.value}]" + instruction[e:]
-    return instruction, len(hits)
+    return instruction, [t for _s, _e, t in hits]
 
 
 FUNCTIONS = {"salary_difference": salary_difference, "esi_eligibility": esi_eligibility,
@@ -213,7 +228,8 @@ def run(contract: Contract, messages: list) -> ComputeResult:
     declared: list[tuple[T, str]] = []
     withheld: list[tuple[T, str]] = []
     protected: list[tuple[T, float]] = []                    # numbers the instruction must not restate
-    for cls, entity, value in _classified_inputs(payload, contract.input_schema):
+    classified = list(_classified_fields(payload, contract.input_schema))
+    for _path, cls, entity, value in classified:
         if cls is DataClass.C1:
             declared.append((entity, str(value)))
         else:                                                # C2/C3 inputs never leave in any form
@@ -243,6 +259,10 @@ def run(contract: Contract, messages: list) -> ComputeResult:
         if spec.egress == "TRANSFORMED":
             declared.append((spec.entity, str(value)))
     instruction = "".join(c for c in payload["instruction"] if not 0xE000 <= ord(c) <= 0xF8FF)
-    instruction, _ = mask_withheld_numbers(instruction, protected)
+    instruction, masked = _mask_numbers(instruction, protected)
     prompt = contract.prompt_template.format(instruction=instruction, **fields)
-    return ComputeResult(prompt=prompt, declared=declared, withheld=withheld, outputs=outputs, raw=raw)
+    # where the instruction sits in the prompt (private-use characters were stripped from it, so one marks the spot)
+    at = contract.prompt_template.format(instruction="\uE0FF", **fields).find("\uE0FF")
+    return ComputeResult(prompt=prompt, declared=declared, withheld=withheld, outputs=outputs, raw=raw,
+                         fields=classified, masked=masked,
+                         instruction_at=(at, at + len(instruction)) if at >= 0 else None)

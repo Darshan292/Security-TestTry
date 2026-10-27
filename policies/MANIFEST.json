@@ -34,8 +34,8 @@
    "version": 3
   },
   "registry/apps.yaml": {
-   "sha256": "d91d2bbf671daaedf80ab3dba142ea020c7b3f36da518e1150d2728273423c55",
-   "version": 2
+   "sha256": "ebfe8573925039bb1fdfb1e420883c16f586190ccaa308db12992b439594c472",
+   "version": 3
   },
   "registry/deployment.yaml": {
    "sha256": "6e62f794b73a397a6b078a42649a3689d5c5bdbc6728de99900d0deea5781471",

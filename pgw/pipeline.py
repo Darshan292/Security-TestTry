@@ -294,31 +294,36 @@ class Segment:
     role: str
     text: str
     setter: Callable[[str], None]
+    # where the string sits in the request: (message index, content part index or None, field). field is
+    # "content", "name" or "tool_calls[k].function.arguments". Used only for the transparency report's offsets.
+    loc: tuple = ()
 
 
 def _segments(messages: list[dict]) -> list[Segment]:
     segs: list[Segment] = []
-    for msg in messages:
+    for mi, msg in enumerate(messages):
         if not isinstance(msg, dict) or set(msg) - ALLOWED_MESSAGE_KEYS or msg.get("role") not in ALLOWED_ROLES:
             raise UnsupportedContent("unsupported message shape")
         role = msg["role"]
         content = msg.get("content")
         if isinstance(content, str):
-            segs.append(Segment(role, content, lambda v, m=msg: m.__setitem__("content", v)))
+            segs.append(Segment(role, content, lambda v, m=msg: m.__setitem__("content", v), (mi, None, "content")))
         elif isinstance(content, list):
-            for part in content:
+            for pi, part in enumerate(content):
                 if not isinstance(part, dict) or part.get("type") != "text" or set(part) - {"type", "text"}:
                     raise UnsupportedContent("only text content parts are supported")
-                segs.append(Segment(role, part["text"], lambda v, p=part: p.__setitem__("text", v)))
+                segs.append(Segment(role, part["text"], lambda v, p=part: p.__setitem__("text", v),
+                                    (mi, pi, "content")))
         elif content is not None:
             raise UnsupportedContent("content must be string, list or null")
         if isinstance(msg.get("name"), str):
-            segs.append(Segment(role, msg["name"], lambda v, m=msg: m.__setitem__("name", v)))
-        for tc in msg.get("tool_calls") or []:
+            segs.append(Segment(role, msg["name"], lambda v, m=msg: m.__setitem__("name", v), (mi, None, "name")))
+        for ti, tc in enumerate(msg.get("tool_calls") or []):
             fn = tc.get("function") if isinstance(tc, dict) else None
             if not isinstance(fn, dict) or not isinstance(fn.get("arguments"), str):
                 raise UnsupportedContent("unsupported tool_call shape")
-            segs.append(Segment(role, fn["arguments"], lambda v, f=fn: f.__setitem__("arguments", v)))
+            segs.append(Segment(role, fn["arguments"], lambda v, f=fn: f.__setitem__("arguments", v),
+                                (mi, None, f"tool_calls[{ti}].function.arguments")))
     return segs
 
 
@@ -511,6 +516,10 @@ class Protected:
     scope_id: str
     entities: dict[tuple[EntityType, str], Entity]
     alias_map: dict[str, Entity] = field(default_factory=dict)   # "TYPE_SUFFIX" -> entity
+    # The inspected strings (texts as handed to detection) and their final resolved detections, in the same order.
+    # References only (no copies); read by the gateway's transparency report, never sent anywhere.
+    segments: list = field(default_factory=list, repr=False)
+    detections: list = field(default_factory=list, repr=False)
 
     @property
     def sensitive_values(self) -> list[tuple[EntityType, str]]:
@@ -806,7 +815,7 @@ class Protector:
         label = _alias_label(ctx)
         kid = self._alias_key_id(ctx)
         alloc = AliasAllocator(scope_key(self.keys.derive(ctx.tenant, label, kid), scope_id))
-        prot = Protected(messages, scope_id, entities)
+        prot = Protected(messages, scope_id, entities, segments=segs, detections=per_seg)
         for key, ent in entities.items():
             if ent.action is Action.TOKENIZE:
                 ent.alias = alloc.get(ent.type, ent.value)

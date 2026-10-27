@@ -2,7 +2,8 @@
 # key_sha256 = sha256 of the app's bearer key. Sealed in policies/MANIFEST.json like policies and contracts: any edit
 # (an added purpose or model, a key hash) needs a re-seal, and production needs that seal signed (SECURITY_BOUNDARY.md).
 # Every purpose MUST be bound to a data contract under `tasks`; an uncontracted purpose stops startup.
-version: 2
+# `transparency: true` opts an app in to the pgw_report (default false); like every field here it is sealed.
+version: 3
 apps:
   # PILOT (product slice). The demo key below is "pilot-hr-helpdesk-key-change-me"; replace it.
   - app_id: hr-helpdesk-pilot
@@ -18,6 +19,9 @@ apps:
       band_position: ../contracts/band_position.yaml
     restore_output: true
     models: [mock-1, claude-opus-5-5, openai/gpt-oss-120b]
+    # Transparency report (docs/TRANSPARENCY_REPORT.md): what the gateway did with each request, returned only to
+    # this app in its own responses (never logged, never in the ledger, never upstream). Default false.
+    transparency: true
   # HR Workspace (pgw/workspace, docs/WORKSPACE.md): the staff-facing UI's backend. It holds this key server-side;
   # browsers never see it. It signs only the structured LOCAL_COMPUTE forms (source hr-workspace-forms@1) and sends
   # pasted free text unattested, so the contracts keep that inside (in-house model). The demo key below is
