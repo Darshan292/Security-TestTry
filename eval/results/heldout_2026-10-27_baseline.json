@@ -1,0 +1,363 @@
+{
+  "label": "baseline",
+  "tickets": 127,
+  "http_status": {
+    "200": 127
+  },
+  "http_status_by_purpose": {
+    "hr_case_explanation": {
+      "200": 39
+    },
+    "hr_email_draft": {
+      "200": 11
+    },
+    "ticket_summary": {
+      "200": 77
+    }
+  },
+  "leak": {
+    "tickets_with_any_leak": 47,
+    "tickets_with_leak_excluding_special_category": 33,
+    "values_leaked": 72,
+    "values_total": 283,
+    "special_category_crossings": 19,
+    "by_family": {
+      "address": {
+        "leaked_or_overmasked": 15,
+        "total": 16
+      },
+      "contact_id": {
+        "leaked_or_overmasked": 1,
+        "total": 25
+      },
+      "dob": {
+        "leaked_or_overmasked": 6,
+        "total": 16
+      },
+      "financial_id": {
+        "leaked_or_overmasked": 3,
+        "total": 19
+      },
+      "government_id": {
+        "leaked_or_overmasked": 3,
+        "total": 44
+      },
+      "money": {
+        "leaked_or_overmasked": 16,
+        "total": 40
+      },
+      "people": {
+        "leaked_or_overmasked": 9,
+        "total": 102
+      },
+      "special_category": {
+        "leaked_or_overmasked": 19,
+        "total": 21
+      }
+    },
+    "by_type": {
+      "aadhaar": {
+        "leaked_or_overmasked": 1,
+        "total": 11
+      },
+      "address": {
+        "leaked_or_overmasked": 8,
+        "total": 9
+      },
+      "bank_account": {
+        "leaked_or_overmasked": 1,
+        "total": 10
+      },
+      "card": {
+        "leaked_or_overmasked": 0,
+        "total": 4
+      },
+      "compensation": {
+        "leaked_or_overmasked": 16,
+        "total": 40
+      },
+      "dl": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "dob": {
+        "leaked_or_overmasked": 6,
+        "total": 16
+      },
+      "email": {
+        "leaked_or_overmasked": 0,
+        "total": 5
+      },
+      "employee_id": {
+        "leaked_or_overmasked": 1,
+        "total": 12
+      },
+      "esic": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "iban": {
+        "leaked_or_overmasked": 2,
+        "total": 3
+      },
+      "pan": {
+        "leaked_or_overmasked": 1,
+        "total": 7
+      },
+      "passport": {
+        "leaked_or_overmasked": 0,
+        "total": 5
+      },
+      "person": {
+        "leaked_or_overmasked": 9,
+        "total": 102
+      },
+      "pf": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "phone": {
+        "leaked_or_overmasked": 0,
+        "total": 8
+      },
+      "pincode": {
+        "leaked_or_overmasked": 7,
+        "total": 7
+      },
+      "special_category": {
+        "leaked_or_overmasked": 19,
+        "total": 21
+      },
+      "uan": {
+        "leaked_or_overmasked": 0,
+        "total": 7
+      },
+      "upi": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "vehicle_reg": {
+        "leaked_or_overmasked": 1,
+        "total": 4
+      },
+      "vid": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "voter_id": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      }
+    }
+  },
+  "benign": {
+    "tickets_with_any_overmask": 13,
+    "strings_overmasked": 30,
+    "strings_scored": 185,
+    "strings_unscored_non_200": 0,
+    "by_family": {
+      "business_ref": {
+        "leaked_or_overmasked": 24,
+        "total": 45
+      },
+      "company_id": {
+        "leaked_or_overmasked": 6,
+        "total": 9
+      },
+      "dates_periods": {
+        "leaked_or_overmasked": 0,
+        "total": 34
+      },
+      "locations_misc": {
+        "leaked_or_overmasked": 0,
+        "total": 13
+      },
+      "policy_or_law": {
+        "leaked_or_overmasked": 0,
+        "total": 47
+      },
+      "statutory_or_business_amount": {
+        "leaked_or_overmasked": 0,
+        "total": 21
+      },
+      "versions_systems": {
+        "leaked_or_overmasked": 0,
+        "total": 16
+      }
+    },
+    "by_type": {
+      "act_name": {
+        "leaked_or_overmasked": 0,
+        "total": 9
+      },
+      "act_section": {
+        "leaked_or_overmasked": 0,
+        "total": 7
+      },
+      "audit_ref": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "benefit_name": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "block_period": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "business_ref": {
+        "leaked_or_overmasked": 0,
+        "total": 13
+      },
+      "cin": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "circular_ref": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "clause": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "cost_center": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "error_code": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "event_date": {
+        "leaked_or_overmasked": 0,
+        "total": 26
+      },
+      "event_name": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "expense_amount": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "fiscal_year": {
+        "leaked_or_overmasked": 0,
+        "total": 3
+      },
+      "form_name": {
+        "leaked_or_overmasked": 0,
+        "total": 5
+      },
+      "grade": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "gstin_company": {
+        "leaked_or_overmasked": 4,
+        "total": 4
+      },
+      "invoice": {
+        "leaked_or_overmasked": 2,
+        "total": 3
+      },
+      "invoice_amount": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "jira": {
+        "leaked_or_overmasked": 2,
+        "total": 3
+      },
+      "office_location": {
+        "leaked_or_overmasked": 0,
+        "total": 10
+      },
+      "org_contact": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "pf_establishment": {
+        "leaked_or_overmasked": 1,
+        "total": 1
+      },
+      "po_number": {
+        "leaked_or_overmasked": 3,
+        "total": 3
+      },
+      "policy_name": {
+        "leaked_or_overmasked": 0,
+        "total": 12
+      },
+      "policy_value": {
+        "leaked_or_overmasked": 0,
+        "total": 8
+      },
+      "pr_number": {
+        "leaked_or_overmasked": 1,
+        "total": 1
+      },
+      "sap_doc": {
+        "leaked_or_overmasked": 1,
+        "total": 1
+      },
+      "sap_message": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "scheme_name": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "service_period": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "servicenow": {
+        "leaked_or_overmasked": 13,
+        "total": 15
+      },
+      "statutory_amount": {
+        "leaked_or_overmasked": 0,
+        "total": 14
+      },
+      "statutory_rate": {
+        "leaked_or_overmasked": 0,
+        "total": 4
+      },
+      "statutory_value": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      },
+      "system_name": {
+        "leaked_or_overmasked": 0,
+        "total": 3
+      },
+      "tan_company": {
+        "leaked_or_overmasked": 1,
+        "total": 1
+      },
+      "time_window": {
+        "leaked_or_overmasked": 0,
+        "total": 1
+      },
+      "trrn": {
+        "leaked_or_overmasked": 1,
+        "total": 1
+      },
+      "vendor_ref": {
+        "leaked_or_overmasked": 1,
+        "total": 1
+      },
+      "version": {
+        "leaked_or_overmasked": 0,
+        "total": 13
+      },
+      "wage_month": {
+        "leaked_or_overmasked": 0,
+        "total": 2
+      }
+    }
+  }
+}

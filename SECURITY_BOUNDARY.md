@@ -348,3 +348,36 @@ that commit (mock provider, synthetic data). The auditor's own scripts were not 
 external model unless its source really reduces it. Run detection as a backstop, not as the control. The changes
 above close the side channels the gateway itself was responsible for.
 
+## 8. Held-out evaluation (2026-10-27): progress on data nobody tuned on
+
+After the re-audit showed the previous round had fitted to the auditor's 36 tickets, progress is measured only on
+held-out data. `tests/fixtures/audit36.py` is a regression fixture, not a measure.
+
+- **How the set was made.** An independent agent wrote 127 realistic tickets with ground truth: 283 personal
+  values and 185 benign strings that must stay readable. It read the docs and contracts but no detection code.
+- **How it was kept unseen.** The fixers were forbidden from reading the set. Its scorer reports only aggregate
+  counts, never the values. The set was sealed by sha256 before any fix, checked before the run, and run once on
+  the final merged code.
+- **Disclosed contamination.** Two held-out values, "23rd Jul '91" and "2.45 million rupees", also appear in
+  detector comments. Both are examples from the auditor's public re-audit report, which were quoted to the test
+  author and to the fixers alike. They are not leaks from the sealed set, and they affect at most 2 of 283 values.
+
+| Measure (127 held-out tickets, production mode, NER on) | Before this round | After |
+|---|---|---|
+| Tickets leaking any raw value | 47 (37%) | **38 (30%)** |
+| Tickets leaking, excluding special-category text | 33 (26%) | **25 (20%)** |
+| Raw values leaked | 72 / 283 | **52 / 283** |
+| By family: address / money / DOB / people / IDs / special category | 15/16, 16/40, 6/16, 9/102, 7/88, 19/21 | 4/16, 12/40, 5/16, 8/102, 5/88, 18/21 |
+| Benign strings over-masked (missing from the restored answer) | 30 / 185 | **0 / 185** |
+
+**Reading.**
+
+- Restorable identifiers removed over-masking entirely.
+- Detection of addresses and IDs improved markedly.
+- **Leaks remain far from the bar for external processing of real data:** a held-out leak rate near zero on
+  structured identifiers, plus a written DPIA. Money in free text (12/40) and dates of birth (5/16) are the
+  largest remaining detectable families.
+- Special-category text crosses by design whenever input is validly attested (§4). It needs a classifier gate or
+  in-house-only purposes.
+- **The free-text external route is not safe for real employee data.**
+
