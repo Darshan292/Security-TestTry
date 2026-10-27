@@ -1,15 +1,16 @@
 # Data contract: explain an HR case's status and next steps to the HR operator (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. Same class treatment as ticket summaries; restored output goes to HR staff only.
 contract: hr_case_explanation
-version: 7
+version: 8
 task_type: hr_case_explanation
 route: EXT_PSEUDO
 data_classes:
   C1: ALIAS
   C2: ALIAS        # salary, DOB -> scoped aliases; the model never sees the value, the reply gets it back
   C3: REDACT
+  REF: ALIAS       # identifier-shaped references of no recognised scheme (tickets, documents) -> aliases
   C4: REFUSE
-restore: [C1, C2]
+restore: [C1, C2, REF]   # REF: the reader gets the exact reference back (SECURITY_BOUNDARY §6 N4)
 purpose_dependent:
   leave_balance: PSEUDONYMISED_RAW        # leave cases cannot be explained without the balance
   attendance: PSEUDONYMISED_RAW
@@ -28,12 +29,21 @@ guidance: >-
   no access to the payroll or HR systems, so every cause is a hypothesis; label it as such, list at most three, and
   never state one as the conclusion. 3) Next steps: concrete checks HR Operations can make to find the actual cause.
   Do not invent system names, timelines, codes or policies that are not in the case. Keep it under 200 words.
-# Company reference formats (C0) in the app's tickets: ticket, offer, claim, leave and case ids. They cross
-# raw; the identifier-shape backstop withholds every other identifier-shaped value. Anchored and bounded;
-# a pattern that also matches a generic identifier (12-digit run, PAN-like, account-like) stops loading.
+# Company reference formats (C0): they cross raw. Every other identifier-shaped value of no recognised scheme
+# (class REF) is aliased and comes back exact in the answer; recognised C3 schemes are removed. Anchored, bounded,
+# with a literal prefix; a pattern that also matches a generic personal-identifier shape (also when written after
+# its prefix, "PO-" + a 10-digit run) stops loading. A fully generic Jira key ([A-Z][A-Z0-9]{1,9}-\d{1,6}) is
+# refused for that reason (it is the shape of an employee or member id), so the HR/IT project keys are listed;
+# bare SAP document numbers (10 digits) are not exempt for the same reason: they are aliased and restored.
 business_identifiers:
-  - '^(?:PAY|OFR|HR|IT|LV|CLM|TKT|REQ)-\d{4,6}$'
+  - '^(?:PAY|OFR|HR|HRIS|HRSD|IT|ITSM|LV)-\d{1,6}$'      # app tickets, Jira keys of these projects
+  - '^(?:CLM|TKT|REQ|ONB|FIN|OPS)-\d{1,6}$'
   - '^DC-20\d{2}-\d{3}$'
+  - '^(?:INC|RITM|REQ|CHG|PRB|PTASK|KB|TASK|SCTASK|CTASK)\d{7,8}$'        # ServiceNow numbering
+  - '^(?:PO|INV|SO|GRN)-?\d{4,8}$'                                       # purchase order, invoice, sales order, GRN
+  - '^(?:PO|INV|SO)-20\d{2}-\d{3,4}$'                                   # dated document numbers
+# The organisation's own registration numbers (C0, exact): exempt from the identifier-shape backstop only.
+org_identifiers: ["29AAKCK5714D1ZH", "U72200KA2016PTC094315"]   # Kestrel Dynamics GSTIN and CIN (synthetic)
 # Source-side input boundary (SECURITY_BOUNDARY.md §4). The NOT_EXPECTED stances above are NOT detected by the
 # gateway. Free text reaches the external model only with a valid Ed25519 signature, by the key pinned here, over
 # this purpose, the source id, a fresh timestamp and the request's messages and pgw_subjects (pgw.product.attest).

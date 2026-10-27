@@ -1,7 +1,7 @@
 # Policy pack: per-entity actions by purpose (ADR-0006).
 # Slice note: pack signing is not implemented yet; packs are loaded from the repo.
 pack: hris-default
-version: 2
+version: 3
 
 defaults:
   AADHAAR: BLOCK_REQUEST
@@ -17,7 +17,11 @@ defaults:
   EMPLOYEE_ID: TOKENIZE
   COMPENSATION: TOKENIZE
   DATE_OF_BIRTH: GENERALIZE
-  IDENTIFIER: REDACT       # identifier-shaped value of no known scheme (shape backstop): removed, never restored
+  # Shape backstop (pgw.detect.idshape, SECURITY_BOUNDARY.md §6 N4). IDENTIFIER is a reference of no recognised
+  # scheme that the request itself carries (ticket, document, policy number): aliased, and restored to the reader.
+  # AADHAAR_LIKE (a cue-less number passing the Aadhaar checksum) is treated like C3: removed, never restored.
+  IDENTIFIER: TOKENIZE
+  AADHAAR_LIKE: REDACT
   DERIVED: TOKENIZE        # LOCAL_COMPUTE outputs; contracts decide per output (PRODUCT_ARCHITECTURE §2)
 
 purposes:
@@ -33,6 +37,7 @@ purposes:
     CARD: REDACT
     BANK_ACCOUNT: REDACT
     UPI_ID: REDACT
+    IDENTIFIER: REDACT
   eval_tokenize_all:       # evaluation only: nothing blocks, so leak rate measures detection
     AADHAAR: TOKENIZE
     PAN: TOKENIZE
@@ -43,8 +48,9 @@ purposes:
     IFSC: TOKENIZE
     DATE_OF_BIRTH: TOKENIZE
     IDENTIFIER: TOKENIZE
+    AADHAAR_LIKE: TOKENIZE
 
-never_restore: [SECRET]
+never_restore: [SECRET, AADHAAR_LIKE]
 
 # Data class per purpose (R2). Unlisted purposes are RESTRICTED (fail safe).
 data_class:

@@ -31,6 +31,11 @@ class DataClass(str, Enum):
     C2 = "C2"   # personal quantities/attributes: never exact (PURPOSE_DEPENDENT lists the contextual kind)
     C3 = "C3"   # government/financial identifiers and credentials: never
     C4 = "C4"   # content the gateway cannot reliably read (non-Latin script personal text, ...)
+    # Identifier-shaped references of no recognised scheme (pgw.detect.idshape IDENTIFIER: a ticket, document, PO or
+    # policy number). The request itself carries the value, so it can be aliased and restored like C1; it is not C3:
+    # every recognised government/financial scheme keeps its own C3 type. A contract that does not state REF gets
+    # its C3 action and no restore (SECURITY_BOUNDARY.md §6 N4).
+    REF = "REF"
     D = "D"     # values computed inside the gateway (LOCAL_COMPUTE outputs): per-output egress rule
 
 
@@ -39,7 +44,8 @@ CLASS_OF: dict[T, DataClass] = {
     T.COMPENSATION: DataClass.C2, T.DATE_OF_BIRTH: DataClass.C2,
     T.AADHAAR: DataClass.C3, T.PAN: DataClass.C3, T.BANK_ACCOUNT: DataClass.C3, T.CARD: DataClass.C3,
     T.UPI_ID: DataClass.C3, T.SECRET: DataClass.C3,
-    T.IDENTIFIER: DataClass.C3,   # identifier-shaped value of no recognised scheme (pgw.detect.idshape backstop)
+    T.AADHAAR_LIKE: DataClass.C3,   # cue-less number passing the Aadhaar checksum (pgw.detect.idshape backstop)
+    T.IDENTIFIER: DataClass.REF,    # identifier-shaped value of no recognised scheme (pgw.detect.idshape backstop)
     T.IFSC: DataClass.C0,   # a bank branch, not a person (DESIGN §5.2)
     T.DERIVED: DataClass.D,
 }
@@ -50,6 +56,7 @@ _ACTION = {"ALIAS": Action.TOKENIZE, "GENERALIZE": Action.GENERALIZE, "REDACT": 
 _ALLOWED = {DataClass.C1: {"ALIAS", "REDACT", "REFUSE"},
             DataClass.C2: {"ALIAS", "GENERALIZE", "REDACT", "REFUSE"},
             DataClass.C3: {"REDACT", "REFUSE"},          # never aliased to an external model either
+            DataClass.REF: {"ALIAS", "REDACT", "REFUSE"},
             DataClass.C4: {"REFUSE", "PRIVATE"}}         # PRIVATE: only to the in-boundary model endpoint
 ROUTES = {"EXT_PSEUDO", "LOCAL_COMPUTE"}
 EGRESS = {"RAW", "TRANSFORMED", "INTERNAL"}
@@ -73,7 +80,8 @@ class ContractError(ValueError):
 
 class PurposeRules(dict):
     """A contracted purpose's per-entity-type actions (a plain dict for the policy), plus its sealed company
-    reference formats (`business_identifiers`), which the identifier-shape backstop lets cross (pipeline)."""
+    reference formats (`business_identifiers`, plus the exact `org_identifiers`), which the identifier-shape backstop
+    lets cross (pipeline)."""
 
     def __init__(self, actions=(), business_identifiers: tuple = ()):
         super().__init__(actions)
@@ -132,6 +140,7 @@ class Contract:
     reference: dict = field(default_factory=dict)         # sealed public tables, e.g. pay_bands (C0)
     external_input: ExternalInput = ExternalInput(frozenset())   # required in every contract file
     business_identifiers: tuple = ()     # compiled, anchored C0 reference formats exempt from the shape backstop
+    org_identifiers: tuple[str, ...] = ()   # the organisation's own registration numbers (GSTIN, CIN, TAN): exact, C0
 
     @property
     def ref(self) -> str:
@@ -141,7 +150,8 @@ class Contract:
         """Per-entity-type actions for the detection pipeline. DERIVED values are only ever aliased."""
         acts = {t: _ACTION[self.classes[c]] for t, c in CLASS_OF.items() if c in self.classes}
         acts[T.DERIVED] = Action.TOKENIZE
-        return PurposeRules(acts, self.business_identifiers)
+        exact = tuple(re.compile(re.escape(x)) for x in self.org_identifiers)
+        return PurposeRules(acts, self.business_identifiers + exact)
 
     def restorable(self, t: T) -> bool:
         return CLASS_OF.get(t, DataClass.C0) in self.restore
@@ -294,6 +304,22 @@ def _parse_business_identifiers(raw) -> tuple:
         raise ContractError(str(e)) from None
 
 
+_ORG_ID = re.compile(r"[A-Z0-9](?:[A-Z0-9]|[\-/.](?=[A-Z0-9])){9,31}")
+
+
+def _parse_org_identifiers(raw) -> tuple[str, ...]:
+    """The organisation's own registration numbers (company GSTIN, CIN, TAN): C0, exact strings, sealed. They are only
+    exempt from the identifier-shape backstop (fullmatch of a backstop span), so a scheme recognizer that knows the
+    value (a PAN, an Aadhaar, a card) still protects it. Each entry: 10-32 upper-case letters and digits, both
+    present, with single - / . separators; at most 10."""
+    out = tuple(str(x).strip() for x in (raw or []))
+    if len(out) > 10 or any(not _ORG_ID.fullmatch(x) or not any(c.isdigit() for c in x)
+                            or not any(c.isalpha() for c in x) for x in out):
+        raise ContractError("org_identifiers: at most 10 entries, each 10-32 upper-case letters and digits (both), "
+                            "with single - / . separators")
+    return out
+
+
 def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
     raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
     try:
@@ -306,6 +332,11 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                 raise ContractError(f"contract must state an action for {c.value}")
             if classes[c] not in _ALLOWED[c]:
                 raise ContractError(f"{c.value}: action {classes[c]} is not allowed (raw value would cross)")
+        classes.setdefault(DataClass.REF, classes[DataClass.C3])   # unstated: as strict as C3
+        if classes[DataClass.REF] not in _ALLOWED[DataClass.REF]:
+            raise ContractError(f"REF: action {classes[DataClass.REF]} is not allowed (raw value would cross)")
+        if set(classes) - set(_ALLOWED):
+            raise ContractError("data_classes: only C1-C4 and REF take an action")
         restore = frozenset(DataClass(c) for c in raw.get("restore", []))
         if restore & {DataClass.C3, DataClass.C4}:
             raise ContractError("C3/C4 values are never restored from model output")
@@ -341,7 +372,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      public_constants=tuple(_parse_public_constants(raw.get("public_constants"))),
                      redaction_text=_parse_redaction_text(raw.get("redaction_text")),
                      external_input=_parse_external_input(raw.get("external_input")), reference=reference,
-                     business_identifiers=_parse_business_identifiers(raw.get("business_identifiers")))
+                     business_identifiers=_parse_business_identifiers(raw.get("business_identifiers")),
+                     org_identifiers=_parse_org_identifiers(raw.get("org_identifiers")))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:

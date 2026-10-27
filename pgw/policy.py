@@ -63,7 +63,7 @@ class PolicyPack:
 
 _YEAR = re.compile(r"(19|20)\d{2}")
 _UNIT = re.compile(r"(lakhs?|lacs?|lpa|l|crores?|cr|k)\b", re.IGNORECASE)
-# Bands are INR bands; an amount in another currency gets no band rather than a wrong one (audit: "USD 142,000"
+# Bands are INR bands; an amount in another currency gets no band rather than a wrong one (audit: a USD salary
 # was banded as ₹0–5L).
 _FOREIGN = re.compile(r"\b(?:usd|eur|gbp|aed|sgd|cad|aud|jpy|chf)\b|[$€£¥]", re.IGNORECASE)
 

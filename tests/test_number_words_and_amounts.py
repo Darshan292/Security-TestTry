@@ -194,7 +194,8 @@ def test_prose_does_not_make_a_view():
 
 def test_auditor_smoke_values():
     out = _protect("my aadhar is two three four one, five six seven eight, nine zero one two. pls update.")
-    assert out == "my aadhar is [IDENTIFIER]. pls update." or out == "my aadhar is [AADHAAR]. pls update."
+    assert out in ("my aadhar is [IDENTIFIER]. pls update.", "my aadhar is [AADHAAR]. pls update.",
+                   "my aadhar is [AADHAAR_LIKE]. pls update.")
     assert "1,12,400" not in _protect("in-hand is only 1,12,400 pm.")
     out = _protect("Offer letter says twenty two lakh fifty thousand but system shows 21,00,000.")
     assert "lakh" not in out and "21,00,000" not in out
@@ -245,11 +246,18 @@ def test_gateway_sends_no_spoken_identifier_and_restores_amounts(tmp_path):
     ans = r.json()["choices"][0]["message"]["content"]
     for a in amounts:                     # C2 on EXT_PSEUDO: aliased out, restored exactly in the answer
         assert f"{a}" in ans, f"amount {a} not restored"
-    for scheme, v in ids.items():
-        if scheme.startswith(("mobile", "landline")):   # a phone is C1: aliased out and restored, like digits
+    restored = 0
+    for scheme, p, v, s in IDS:
+        line = f"{p}{v}{s}."
+        types = {d.type for d in PROT.analyze([{"role": "user", "content": line}], CTX)[0]
+                 if d.start < len(p) + len(v) and d.end > len(p)}
+        if types & {EntityType.PHONE, EntityType.IDENTIFIER}:
+            # a phone is C1; an identifier of no recognised scheme is REF: aliased out, the exact words come back
             assert v in ans, scheme
-        else:                                           # C3 identifiers are never restored
-            assert v.lower() not in ans.lower(), scheme
+            restored += 1
+        else:                                           # C3 identifiers (and AADHAAR_LIKE) are never restored
+            assert v.lower() not in ans.lower(), (scheme, types)
+    assert restored < len(IDS)
 
 
 def test_gateway_auditor_smoke(tmp_path):

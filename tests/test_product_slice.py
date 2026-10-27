@@ -261,7 +261,7 @@ def test_ledger_records_route_and_contract_without_content(tmp_path):
     call(client, "salary_comparison", json.dumps(PAYLOAD))
     rows = [json.loads(line) for line in (tmp_path / "egress.jsonl").read_text().splitlines()]
     assert [(r["route"], r["contract"], r["decision"]) for r in rows] == [
-        ("EXT_PSEUDO", "ticket_summary@7", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@5", "SENT")]
+        ("EXT_PSEUDO", "ticket_summary@8", "SENT"), ("LOCAL_COMPUTE", "salary_comparison@5", "SENT")]
     text = (tmp_path / "egress.jsonl").read_text()
     for v in TICKET_RAW + SALARY_FORMS + ["Amit Trivedi"]:
         assert v not in text
