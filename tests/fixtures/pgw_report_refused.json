@@ -1,0 +1,85 @@
+{
+  "_comment": "pgw_report v1 fixture (PGW_REPORT_SPEC.md). Recorded from a real gateway run (development mode, mock model, synthetic data): outbound text, placeholders, offsets and stage timings are what that run produced. No requester declared: the contract requires one, so the gateway refuses before anything is sent.",
+  "request": {
+    "purpose": "ticket_summary",
+    "attested": false,
+    "body": {
+      "model": "mock-1",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Summarise this HR helpdesk ticket in three short lines: the issue, what was done, and what happens next. Use only what the ticket states."
+        },
+        {
+          "role": "user",
+          "content": "Ticket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748. Contact imran.ansari@kestrel-dyn.in if needed."
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "x-pgw-request-id": "req_79d6d0be8cc943659358e4e6"
+    },
+    "body": {
+      "error": {
+        "type": "invalid_declared_subjects",
+        "message": "the data contract requires role(s): requester",
+        "pgw_report": {
+          "version": 1,
+          "request_id": "req_79d6d0be8cc943659358e4e6",
+          "purpose": "ticket_summary",
+          "contract": "ticket_summary@8",
+          "route": "EXT_PSEUDO",
+          "outcome": "refused",
+          "input_source": {
+            "id": null,
+            "verified": false
+          },
+          "stages": [
+            {
+              "id": "received",
+              "status": "failed",
+              "ms": 2.65
+            }
+          ],
+          "detected": [],
+          "counts": {
+            "replaced": 0,
+            "removed": 0,
+            "by_type": {}
+          },
+          "outbound": null,
+          "restore": null,
+          "checks": [
+            {
+              "id": "egress_clean",
+              "status": "n/a",
+              "label": "No value detected or declared in THIS request appears in what left"
+            },
+            {
+              "id": "declared_absent",
+              "status": "n/a",
+              "label": "No declared person's name, ID, email or phone appears in what left"
+            },
+            {
+              "id": "source_verified",
+              "status": "n/a",
+              "label": "The input was signed by a source this purpose allows"
+            },
+            {
+              "id": "c3_not_returned",
+              "status": "n/a",
+              "label": "No government or financial identifier is returned in the answer"
+            }
+          ],
+          "error": {
+            "type": "invalid_declared_subjects",
+            "message": "the data contract requires role(s): requester"
+          }
+        }
+      }
+    }
+  }
+}

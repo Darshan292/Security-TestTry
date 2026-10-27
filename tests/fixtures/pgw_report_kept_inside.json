@@ -1,0 +1,152 @@
+{
+  "_comment": "pgw_report v1 fixture (PGW_REPORT_SPEC.md). Recorded from a real gateway run (development mode, mock model, synthetic data): outbound text, placeholders, offsets and stage timings are what that run produced. Pasted into the workspace: unattested, so the contract keeps it with the in-house model.",
+  "request": {
+    "purpose": "ticket_summary",
+    "attested": false,
+    "body": {
+      "model": "mock-1",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Summarise this HR helpdesk ticket in three short lines: the issue, what was done, and what happens next. Use only what the ticket states."
+        },
+        {
+          "role": "user",
+          "content": "Ticket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748. Contact imran.ansari@kestrel-dyn.in if needed."
+        }
+      ],
+      "pgw_subjects": {
+        "requester": [
+          {
+            "name": "Imran Ansari",
+            "employee_id": "KD-11914"
+          }
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "x-pgw-request-id": "req_13ace4e0540441e5bfe80614",
+      "x-pgw-route": "PRIVATE_LOCAL",
+      "x-pgw-private-model": "model"
+    },
+    "body": {
+      "id": "mock-1",
+      "object": "chat.completion",
+      "created": 0,
+      "model": "local",
+      "choices": [
+        {
+          "index": 0,
+          "finish_reason": "stop",
+          "message": {
+            "role": "assistant",
+            "content": "Summary: nothing to report."
+          }
+        }
+      ],
+      "pgw_report": {
+        "version": 1,
+        "request_id": "req_13ace4e0540441e5bfe80614",
+        "purpose": "ticket_summary",
+        "contract": "ticket_summary@8",
+        "route": "PRIVATE_LOCAL",
+        "outcome": "kept_inside",
+        "input_source": {
+          "id": null,
+          "verified": false
+        },
+        "stages": [
+          {
+            "id": "received",
+            "status": "done",
+            "ms": 1.52
+          },
+          {
+            "id": "verify_source",
+            "status": "done",
+            "ms": 0.3
+          },
+          {
+            "id": "compute",
+            "status": "skipped",
+            "ms": 0.0
+          },
+          {
+            "id": "protect",
+            "status": "skipped",
+            "ms": 0.0
+          },
+          {
+            "id": "egress_check",
+            "status": "skipped",
+            "ms": 0.0
+          },
+          {
+            "id": "provider",
+            "status": "done",
+            "ms": 0.77
+          },
+          {
+            "id": "restore",
+            "status": "done",
+            "ms": 0.2
+          }
+        ],
+        "detected": [],
+        "counts": {
+          "replaced": 0,
+          "removed": 0,
+          "by_type": {}
+        },
+        "outbound": {
+          "destination": "in_house",
+          "provider": "in_house",
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Summarise this HR helpdesk ticket in three short lines: the issue, what was done, and what happens next. Use only what the ticket states."
+            },
+            {
+              "role": "user",
+              "content": "Ticket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748. Contact imran.ansari@kestrel-dyn.in if needed."
+            }
+          ],
+          "gateway_note_included": false,
+          "sha256": "d3e59158c1a4b47ea137f0efaac9bd9e38c6765b08b8e2449318f3e830348dc4",
+          "bytes": 616
+        },
+        "restore": {
+          "restored": 0,
+          "kept_withheld": 0
+        },
+        "checks": [
+          {
+            "id": "egress_clean",
+            "status": "n/a",
+            "label": "No value detected or declared in THIS request appears in what left"
+          },
+          {
+            "id": "declared_absent",
+            "status": "n/a",
+            "label": "No declared person's name, ID, email or phone appears in what left"
+          },
+          {
+            "id": "source_verified",
+            "status": "n/a",
+            "label": "The input was signed by a source this purpose allows"
+          },
+          {
+            "id": "c3_not_returned",
+            "status": "pass",
+            "label": "No government or financial identifier is returned in the answer"
+          }
+        ],
+        "error": null
+      }
+    }
+  }
+}

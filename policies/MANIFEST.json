@@ -2,12 +2,12 @@
  "ed25519": null,
  "files": {
   "contracts/band_position.yaml": {
-   "sha256": "0e095b9cbdc7c95ecad391914002176a5e2302428dc1aa12439780b0bab0bf84",
-   "version": 4
+   "sha256": "0ed927c1e461fe005cd853d026f4d40700c9d32bda8c05979820a9ce9118b866",
+   "version": 5
   },
   "contracts/esi_letter.yaml": {
-   "sha256": "4eaceb093aa1b76115f4c98717d32e89f3e59feaf7fe25946c6cc224e5b4af69",
-   "version": 4
+   "sha256": "f3220f80849af44be00d4f10c147e163cb559c89377bd829361f43ff8f26824b",
+   "version": 5
   },
   "contracts/hr_case_explanation.yaml": {
    "sha256": "a2c9f7f80840eb5774c78363873719ea0bf79aae15c99837e663dc573ec15558",
@@ -18,8 +18,8 @@
    "version": 9
   },
   "contracts/salary_comparison.yaml": {
-   "sha256": "901eac58d881a4fbe29c46b717fe40604670167bfb6a1a0e332f5de413cd6de9",
-   "version": 5
+   "sha256": "1580cfd74f235a071064b8cbcd1a4b84e7a1898ccbf4dfbb27e4aac23e4601d2",
+   "version": 6
   },
   "contracts/ticket_summary.yaml": {
    "sha256": "aff6e081fb8b570fe84b9fee5a765842a470c56f75647b81d99258c1a24e84b2",
@@ -34,7 +34,7 @@
    "version": 3
   },
   "registry/apps.yaml": {
-   "sha256": "312ee865e08f25eaabbe42bbe0ca5759fa6c76fec53efd816a2b54469dea1897",
+   "sha256": "d91d2bbf671daaedf80ab3dba142ea020c7b3f36da518e1150d2728273423c55",
    "version": 2
   },
   "registry/deployment.yaml": {

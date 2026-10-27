@@ -1,0 +1,214 @@
+{
+  "_comment": "pgw_report v1 fixture (PGW_REPORT_SPEC.md). Recorded from a real gateway run (development mode, mock model, synthetic data): outbound text, placeholders, offsets and stage timings are what that run produced. A workspace form, signed by the workspace as hr-workspace-forms@1.",
+  "request": {
+    "purpose": "salary_comparison",
+    "attested": true,
+    "body": {
+      "model": "mock-1",
+      "messages": [
+        {
+          "role": "user",
+          "content": "{\"instruction\":\"Who earns more, and by how much? Write a two-line note for the HR manager.\",\"employees\":[{\"name\":\"Amit Trivedi\",\"employee_id\":\"KD-10989\",\"annual_ctc\":2450000},{\"name\":\"Hetal Shah\",\"employee_id\":\"KD-11063\",\"annual_ctc\":2180000}]}"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "x-pgw-request-id": "req_217ba3f2025d47efa4d4ec20",
+      "x-pgw-gate-events": "0"
+    },
+    "body": {
+      "id": "mock-1",
+      "object": "chat.completion",
+      "created": 0,
+      "model": "mock-1",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Summary: Amit Trivedi raised an issue; Hetal Shah raised an issue; see (withheld); see KD-10989; see KD-11063; see ₹2,70,000; see 12.4%."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 1,
+        "completion_tokens": 1,
+        "total_tokens": 2
+      },
+      "pgw_report": {
+        "version": 1,
+        "request_id": "req_217ba3f2025d47efa4d4ec20",
+        "purpose": "salary_comparison",
+        "contract": "salary_comparison@6",
+        "route": "LOCAL_COMPUTE",
+        "outcome": "sent",
+        "input_source": {
+          "id": "hr-workspace-forms@1",
+          "verified": true
+        },
+        "stages": [
+          {
+            "id": "received",
+            "status": "done",
+            "ms": 1.82
+          },
+          {
+            "id": "verify_source",
+            "status": "done",
+            "ms": 0.45
+          },
+          {
+            "id": "compute",
+            "status": "done",
+            "ms": 1.1
+          },
+          {
+            "id": "protect",
+            "status": "done",
+            "ms": 4.69
+          },
+          {
+            "id": "egress_check",
+            "status": "done",
+            "ms": 0.24
+          },
+          {
+            "id": "provider",
+            "status": "done",
+            "ms": 0.96
+          },
+          {
+            "id": "restore",
+            "status": "done",
+            "ms": 0.92
+          }
+        ],
+        "detected": [
+          {
+            "field": "employees[0].name",
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_33T5CE]",
+            "source": "declared"
+          },
+          {
+            "field": "employees[0].employee_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_2NCBF1]",
+            "source": "declared"
+          },
+          {
+            "field": "employees[0].annual_ctc",
+            "type": "COMPENSATION",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "declared"
+          },
+          {
+            "field": "employees[1].name",
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_48QCFS]",
+            "source": "declared"
+          },
+          {
+            "field": "employees[1].employee_id",
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_1XMY6R]",
+            "source": "declared"
+          },
+          {
+            "field": "employees[1].annual_ctc",
+            "type": "COMPENSATION",
+            "class": "C2",
+            "action": "withhold",
+            "placeholder": null,
+            "source": "declared"
+          },
+          {
+            "field": "outputs",
+            "type": "DERIVED",
+            "class": "D",
+            "action": "alias",
+            "placeholder": "[DERIVED_4CKVNB]",
+            "source": "computed"
+          },
+          {
+            "field": "outputs",
+            "type": "DERIVED",
+            "class": "D",
+            "action": "alias",
+            "placeholder": "[DERIVED_82ARR4]",
+            "source": "computed"
+          }
+        ],
+        "counts": {
+          "replaced": 6,
+          "removed": 2,
+          "by_type": {
+            "PERSON": 2,
+            "EMPLOYEE_ID": 2,
+            "COMPENSATION": 2,
+            "DERIVED": 2
+          }
+        },
+        "outbound": {
+          "destination": "external",
+          "provider": "mock",
+          "model": "mock-1",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. Keep them exactly as written wherever you refer to them; do not guess what they stand for. A type name in brackets without a code, such as [BANK_ACCOUNT], marks a value that was withheld entirely: never copy it into your answer; refer to it in words (e.g. 'the registered bank account')."
+            },
+            {
+              "role": "user",
+              "content": "Who earns more, and by how much? Write a two-line note for the HR manager.\n\nFacts computed inside the privacy gateway from exact HRIS data (exact salaries are not shared with you):\n- Employees compared: [PERSON_33T5CE] ([EMPLOYEE_ID_2NCBF1]) and [PERSON_48QCFS] ([EMPLOYEE_ID_1XMY6R]).\n- The first of these two has the higher annual CTC.\n- The difference is [DERIVED_4CKVNB] per year, which is [DERIVED_82ARR4] of the lower CTC.\nWrite the answer for the HR manager using only these facts.\n"
+            }
+          ],
+          "gateway_note_included": true,
+          "sha256": "fdb65067093069bbcd4905e94b3833aa9d53469af4e4926151b8962214b62c82",
+          "bytes": 963
+        },
+        "restore": {
+          "restored": 6,
+          "kept_withheld": 2
+        },
+        "checks": [
+          {
+            "id": "egress_clean",
+            "status": "pass",
+            "label": "No value detected or declared in THIS request appears in what left"
+          },
+          {
+            "id": "declared_absent",
+            "status": "pass",
+            "label": "No declared person's name, ID, email or phone appears in what left"
+          },
+          {
+            "id": "source_verified",
+            "status": "pass",
+            "label": "The input was signed by a source this purpose allows"
+          },
+          {
+            "id": "c3_not_returned",
+            "status": "pass",
+            "label": "No government or financial identifier is returned in the answer"
+          }
+        ],
+        "error": null
+      }
+    }
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "_comment": "pgw_report v1 fixture (PGW_REPORT_SPEC.md). Recorded from a real gateway run (development mode, mock model, synthetic data): outbound text, placeholders, offsets and stage timings are what that run produced. A helpdesk ticket signed by its source (helpdesk-ticket-export@1) and passed through the workspace's integration endpoint.",
+  "request": {
+    "purpose": "ticket_summary",
+    "attested": true,
+    "body": {
+      "model": "mock-1",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Summarise this HR helpdesk ticket in three short lines: the issue, what was done, and what happens next. Use only what the ticket states."
+        },
+        {
+          "role": "user",
+          "content": "Ticket PAY-88231 | Payroll | Raised by: Imran Ansari (KD-11914)\n[28 Sep] Imran Ansari: My October TDS projection shows an extra deduction of Rs 4,500. I uploaded rent receipts but the HRA exemption was not applied. PAN ZXWPA3889P.\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account 644748074748. Contact imran.ansari@kestrel-dyn.in if needed."
+        }
+      ],
+      "pgw_subjects": {
+        "requester": [
+          {
+            "name": "Imran Ansari",
+            "employee_id": "KD-11914"
+          }
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "x-pgw-request-id": "req_61afb49b3d25485d93869926",
+      "x-pgw-gate-events": "0"
+    },
+    "body": {
+      "id": "mock-1",
+      "object": "chat.completion",
+      "created": 0,
+      "model": "mock-1",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Summary: Imran Ansari raised an issue; contact imran.ansari@kestrel-dyn.in; see (withheld); see KD-11914; see Rs 4,500."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 1,
+        "completion_tokens": 1,
+        "total_tokens": 2
+      },
+      "pgw_report": {
+        "version": 1,
+        "request_id": "req_61afb49b3d25485d93869926",
+        "purpose": "ticket_summary",
+        "contract": "ticket_summary@8",
+        "route": "EXT_PSEUDO",
+        "outcome": "sent",
+        "input_source": {
+          "id": "helpdesk-ticket-export@1",
+          "verified": true
+        },
+        "stages": [
+          {
+            "id": "received",
+            "status": "done",
+            "ms": 16.51
+          },
+          {
+            "id": "verify_source",
+            "status": "done",
+            "ms": 2.67
+          },
+          {
+            "id": "compute",
+            "status": "skipped",
+            "ms": 0.0
+          },
+          {
+            "id": "protect",
+            "status": "done",
+            "ms": 28.03
+          },
+          {
+            "id": "egress_check",
+            "status": "done",
+            "ms": 0.83
+          },
+          {
+            "id": "provider",
+            "status": "done",
+            "ms": 1.36
+          },
+          {
+            "id": "restore",
+            "status": "done",
+            "ms": 0.82
+          }
+        ],
+        "detected": [
+          {
+            "message": 1,
+            "part": null,
+            "start": 40,
+            "end": 52,
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_72Z6WV]",
+            "source": "declared"
+          },
+          {
+            "message": 1,
+            "part": null,
+            "start": 54,
+            "end": 62,
+            "type": "EMPLOYEE_ID",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMPLOYEE_ID_05CNN0]",
+            "source": "declared"
+          },
+          {
+            "message": 1,
+            "part": null,
+            "start": 73,
+            "end": 85,
+            "type": "PERSON",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[PERSON_72Z6WV]",
+            "source": "declared"
+          },
+          {
+            "message": 1,
+            "part": null,
+            "start": 141,
+            "end": 149,
+            "type": "COMPENSATION",
+            "class": "C2",
+            "action": "alias",
+            "placeholder": "[COMPENSATION_0NDH4C]",
+            "source": "detected"
+          },
+          {
+            "message": 1,
+            "part": null,
+            "start": 219,
+            "end": 229,
+            "type": "PAN",
+            "class": "C3",
+            "action": "remove",
+            "placeholder": "[PAN]",
+            "source": "detected"
+          },
+          {
+            "message": 1,
+            "part": null,
+            "start": 327,
+            "end": 339,
+            "type": "BANK_ACCOUNT",
+            "class": "C3",
+            "action": "remove",
+            "placeholder": "[BANK_ACCOUNT]",
+            "source": "detected"
+          },
+          {
+            "message": 1,
+            "part": null,
+            "start": 349,
+            "end": 376,
+            "type": "EMAIL",
+            "class": "C1",
+            "action": "alias",
+            "placeholder": "[EMAIL_7N26Z2]",
+            "source": "detected"
+          }
+        ],
+        "counts": {
+          "replaced": 5,
+          "removed": 2,
+          "by_type": {
+            "PERSON": 2,
+            "EMPLOYEE_ID": 1,
+            "COMPENSATION": 1,
+            "PAN": 1,
+            "BANK_ACCOUNT": 1,
+            "EMAIL": 1
+          }
+        },
+        "outbound": {
+          "destination": "external",
+          "provider": "mock",
+          "model": "mock-1",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Tokens in square brackets such as [PERSON_...] are placeholders for confidential values. Keep them exactly as written wherever you refer to them; do not guess what they stand for. A type name in brackets without a code, such as [BANK_ACCOUNT], marks a value that was withheld entirely: never copy it into your answer; refer to it in words (e.g. 'the registered bank account')."
+            },
+            {
+              "role": "system",
+              "content": "Summarise this HR helpdesk ticket in three short lines: the issue, what was done, and what happens next. Use only what the ticket states."
+            },
+            {
+              "role": "user",
+              "content": "Ticket PAY-88231 | Payroll | Raised by: [PERSON_72Z6WV] ([EMPLOYEE_ID_05CNN0])\n[28 Sep] [PERSON_72Z6WV]: My October TDS projection shows an extra deduction of [COMPENSATION_0NDH4C]. I uploaded rent receipts but the HRA exemption was not applied. PAN [PAN].\n[30 Sep] Payroll Ops: The excess TDS will be refunded in the November payroll to salary account [BANK_ACCOUNT]. Contact [EMAIL_7N26Z2] if needed."
+            }
+          ],
+          "gateway_note_included": true,
+          "sha256": "cd61bf520969c69d5b66130a214f96e1dea9923fc9865cbc5f7e79b8714175e2",
+          "bytes": 1039
+        },
+        "restore": {
+          "restored": 5,
+          "kept_withheld": 2
+        },
+        "checks": [
+          {
+            "id": "egress_clean",
+            "status": "pass",
+            "label": "No value detected or declared in THIS request appears in what left"
+          },
+          {
+            "id": "declared_absent",
+            "status": "pass",
+            "label": "No declared person's name, ID, email or phone appears in what left"
+          },
+          {
+            "id": "source_verified",
+            "status": "pass",
+            "label": "The input was signed by a source this purpose allows"
+          },
+          {
+            "id": "c3_not_returned",
+            "status": "pass",
+            "label": "No government or financial identifier is returned in the answer"
+          }
+        ],
+        "error": null
+      }
+    }
+  }
+}

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>HR Workspace</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.3-2.9 8-7 9.5-4.1-1.5-7-5.2-7-9.5V6l7-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/><path d="M8.5 11l1.8 1.8 3.2-3.3"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10.5a3.5 3.5 0 0 0 .4-7A5.5 5.5 0 0 0 7.3 9.6 4.2 4.2 0 0 0 7 18z"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 20V6l8-3 8 3v14"/><path d="M4 20h16M9 20v-4h6v4M8 9h.01M12 9h.01M16 9h.01M8 12.5h.01M12 12.5h.01M16 12.5h.01"/></symbol>
+  <symbol id="i-return" viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-2"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24"><path d="M7 12h10"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.5V20h12V9.5"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><path d="M8.3 3.5h7.4l4.8 4.8v7.4l-4.8 4.8H8.3l-4.8-4.8V8.3z"/><path d="M12 8v5M12 16h.01"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 15.5h5"/></symbol>
+  <symbol id="i-case" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M9 7V5h6v2M4 12h16"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M4 7l8 6 8-6"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 4v16M7 20h10M5 8h14"/><path d="M5 8l-2.5 6a2.5 2.5 0 0 0 5 0zM19 8l-2.5 6a2.5 2.5 0 0 0 5 0z"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19s-7-4.4-7-9.5A3.8 3.8 0 0 1 12 7a3.8 3.8 0 0 1 7 2.5C19 14.6 12 19 12 19z"/><path d="M9 11h2l1-2 1.5 4 1-2H15"/></symbol>
+  <symbol id="i-band" viewBox="0 0 24 24"><path d="M4 17h16M4 12h16M4 7h16"/><circle cx="14" cy="12" r="2.2"/></symbol>
+</svg>
+
+<div class="dev-banner" id="dev-banner" hidden role="note">
+  <strong>Development mode.</strong> <span id="dev-banner-text">Signed in as a local development user. Use synthetic data only.</span>
+</div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-shield"/></svg></span>
+      <span class="brand-name">HR Workspace</span>
+      <span class="brand-sub">Protected by the privacy gateway</span>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="btn btn-ghost" id="how-open"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>How it works</button>
+      <span class="user-pill" id="user-pill" title="Signed in"><span class="user-dot" aria-hidden="true"></span><span id="user-name">…</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="shell" id="main">
+  <div class="col-left">
+    <section class="card compose" aria-labelledby="compose-title">
+      <div class="card-head">
+        <h1 class="card-title" id="compose-title">New request</h1>
+      </div>
+      <fieldset class="task-picker" id="task-picker">
+        <legend class="label">Task</legend>
+        <div class="task-group-label">Paste text</div>
+        <div class="task-grid" id="tasks-text"></div>
+        <div class="task-group-label">Fill a form</div>
+        <div class="task-grid" id="tasks-form"></div>
+      </fieldset>
+
+      <p class="route-note" id="route-note"></p>
+
+      <div id="text-input" class="input-block" hidden>
+        <div class="field-head">
+          <label class="label" for="text" id="text-label">Text</label>
+          <span class="counter" id="counter" aria-live="off">0</span>
+        </div>
+        <textarea id="text" rows="9" spellcheck="false" aria-describedby="counter text-hint"></textarea>
+        <p class="hint" id="text-hint">Press <kbd>Ctrl</kbd> <kbd>Enter</kbd> to run.</p>
+
+        <section class="people" aria-labelledby="people-title">
+          <div class="field-head">
+            <h2 class="label" id="people-title">People in this request</h2>
+            <span class="requires" id="people-requires"></span>
+          </div>
+          <p class="hint">Declared people are protected wherever they appear, without relying on detection.</p>
+          <div id="people-rows" class="people-rows"></div>
+          <button type="button" class="btn btn-subtle btn-small" id="add-person"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Add person</button>
+        </section>
+      </div>
+
+      <div id="form-input" class="input-block" hidden>
+        <div id="form-fields"></div>
+        <p class="notice" id="forms-disabled" hidden>Structured tasks are not enabled on this workspace (no source signing key is configured). Contact your administrator.</p>
+      </div>
+
+      <p class="form-error" id="input-error" role="alert" hidden></p>
+
+      <div class="run-row">
+        <button type="button" class="btn btn-primary" id="run"><span class="spinner" aria-hidden="true"></span><span id="run-label">Run</span></button>
+        <span class="hint" id="run-hint"></span>
+      </div>
+    </section>
+
+    <section class="card history" aria-labelledby="history-title">
+      <div class="card-head">
+        <h2 class="card-title" id="history-title">This session</h2>
+        <button type="button" class="btn btn-ghost btn-small" id="history-clear" hidden>Clear</button>
+      </div>
+      <p class="hint" id="history-empty">Your runs appear here. They are kept in this browser tab only and are cleared when you close it.</p>
+      <ol class="history-list" id="history-list"></ol>
+    </section>
+  </div>
+
+  <div class="col-right" id="results" aria-busy="false">
+    <section class="card journey" aria-labelledby="journey-title">
+      <div class="card-head">
+        <h2 class="card-title" id="journey-title">What happened</h2>
+        <div class="timing" id="timing" hidden>
+          <span><span class="timing-label">Gateway</span> <span class="num" id="t-gateway">–</span></span>
+          <span><span class="timing-label">Round trip</span> <span class="num" id="t-round">–</span></span>
+        </div>
+      </div>
+      <div class="journey-canvas" id="journey" data-route="none">
+        <div class="boundary" aria-hidden="true"><span class="boundary-label">Inside your company</span></div>
+        <svg class="paths" viewBox="0 0 1000 168" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <g class="tracks">
+            <path d="M100 124 L300 124"/><path d="M300 124 L500 124"/>
+            <path class="out" d="M500 124 C600 124 600 44 700 44"/><path class="out" d="M700 44 C800 44 800 124 900 124"/>
+            <path class="in" d="M500 124 L700 124"/><path class="in" d="M700 124 L900 124"/>
+          </g>
+          <g class="progress">
+            <path id="seg-0" pathLength="1" d="M100 124 L300 124"/><path id="seg-1" pathLength="1" d="M300 124 L500 124"/>
+            <path id="seg-2o" class="out" pathLength="1" d="M500 124 C600 124 600 44 700 44"/>
+            <path id="seg-3o" class="out" pathLength="1" d="M700 44 C800 44 800 124 900 124"/>
+            <path id="seg-2i" class="in" pathLength="1" d="M500 124 L700 124"/>
+            <path id="seg-3i" class="in" pathLength="1" d="M700 124 L900 124"/>
+          </g>
+        </svg>
+        <div class="node" id="node-0" data-state="idle"><span class="node-dot"><svg class="icon"><use href="#i-message"/></svg></span><span class="node-label">Your request</span></div>
+        <div class="node" id="node-1" data-state="idle"><span class="node-dot"><svg class="icon"><use href="#i-shield"/></svg></span><span class="node-label">Privacy shield</span></div>
+        <div class="node" id="node-2" data-state="idle"><span class="node-dot"><svg class="icon"><use href="#i-check"/></svg></span><span class="node-label">Safety check</span></div>
+        <div class="node node-model" id="node-3" data-state="idle"><span class="node-dot"><svg class="icon"><use href="#i-cloud" id="model-icon"/></svg></span><span class="node-label" id="model-label">AI</span></div>
+        <div class="node" id="node-4" data-state="idle"><span class="node-dot"><svg class="icon"><use href="#i-return"/></svg></span><span class="node-label">Back to you</span></div>
+      </div>
+      <ol class="steps" id="steps" aria-label="Steps"></ol>
+      <p class="hint journey-note" id="journey-note">Choose a task and run it. Each step the gateway reports appears here with its measured time.</p>
+    </section>
+
+    <section class="outcome" id="outcome" aria-live="polite" aria-atomic="true" hidden></section>
+
+    <section class="panes" aria-label="Your text, what the AI saw and what came back">
+      <article class="card pane" id="pane-typed">
+        <header class="pane-head"><h2 class="pane-title">What you typed</h2><span class="pane-meta" id="meta-typed"></span></header>
+        <div class="pane-body" id="body-typed"><p class="empty">Nothing yet.</p></div>
+      </article>
+      <article class="card pane" id="pane-saw">
+        <header class="pane-head"><h2 class="pane-title" id="title-saw">What the AI saw</h2><span class="pane-meta" id="meta-saw"></span></header>
+        <div class="pane-body" id="body-saw"><p class="empty">Nothing yet.</p></div>
+      </article>
+      <article class="card pane" id="pane-back">
+        <header class="pane-head"><h2 class="pane-title">What you got back</h2>
+          <button type="button" class="btn btn-subtle btn-small" id="copy" disabled><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span id="copy-label">Copy answer</span></button>
+        </header>
+        <div class="pane-body" id="body-back"><p class="empty">Nothing yet.</p></div>
+      </article>
+    </section>
+    <div class="legend" id="legend" aria-label="Colour key">
+      <span class="chip chip-person">Name</span><span class="chip chip-id">ID or account</span><span class="chip chip-money">Pay</span><span class="chip chip-date">Date</span><span class="chip chip-contact">Contact</span><span class="chip chip-withheld">Withheld</span>
+    </div>
+
+    <section class="card checks" aria-labelledby="checks-title" id="checks-card" hidden>
+      <div class="card-head"><h2 class="card-title" id="checks-title">What the gateway checked</h2></div>
+      <ul class="check-list" id="check-list"></ul>
+      <details class="na-checks" id="na-wrap" hidden><summary>Not applicable to this request (<span id="na-count">0</span>)</summary><ul class="check-list" id="na-list"></ul></details>
+    </section>
+
+    <details class="card tech" id="tech">
+      <summary><svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>Show technical details</summary>
+      <div class="tech-body" id="tech-body"><p class="empty">Run a task to see the gateway's report.</p></div>
+    </details>
+  </div>
+</main>
+
+<dialog class="how" id="how" aria-labelledby="how-title">
+  <div class="how-inner">
+    <div class="how-head">
+      <h2 id="how-title">How it works</h2>
+      <button type="button" class="btn btn-ghost btn-icon" id="how-close" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <ol class="how-steps">
+      <li><h3>Your request goes to the privacy gateway, never straight to an AI</h3><p>The workspace has no route to any AI service. Everything passes through the company's privacy gateway, which applies a signed data contract for each task.</p></li>
+      <li><h3>Personal details are replaced before anything leaves</h3><p>Names, employee IDs, contact details and pay are swapped for placeholders such as <code>[PERSON_7K2Q9D]</code>. Government and bank numbers are removed entirely. People you list under “People in this request” are protected wherever they appear.</p></li>
+      <li><h3>Pasted text stays inside the company</h3><p>Text you paste is not signed by an approved source system, so the gateway sends it only to the in-house model. Only text signed by an approved source (for example a helpdesk export) may go to an external AI, protected.</p></li>
+      <li><h3>Forms are computed inside the gateway</h3><p>For salary, ESI and pay-band tasks you fill typed fields. The gateway computes the result itself; the external AI sees only placeholders and the computed facts, never the exact pay.</p></li>
+      <li><h3>A final check, then the real details come back</h3><p>Before sending, the gateway checks the exact outgoing text for every value it found or you declared, and stops the request if any is present. When the answer returns, placeholders are turned back into the real details for you.</p></li>
+    </ol>
+    <p class="hint">Limits: the gateway finds identifiers, not sensitive topics such as health or disciplinary details. The checks shown after each run describe exactly what was verified for that request.</p>
+  </div>
+</dialog>
+
+<div class="session-expired" id="expired" hidden role="alertdialog" aria-labelledby="expired-title">
+  <div class="card">
+    <h2 id="expired-title">Please sign in again</h2>
+    <p>Your session has ended. Reload the page to sign in.</p>
+    <button type="button" class="btn btn-primary" id="reload">Reload</button>
+  </div>
+</div>
+</body>
+</html>

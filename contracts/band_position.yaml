@@ -1,7 +1,7 @@
 # Data contract: explain where an employee sits in their pay band (LOCAL_COMPUTE). The exact CTC stays inside
 # the gateway; only a coarse position (which third of the band) crosses, next to an aliased identity.
 contract: band_position
-version: 4
+version: 5
 task_type: pay_band_position_explanation
 route: LOCAL_COMPUTE
 compute: band_position
@@ -70,9 +70,11 @@ prompt_template: |
 # this purpose, the source id, a fresh timestamp and the request's messages and pgw_subjects (pgw.product.attest).
 # That proves which source produced the content, not that its sanitizer removed anything.
 # Without a valid signature: refused (422), nothing sent.
-# THE KEY BELOW IS A DEMO KEY (its private half is committed in tests/fixtures). Production refuses to start with it:
+# THE KEYS BELOW ARE DEMO KEYS (their private halves are committed in tests/fixtures). Production refuses them:
 # generate your source's key (python -m pgw.product.attest keygen KEYFILE), put the public key here and re-sign.
 external_input:
   sanitizers:
     band-review-form@1: "853c6ae50fb259f388e8b8222988bc24ff2ddcf37f84322cdbf3387eeb1fb48f"
+    # HR Workspace (pgw/workspace): signs payloads it builds only from validated typed fields (docs/WORKSPACE.md)
+    hr-workspace-forms@1: "b5891a0dd6aa39298a8929885b9b28df72e4932a27b0e2d24133a3d21a8510b2"
   unattested: REFUSE

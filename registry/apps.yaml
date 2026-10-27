@@ -18,3 +18,21 @@ apps:
       band_position: ../contracts/band_position.yaml
     restore_output: true
     models: [mock-1, claude-opus-5-5, openai/gpt-oss-120b]
+  # HR Workspace (pgw/workspace, docs/WORKSPACE.md): the staff-facing UI's backend. It holds this key server-side;
+  # browsers never see it. It signs only the structured LOCAL_COMPUTE forms (source hr-workspace-forms@1) and sends
+  # pasted free text unattested, so the contracts keep that inside (in-house model). The demo key below is
+  # "hr-workspace-key-change-me"; replace it. transparency: the gateway returns its pgw_report to this app only.
+  - app_id: hr-workspace
+    tenant: acme
+    key_sha256: 8c1f9a3aab639bf4053a5d571c98abcb67c994db59d095c4920985c38c0e4973
+    purposes: [ticket_summary, hr_case_explanation, hr_email_draft, salary_comparison, esi_letter, band_position]
+    tasks:
+      ticket_summary: ../contracts/ticket_summary.yaml
+      hr_case_explanation: ../contracts/hr_case_explanation.yaml
+      hr_email_draft: ../contracts/hr_email_draft.yaml
+      salary_comparison: ../contracts/salary_comparison.yaml
+      esi_letter: ../contracts/esi_letter.yaml
+      band_position: ../contracts/band_position.yaml
+    restore_output: true
+    transparency: true
+    models: [mock-1, claude-opus-5-5, openai/gpt-oss-120b]

@@ -2,7 +2,7 @@
 # Exact CTC values arrive as structured C2 fields, are used only inside the gateway, and never leave it.
 # Every computed output has an explicit egress rule; anything unlisted is INTERNAL.
 contract: salary_comparison
-version: 5
+version: 6
 task_type: salary_comparison
 route: LOCAL_COMPUTE
 compute: salary_difference
@@ -55,9 +55,11 @@ prompt_template: |
 # this purpose, the source id, a fresh timestamp and the request's messages and pgw_subjects (pgw.product.attest).
 # That proves which source produced the content, not that its sanitizer removed anything.
 # Without a valid signature: refused (422), nothing sent.
-# THE KEY BELOW IS A DEMO KEY (its private half is committed in tests/fixtures). Production refuses to start with it:
+# THE KEYS BELOW ARE DEMO KEYS (their private halves are committed in tests/fixtures). Production refuses them:
 # generate your source's key (python -m pgw.product.attest keygen KEYFILE), put the public key here and re-sign.
 external_input:
   sanitizers:
     comp-review-form@1: "fbcf8d3fd275bc11b9770d7a7ea4e43080346f1779ce9502e0c1e0c98ea63e1d"
+    # HR Workspace (pgw/workspace): signs payloads it builds only from validated typed fields (docs/WORKSPACE.md)
+    hr-workspace-forms@1: "b5891a0dd6aa39298a8929885b9b28df72e4932a27b0e2d24133a3d21a8510b2"
   unattested: REFUSE
