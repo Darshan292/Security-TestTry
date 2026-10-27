@@ -169,3 +169,48 @@ def test_codespaces_forwarded_origin_is_allowed_exactly():
         assert ok.status_code == 200
         bad = c.post("/api/run", json=BODY, headers={"Origin": "https://other-8765.app.github.dev", "X-PGW-UI": "1"})
         assert bad.status_code == 403
+
+
+# --- the page itself (demo/ui/index.html): untrusted text is never parsed as HTML; no external resources ----------
+
+def _page_and_script(client):
+    import re
+    html = client.get("/").text
+    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+    assert scripts, "inline script expected"
+    return html, "\n".join(scripts)
+
+
+def test_page_builds_dom_without_html_parsing_apis(client):
+    """Ticket text, model output and payloads are untrusted: the page must build DOM with textContent/createElement
+    only. A source scan is enough because the page is a single static file."""
+    import re
+    html, script = _page_and_script(client)
+    for api in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "createContextualFragment",
+                "DOMParser", "srcdoc", "eval(", "new Function", "setTimeout(\"", "setTimeout('"):
+        assert api not in script, api
+    assert not re.search(r"setAttribute\(\s*['\"]on", script)            # no inline event handler attributes
+    assert not re.search(r"\.on[a-z]+\s*=", script)                      # no on* property handlers built from data
+    assert not re.search(r"\son[a-z]+\s*=", re.sub(r"<script>.*?</script>", "", html, flags=re.S))
+
+
+def test_page_loads_nothing_external_and_keeps_request_protections(client):
+    import re
+    html, script = _page_and_script(client)
+    urls = set(re.findall(r"https?://[^\s\"'<>)]+", html))
+    assert urls <= {"http://www.w3.org/2000/svg"}, urls                  # SVG namespace only: no CDN, font or image
+    assert "<link" not in html and "@import" not in html and "<script src" not in html and "<iframe" not in html
+    assert "'X-PGW-UI':'1'" in script and "'Content-Type':'application/json'" in script
+    assert "fetch('/api/run'" in script                                   # same-origin relative URL
+    csp = client.get("/").headers["content-security-policy"]
+    assert "connect-src 'self'" in csp and "default-src 'self'" in csp
+
+
+def test_page_wording_is_honest(client):
+    html, _ = _page_and_script(client)
+    assert "Demo · synthetic data only" in html
+    low = html.lower()
+    for claim in ("100% safe", "100 % safe", "enterprise-ready", "enterprise ready", "production-ready",
+                  "production ready", "guaranteed", "unhackable"):
+        assert claim not in low, claim
+    assert "THIS request" in html and "not a real AI" in html            # checks scope; stand-in disclosure
