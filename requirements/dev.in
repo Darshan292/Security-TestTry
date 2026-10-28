@@ -1,5 +1,8 @@
 # Dev/test/eval dependencies. Installed on top of runtime.txt.
 -c runtime.txt
+-c ml.txt
 pytest>=8
 pydantic>=2.5
 ruff>=0.5
+# Test-time model building for pgw/ml tests (tests/ml_fixtures.py: tiny ONNX graphs, int8 quantisation)
+onnx>=1.16

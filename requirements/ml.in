@@ -1,0 +1,6 @@
+# Optional ML extra (pgw/ml: ONNX Runtime CPU detectors and content gate). Install on top of runtime.txt.
+# Licences: onnxruntime MIT, tokenizers Apache-2.0, numpy BSD-3-Clause (THIRD_PARTY_NOTICES.md).
+-c runtime.txt
+onnxruntime>=1.20
+tokenizers>=0.20
+numpy>=1.26

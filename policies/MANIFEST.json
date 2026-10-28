@@ -38,8 +38,8 @@
    "version": 3
   },
   "registry/deployment.yaml": {
-   "sha256": "6e62f794b73a397a6b078a42649a3689d5c5bdbc6728de99900d0deea5781471",
-   "version": 2
+   "sha256": "ae74a78161cdaa1a1a111aa32d624d78b53f5501fc662a4ea40ceedc9474e3b1",
+   "version": 3
   }
  },
  "signature": null

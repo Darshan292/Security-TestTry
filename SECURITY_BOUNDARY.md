@@ -427,3 +427,14 @@ placeholder.
 - The app is responsible for what it does with the report. Placeholders and offsets are harmless. The outbound
   messages, however, are pseudonymised personal data, as the provider received them, and they need the same
   handling as the input.
+
+## 10. ML layer (defence in depth, not the guarantee)
+
+[docs/ML_ARCHITECTURE.md](docs/ML_ARCHITECTURE.md). The guarantee stays what §1-§4 enforce: mandatory contracts,
+structured fields and routing (free text leaves only signed, or stays in-house), the egress check and the output gate.
+The ML span detector (`ml_detector`) and the special-category content gate (`content_gate_model`) add detection on
+top. What is enforced about them: each model directory is pinned by sha256 in the signed profile (mismatch: startup
+stops); inference runs in bounded worker processes and any failure, timeout or full queue fails the request closed
+(503, nothing sent); the content gate keeps a request in-house (PRIVATE) or refuses it even when the input is validly
+signed. What is NOT enforced: that a model finds what it should. Its recall is a measured property
+([docs/ML_EVALUATION.md](docs/ML_EVALUATION.md)), released only through the human-set release gate.

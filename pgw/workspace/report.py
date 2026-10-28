@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 import re
 
-STAGES = ("received", "verify_source", "compute", "protect", "egress_check", "provider", "restore")
+STAGES = ("received", "verify_source", "content_gate", "compute", "protect", "egress_check", "provider", "restore")
 OUTCOMES = ("sent", "kept_inside", "refused", "error")
 ROUTES = ("EXT_PSEUDO", "LOCAL_COMPUTE", "PRIVATE_LOCAL")
 # Alternative spellings accepted for top-level keys and stage ids (spec name first).
@@ -230,6 +230,10 @@ ERRORS: dict[str, tuple[str, str, bool | None]] = {
                                  "The gateway did not accept the form values for this task.", False),
     "request_blocked": ("Stopped on purpose",
                         "The text contains details that must never be sent to an AI.", False),
+    "special_category_content": ("Stopped on purpose",
+                                 "The text is about a topic this task keeps inside the company.", False),
+    "content_gate_unavailable": ("Stopped: check unavailable",
+                                 "The sensitive-topic check could not run, so nothing was sent.", False),
     "content_requires_private_route": ("Stopped on purpose",
                                        "Part of the text is in a script the gateway cannot check reliably.", False),
     "sensitive_data_in_parameters": ("Stopped on purpose", "The request carried personal details where none are "

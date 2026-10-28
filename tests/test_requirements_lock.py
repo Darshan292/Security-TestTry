@@ -5,7 +5,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+ML_EXTRA = {"onnxruntime", "tokenizers", "numpy"}   # optional ML extra (pgw/ml): requirements/ml.txt
 OPTIONAL_EXTRAS = {"spacy",            # optional NER extra: requirements/ner.txt
+                   *ML_EXTRA,
                    "llama_cpp"}         # optional local-LLM backend for pgw.private_llm (not locked; not shipped)
 # import name -> PyPI distribution name, where they differ
 DIST = {"yaml": "pyyaml", "ahocorasick": "pyahocorasick"}
@@ -59,3 +61,16 @@ def test_every_pgw_import_is_locked():
 def test_ner_model_is_url_and_hash_pinned():
     text = (ROOT / "requirements" / "ner-model.txt").read_text(encoding="utf-8").replace("\\\n", " ")
     assert re.search(r"en_core_web_lg @ https://\S+en_core_web_lg-3\.8\.0\S*\.whl\s+--hash=sha256:[0-9a-f]{64}", text)
+
+
+def test_ml_extra_is_hashed_and_covers_every_pgw_ml_import():
+    locked = _locked(ROOT / "requirements" / "ml.txt")
+    assert locked and not [n for n, h in locked.items() if not h], "unhashed pins in requirements/ml.txt"
+    assert {_norm(m) for m in ML_EXTRA} <= set(locked)
+    runtime = _locked(ROOT / "requirements" / "runtime.txt")
+    shared = set(locked) & set(runtime)        # compiled with -c runtime.txt: identical pins
+    text = lambda p: (ROOT / "requirements" / p).read_text(encoding="utf-8")  # noqa: E731
+    for n in shared:
+        v = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("ml.txt").replace("_", "-"))
+        w = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("runtime.txt").replace("_", "-"))
+        assert v and w and v.group(1) == w.group(1), n

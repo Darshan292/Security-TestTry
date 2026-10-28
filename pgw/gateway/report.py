@@ -23,13 +23,16 @@ from ..types import Action, EntityType
 
 VERSION = 1
 MAX_DETECTED = 2000      # entries in `detected`; past that the list is cut and `truncated` is true
-STAGES = ("received", "verify_source", "compute", "protect", "egress_check", "provider", "restore")
+STAGES = ("received", "verify_source", "content_gate", "compute", "protect", "egress_check", "provider", "restore")
 CHECKS = {
     "egress_clean": "No value detected or declared in THIS request appears in what left",
     "declared_absent": "No declared subject appears in what left",
     "source_verified": "The input carries a valid signature from a source this contract allowlists",
     "c3_not_returned": "No government or financial identifier (C3) appears in the answer",
+    "content_gate": "No special-category label of the contract's content gate reached its threshold",
 }
+# Reported only when the contract declares the check (otherwise the report is exactly as before the ML layer).
+OPTIONAL_CHECKS = frozenset({"content_gate"})
 ACTION = {Action.TOKENIZE: "alias", Action.REDACT: "remove", Action.GENERALIZE: "generalize", Action.ALLOW: "allow",
           Action.BLOCK_REQUEST: "block"}
 _REPLACED = ("alias", "generalize")
@@ -233,7 +236,8 @@ class Report:
             "outbound": outbound,
             "restore": ({"restored": self.restored, "kept_withheld": self.kept_withheld}
                         if self.restore_done else None),
-            "checks": [{"id": k, "status": v, "label": CHECKS[k]} for k, v in self.checks.items()],
+            "checks": [{"id": k, "status": v, "label": CHECKS[k]} for k, v in self.checks.items()
+                       if not (k in OPTIONAL_CHECKS and v == "n/a")],
             "error": error,
         }
 

@@ -39,6 +39,7 @@ services:
       appnet:
         aliases: [gateway]            # apps reach it as http://gateway:8080
       egressnet: {}
+      privatenet: {}                  # reaches the in-boundary model (pgw-private-llm), nothing else
     restart: unless-stopped
 
   example-app:
@@ -80,7 +81,44 @@ services:
     read_only: true
     restart: unless-stopped
 
+  pgw-private-llm:
+    # In-house CPU LLM for the PRIVATE route (deploy/LLAMA_SERVER.md): llama.cpp's OpenAI-compatible llama-server.
+    # STUB: enabled only with `docker compose --profile private-llm up`; no model ships with this repository.
+    # The signed profile then sets private_upstream_url: http://pgw-private-llm:8080/v1 (host already in the default
+    # private_allowlist), and PGW_PRIVATE_MODEL=${PGW_PRIVATE_MODEL_ALIAS} so it matches the --alias below.
+    profiles: ["private-llm"]
+    # Pinned tag AND digest (multi-arch index of server-b11723, ghcr.io/ggml-org/llama.cpp, MIT licence).
+    image: ghcr.io/ggml-org/llama.cpp:server-b11723@sha256:143926008cbbbab8fae8fd87809875af3e42d3d676c30c11c55c0f3f683a5a07
+    command:
+      - "-m"
+      - "/models/${PGW_PRIVATE_GGUF_FILE:?GGUF file name inside PGW_PRIVATE_GGUF_DIR}"
+      - "--alias"
+      - "${PGW_PRIVATE_MODEL_ALIAS:-hr-private-llm}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "--threads"
+      - "${LLAMA_THREADS:-8}"            # generation threads: physical cores given to this container
+      - "--threads-batch"
+      - "${LLAMA_THREADS:-8}"            # prompt processing threads
+      - "--ctx-size"
+      - "${LLAMA_CTX:-8192}"             # total KV cache, shared by the parallel slots
+      - "--parallel"
+      - "${LLAMA_PARALLEL:-2}"           # concurrent requests (slots); ctx per slot = ctx-size / parallel
+      - "--no-webui"
+    volumes:
+      # The model file is mounted READ-ONLY; record its sha256 next to the deployment (deploy/LLAMA_SERVER.md).
+      - "${PGW_PRIVATE_GGUF_DIR:?directory holding the GGUF model}:/models:ro"
+    read_only: true
+    tmpfs: [/tmp]
+    cpus: "${LLAMA_CPUS:-8}"
+    networks: [privatenet]            # ONLY the gateway can reach it; it has no route out
+    restart: unless-stopped
+
 networks:
+  privatenet:
+    internal: true                    # in-boundary model network: gateway <-> pgw-private-llm only, no route out
   appnet:
     internal: true                    # no route out: the core of the T13 control
   egressnet:

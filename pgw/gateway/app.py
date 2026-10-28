@@ -435,6 +435,30 @@ def create_app(settings: Settings) -> Starlette:
     # Contracted purposes (Path A and the free-text field of Path B) also get the local NER. A model that does
     # not load stops startup (NerUnavailable); a model that fails at request time fails that request closed.
     contract_protector = protector
+    # ML layer (docs/ML_ARCHITECTURE.md). Each model's directory is verified against the sha256 pinned in the signed
+    # profile before anything else uses it: a mismatch stops startup (pgw.ml.artifact.ArtifactError).
+    from .settings import check_ml_settings
+    check_ml_settings(settings)
+    ml_detector = gate = None
+    ml_cap = settings.protect_timeout_s * 0.8
+    if contracts and settings.ml_detector is not None:
+        from ..ml.config import parse_detector
+        from ..ml.runtime import open_detector
+        ml_detector = open_detector(parse_detector(settings.ml_detector), ml_cap)
+    gated = {p: c for p, c in contracts.items() if c.content_gate is not None}
+    if gated:
+        if settings.content_gate_model is None:
+            raise ContractError(f"purpose(s) {sorted(gated)} declare a content_gate but no content_gate_model is "
+                                "configured in the signed deployment profile")
+        from ..ml.config import parse_gate
+        gate_cfg = parse_gate(settings.content_gate_model)
+        for p, c in gated.items():
+            unknown = sorted(set(c.content_gate["labels"]) - set(gate_cfg.labels))
+            if unknown:
+                raise ContractError(f"purpose {p!r}: content_gate labels {unknown} are not labels of the configured "
+                                    "content_gate_model")
+        from ..ml.runtime import open_gate
+        gate = open_gate(gate_cfg, ml_cap)
     if contracts and settings.ner_model:
         from ..detect.ner import NerDetector
         if settings.ner_workers > 0:   # bounded worker processes (fail closed when full/slow); 0 = in-process
@@ -444,7 +468,12 @@ def create_app(settings: Settings) -> Starlette:
         else:
             ner = NerDetector(settings.ner_model)
             ner.warm()
-        contract_protector = Protector(policy, keys, roster, ledger, ner=ner)
+        contract_protector = Protector(policy, keys, roster, ledger, ner=ner, ml=ml_detector,
+                                       heuristics=settings.legacy_heuristics)
+    elif contracts and ml_detector is not None:   # the ML detector replaces spaCy (signed profile decision)
+        _log(logging.WARNING, event="ner_replaced_by_ml_detector")
+        contract_protector = Protector(policy, keys, roster, ledger, ml=ml_detector,
+                                       heuristics=settings.legacy_heuristics)
     elif contracts:   # production reaches this only with a signed ner_off_justification in the profile
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
@@ -466,8 +495,11 @@ def create_app(settings: Settings) -> Starlette:
         if c.external_input.unattested == "PRIVATE" and private is None:
             raise ContractError(f"purpose {p!r} routes unattested input privately but no private endpoint is "
                                 "configured")
+    for p, c in gated.items():
+        if c.content_gate["action"] == "PRIVATE" and private is None:
+            raise ContractError(f"purpose {p!r} routes gated content privately but no private endpoint is configured")
     needs_private = any(c.classes[DataClass.C4] == "PRIVATE" or c.external_input.unattested == "PRIVATE"
-                        for c in contracts.values())
+                        or (c.content_gate or {}).get("action") == "PRIVATE" for c in contracts.values())
     private_kind = probe_private(private, settings.private_model, prod) if needs_private else None
     egress_ledger = EgressLedger(settings.egress_ledger_path, keys if settings.tenant_keys_file else None)
     slots = threading.BoundedSemaphore(settings.max_concurrent_protect)
@@ -724,6 +756,38 @@ def create_app(settings: Settings) -> Starlette:
                 rep.input_source, rep.verified = input_source, True
                 rep.check("source_verified", "pass")
             _tr("input_source", attested=True, accepted=True, verified=True, sanitizer=input_source)
+            if contract.content_gate is not None:
+                # Special-category content stays in-house (or is refused) EVEN WHEN validly signed: the signature
+                # says who sanitised the text, not that its subject matter may leave. A gate failure fails closed.
+                cg = contract.content_gate
+                rep.begin("content_gate")
+                try:
+                    scores = await bounded(gate.classify, "\n".join(texts))
+                except _Reject:
+                    rep.end("content_gate", "failed")
+                    raise
+                except Exception as e:
+                    rep.end("content_gate", "failed")
+                    _log(logging.ERROR, event="content_gate_failed", request_id=rid, error_type=type(e).__name__)
+                    ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                                "content_gate_unavailable", contract)
+                    raise _Reject(503, "content_gate_unavailable",
+                                  "content check unavailable; request not sent") from None
+                from ..ml.gate import triggered
+                hit = triggered(scores, cg["labels"], cg["threshold"])
+                rep.end("content_gate")
+                rep.check("content_gate", "fail" if hit else "pass")
+                _tr("content_gate", labels=list(cg["labels"]), triggered=hit, action=cg["action"])
+                if hit and cg["action"] == "PRIVATE":
+                    return await _private(rid, app, purpose, model, body, ctx, contract, t0, "content_gate",
+                                          declared=declared_ids(contract, subj), rep=rep)
+                if hit:
+                    if rep.enabled:
+                        rep.skip("compute", "protect", "egress_check")
+                    ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                                "content_gate", contract)
+                    raise _Reject(422, "special_category_content",
+                                  "content in a category this purpose keeps in-house; not sent externally")
             t_c4 = time.perf_counter()
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
                 return await _private(rid, app, purpose, model, body, ctx, contract, t0,
@@ -927,8 +991,10 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(400, "unsupported_parameter", "streaming is not available on the private route")
         p_body = {k: v for k, v in body.items() if not k.startswith("pgw_") and k not in ("tools", "tool_choice")}
         p_body["model"] = settings.private_model
-        _tr("route", route="PRIVATE_LOCAL", reason="input not attested as source-sanitized: in-boundary model only"
-            if reason == "input_not_sanitized" else "content the gateway cannot read reliably (C4): in-boundary model only")
+        _tr("route", route="PRIVATE_LOCAL", reason={
+            "input_not_sanitized": "input not attested as source-sanitized: in-boundary model only",
+            "content_gate": "special-category content (content gate): in-boundary model only"}.get(
+            reason, "content the gateway cannot read reliably (C4): in-boundary model only"))
         p_wire = private.wire_bytes(p_body)
         _tr("send", provider="private (in-boundary)", model=settings.private_model, bytes=len(p_wire),
             sha256=hashlib.sha256(p_wire).hexdigest(), outbound=p_wire.decode("utf-8", "replace"),
@@ -1220,9 +1286,10 @@ def create_app(settings: Settings) -> Starlette:
         try:
             yield
         finally:   # release NER worker processes (each holds a model copy) when the app stops
-            close = getattr(getattr(contract_protector, "ner", None), "close", None)
-            if close is not None:
-                close()
+            for comp in (getattr(contract_protector, "ner", None), ml_detector, gate):
+                close = getattr(comp, "close", None)
+                if close is not None:
+                    close()
 
     return Starlette(routes=[Route("/v1/chat/completions", chat, methods=["POST"]),
                              Route("/healthz", health, methods=["GET"])], lifespan=lifespan)

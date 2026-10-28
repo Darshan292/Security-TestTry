@@ -1,0 +1,91 @@
+"""ONNX Runtime (CPU) and `tokenizers` helpers shared by the backends. Imports are lazy (optional extra)."""
+from __future__ import annotations
+
+from .artifact import Artifact, ArtifactError
+
+_INT_TYPES = {"tensor(int64)": "int64", "tensor(int32)": "int32"}
+
+
+def make_session(model_bytes: bytes, intra_op_threads: int = 1, inter_op_threads: int = 1):
+    """A CPU-only inference session built from the verified in-memory model bytes."""
+    import onnxruntime as ort
+    so = ort.SessionOptions()
+    so.intra_op_num_threads = int(intra_op_threads)
+    so.inter_op_num_threads = int(inter_op_threads)
+    so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    so.log_severity_level = 3
+    # Idle worker threads must not spin: several workers share the cores of one host.
+    so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    so.add_session_config_entry("session.inter_op.allow_spinning", "0")
+    try:
+        return ort.InferenceSession(model_bytes, sess_options=so, providers=["CPUExecutionProvider"])
+    except Exception as e:  # noqa: BLE001 - any load failure is an artefact problem; startup stops
+        raise ArtifactError(f"model.onnx does not load: {type(e).__name__}") from None
+
+
+def load_tokenizer(art: Artifact):
+    from tokenizers import Tokenizer
+    try:
+        tok = Tokenizer.from_str(art.files["tokenizer.json"].decode("utf-8"))
+    except Exception as e:  # noqa: BLE001
+        raise ArtifactError(f"tokenizer.json does not load: {type(e).__name__}") from None
+    tok.no_truncation()       # windows are built here; never silently cut text
+    tok.no_padding()
+    return tok
+
+
+def special_ids(tok, doc: dict) -> tuple[int | None, int | None, int]:
+    """(cls id, sep id, pad id) from labels.json special_tokens (absent -> no cls/sep, pad 0)."""
+    sp = doc.get("special_tokens") or {}
+    out = []
+    for k in ("cls", "sep", "pad"):
+        if k in sp:
+            i = tok.token_to_id(sp[k])
+            if i is None:
+                raise ArtifactError(f"labels.json special token {k!r} is not in the tokenizer vocabulary")
+            out.append(i)
+        else:
+            out.append(None)
+    return out[0], out[1], out[2] if out[2] is not None else 0
+
+
+def input_spec(session, allowed: dict[str, str]) -> dict[str, str]:
+    """{input name: numpy dtype}. Every model input must be one this backend knows how to feed."""
+    spec = {}
+    for i in session.get_inputs():
+        if i.name not in allowed:
+            raise ArtifactError(f"model.onnx has an input this backend cannot feed: {i.name!r}")
+        want = allowed[i.name]
+        if want == "int" and i.type not in _INT_TYPES:
+            raise ArtifactError(f"model.onnx input {i.name!r} must be int64 or int32")
+        spec[i.name] = _INT_TYPES.get(i.type, "bool" if i.type == "tensor(bool)" else "int64")
+    return spec
+
+
+def windows(n: int, size: int, stride: int) -> list[tuple[int, int]]:
+    """Token windows [a, b) of at most `size` tokens that overlap by `stride` tokens and cover [0, n)."""
+    if n <= 0:
+        return [(0, 0)]
+    if n <= size:
+        return [(0, n)]
+    step = max(1, size - stride)
+    out, a = [], 0
+    while True:
+        b = min(a + size, n)
+        out.append((a, b))
+        if b >= n:
+            return out
+        a += step
+
+
+def softmax(x):
+    import numpy as np
+    z = x - x.max(axis=-1, keepdims=True)
+    e = np.exp(z)
+    return e / e.sum(axis=-1, keepdims=True)
+
+
+def sigmoid(x):
+    import numpy as np
+    return 1.0 / (1.0 + np.exp(-np.clip(x, -60, 60)))

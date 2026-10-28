@@ -1,0 +1,21 @@
+# ML release gate: CONFIGURATION FOR HUMANS TO SET (docs/ML_EVALUATION.md, "Release gate").
+#
+# Every threshold below is deliberately null. They are a risk decision for the DPO, HR and the security owner, not a
+# measured fact, and nothing in this repository proposes values for them. Until they are set, `python -m eval.ml.run
+# --role release` reports verdict UNDECIDED and lists which thresholds are missing.
+# Set them in a reviewed change BEFORE the first release-gate run, and record the decision (who, when, why) as a dated
+# amendment in EVALUATION_PLAN.md, as for every other gate. Do not change them after seeing a release-gate result.
+version: 1
+decided_by: null            # names/roles of the approvers
+decided_on: null            # YYYY-MM-DD
+thresholds:
+  max_leak_rate: null                     # share of gold values surviving in the protected text, all types
+  max_leak_rate_by_type: {}               # e.g. {AADHAAR: <value>, PERSON: <value>}
+  min_recall_overlap_by_type: {}          # overlap recall per type
+  min_precision_overlap_by_type: {}       # overlap precision per type
+  max_benign_spans_masked: null           # over-masking of annotated benign strings
+  max_latency_p95_ms: null                # per request on the production CPU class
+  min_examples: null                      # minimum human-labelled real examples for the verdict to count
+# Datasets that are release-gate only (external tester's sets, the human-labelled real sample). Listed here, the
+# harness refuses them with --role dev. Paths as on the evaluation machine inside the boundary.
+release_sets: []

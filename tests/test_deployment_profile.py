@@ -62,6 +62,12 @@ def different(field: str, tmp: Path):
         return DEFAULTS[field] + 1.5, str(DEFAULTS[field] + 1.5)
     if kind == "hosts":
         return ("evil.example",), "evil.example"
+    if kind == "mldetector":
+        v = {"path": str(tmp / "models" / "pii"), "sha256": "0" * 64, "labels": {"PER": "PERSON"},
+             "min_score_by_type": {"DEFAULT": 0.5}}
+        return v, None
+    if kind == "mlgate":
+        return {"path": str(tmp / "models" / "gate"), "sha256": "0" * 64, "labels": ["health"]}, None
     raise AssertionError(f"no test value for kind {kind}")
 
 

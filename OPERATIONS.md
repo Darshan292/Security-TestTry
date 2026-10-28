@@ -69,6 +69,8 @@ Contracts that keep unattested input or C4 content in-boundary (`unattested: PRI
   - `PGW_PRIVATE_MODEL` set to a model id that endpoint lists (otherwise a `private_model_not_listed_by_endpoint` warning, and the server will likely reject the requests);
   - capacity planning (the private route is not streamed and waits for the whole answer, within `upstream_timeout_s`), logging on the model server that keeps no prompts, and the same host hardening as the gateway, since it receives unprotected personal content;
   - **an answer-quality evaluation with HR staff** on synthetic tickets of the relevant purposes and languages before the route is relied on. The gateway's tests prove routing, isolation and fail-closed behaviour only; nothing here measures whether the model's answers are correct or useful.
+- **Recommended:** llama.cpp's `llama-server` (MIT, CPU, GGUF): compose stub `pgw-private-llm` (profile `private-llm`, image pinned by digest, model mounted read-only), setup and sizing in [deploy/LLAMA_SERVER.md](deploy/LLAMA_SERVER.md); measure it on your hardware with `python scripts/bench_private_llm.py`. Contracts with a `content_gate` whose action is PRIVATE also need this endpoint.
+- **ML models (detector, content gate):** lifecycle, pinning and alerting in [docs/ML_ARCHITECTURE.md](docs/ML_ARCHITECTURE.md); alert on `content_gate_failed` and on 503 `detector_unavailable` / `content_gate_unavailable` rates.
 - **Without such a model**, set `unattested: REFUSE` (and `C4: REFUSE`) in the contracts and re-sign: unattested or unreadable input is then refused instead of answered in-boundary.
 
 ## Provider data retention and region

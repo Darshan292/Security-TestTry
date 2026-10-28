@@ -27,6 +27,11 @@ is the table in `pgw/gateway/settings.py`.
   elsewhere. A missing profile, an edited one, or one missing from the signed manifest stops production.
 - **NER off is a signed decision.** `ner_model: null` starts in production only if the profile also gives
   `ner_off_justification` (at least 20 characters). A model that does not load still stops startup.
+- **ML models are pinned.** `ml_detector` and `content_gate_model` name a model directory and the sha256 of its
+  manifest (`python -m pgw.ml.artifact <dir>`); a directory that does not match stops startup. An `ml_detector` may
+  replace spaCy (`ner_model: null` then needs no justification). `legacy_heuristics: false` needs an `ml_detector`.
+  The in-house CPU LLM for the PRIVATE route: [LLAMA_SERVER.md](LLAMA_SERVER.md). Architecture and lifecycle:
+  [docs/ML_ARCHITECTURE.md](../docs/ML_ARCHITECTURE.md).
 - **Development** (`PGW_MODE=development`): the profile is optional; differences are logged as
   `deployment_profile_differs_development_only` warnings and the environment value is used.
 - Changing any of these values = edit the profile, bump its `version`, raise its `config_serial`, review, re-seal and
@@ -45,7 +50,9 @@ it (e.g. `upstream_kind: anthropic`, `provider_zero_retention: true`, `provider_
 | `max_body_bytes` / `max_content_chars` / `max_messages` (`PGW_MAX_*`) | 262144 / 50000 / 200 | 413, nothing sent |
 | `protect_timeout_s` / `max_concurrent_protect` | 10 / 8 | 503 on deadline or when all worker slots are busy. A timed-out worker keeps its slot until it really ends |
 | `upstream_timeout_s` (`PGW_UPSTREAM_TIMEOUT_S`) | 60 | Provider timeout; failure is 502 with no content |
-| `private_upstream_url`, `private_allowlist` | none, loopback + `pgw-private-llm` | In-boundary (C4) endpoint |
+| `private_upstream_url`, `private_allowlist` | none, loopback + `pgw-private-llm` | In-boundary (C4) endpoint; llama.cpp `llama-server` stub in `docker-compose.yml` (profile `private-llm`) |
+| `ml_detector`, `content_gate_model` (profile only) | null, null | ML span detector and special-category content gate: `{path, sha256, labels, ..., workers, queue_max, timeout_s, intra_op_threads, inter_op_threads, batch_size}` (pgw/ml/config.py). Pin mismatch stops startup; inference failure or timeout is 503, nothing sent |
+| `legacy_heuristics` (profile only) | true | `false` (only with `ml_detector`): name/amount heuristics off, to measure "ML + ID regex" |
 | `roster_path` (`PGW_ROSTER`) | none | Sealed roster for name matching; the environment cannot remove it |
 
 Operational settings stay in the environment (they are paths, secrets or the trust anchor, and must not be in the
