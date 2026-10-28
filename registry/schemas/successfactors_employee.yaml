@@ -1,0 +1,61 @@
+# STARTER SCHEMA - verify against your tenant's actual field names before use.
+# SAP SuccessFactors Employee Central via OData v2 (PerPerson with $expand=personalInfoNav,emailNav,phoneNav,
+# employmentNav/jobInfoNav): {"d": {"results": [...]}} with nested navigation results. Entity and property names
+# follow the public OData API reference (PerPerson, PerPersonal, PerEmail, EmpEmployment, EmpJob); expansions and
+# custom fields differ per tenant: check and re-seal. OData __metadata/__deferred blocks are removed.
+kind: pgw-field-schema
+schema: successfactors_employee
+version: 1
+title: SuccessFactors employee (PerPerson / EmpJob, OData v2 JSON)
+starter: true
+formats: [json]
+records_at: "d.results[]"
+fields:
+  - {path: __metadata, name: meta, disposition: REMOVE, subtree: true}
+  - {path: personIdExternal, name: person_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: dateOfBirth, name: birth_year, type: date, disposition: GENERALIZE, method: year}
+  - {path: countryOfBirth, name: country_of_birth, disposition: NEVER, category: nationality}
+  - {path: placeOfBirth, name: place_of_birth, disposition: REMOVE}
+  - {path: "personalInfoNav.results[].__metadata", name: personal_meta, disposition: REMOVE, subtree: true}
+  - {path: "personalInfoNav.results[].firstName", name: first_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: "personalInfoNav.results[].lastName", name: last_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: "personalInfoNav.results[].displayName", name: display_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: "personalInfoNav.results[].gender", name: gender, disposition: NEVER, category: gender}
+  - {path: "personalInfoNav.results[].maritalStatus", name: marital_status, disposition: NEVER, category: marital_status}
+  - {path: "personalInfoNav.results[].nationality", name: nationality, disposition: NEVER, category: nationality}
+  - {path: "personalInfoNav.results[].secondNationality", name: nationality2, disposition: NEVER, category: nationality}
+  - {path: "personalInfoNav.results[].challengeStatus", name: challenge_status, disposition: NEVER, category: disability}
+  - {path: "personalInfoNav.results[].religion", name: religion, disposition: NEVER, category: religion}
+  - {path: "personalInfoNav.results[].startDate", name: personal_start, disposition: REMOVE}
+  - {path: "emailNav.results[].__metadata", name: email_meta, disposition: REMOVE, subtree: true}
+  - {path: "emailNav.results[].emailAddress", name: email, type: string, disposition: ALIAS, entity: EMAIL}
+  - {path: "emailNav.results[].emailType", name: email_type, disposition: REMOVE}
+  - {path: "emailNav.results[].isPrimary", name: email_primary, disposition: REMOVE}
+  - {path: phoneNav, name: phones, disposition: REMOVE, subtree: true}
+  - {path: homeAddressNavDEFLT, name: home_address, disposition: REMOVE, subtree: true}
+  - {path: nationalIdNav, name: national_id, disposition: REMOVE, subtree: true}
+  - {path: "employmentNav.results[].__metadata", name: employment_meta, disposition: REMOVE, subtree: true}
+  - {path: "employmentNav.results[].userId", name: user_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: "employmentNav.results[].startDate", name: start_month, type: date, disposition: GENERALIZE, method: month}
+  - {path: "employmentNav.results[].endDate", name: end_month, type: date, disposition: GENERALIZE, method: month}
+  - {path: "employmentNav.results[].jobInfoNav.results[].__metadata", name: job_meta, disposition: REMOVE, subtree: true}
+  - {path: "employmentNav.results[].jobInfoNav.results[].jobTitle", name: job_title, disposition: REMOVE}
+  - {path: "employmentNav.results[].jobInfoNav.results[].department", name: department, type: enum, disposition: KEEP,
+     enum: [Finance, Engineering, Operations, Sales, Marketing, Human Resources, Legal, Administration, Support, Manufacturing],
+     justification: "Department from the organisation's foundation object list; non-personal and shared by many employees"}
+  - {path: "employmentNav.results[].jobInfoNav.results[].division", name: division, disposition: REMOVE}
+  - {path: "employmentNav.results[].jobInfoNav.results[].location", name: location, disposition: REMOVE}
+  - {path: "employmentNav.results[].jobInfoNav.results[].managerId", name: manager_id, type: string, disposition: ALIAS,
+     entity: EMPLOYEE_ID}
+  - {path: "employmentNav.results[].jobInfoNav.results[].payGrade", name: pay_grade, type: string, disposition: COMPUTE_ONLY}
+  - {path: "employmentNav.results[].jobInfoNav.results[].standardHours", name: standard_hours, type: number,
+     disposition: COMPUTE_ONLY}
+  - {path: "employmentNav.results[].jobInfoNav.results[].employeeClass", name: employee_class, type: enum, disposition: KEEP,
+     enum: [Employee, Intern, Contractor, Trainee],
+     justification: "Employee class picklist value; a non-personal employment classification"}
+  - {path: "employmentNav.results[].jobInfoNav.results[].emplStatus", name: employment_status, type: enum, disposition: KEEP,
+     enum: [Active, Inactive, Terminated, Retired, Suspended],
+     justification: "Employment status picklist value; an employment-record state (leave statuses are not listed)"}
+  - {path: "employmentNav.results[].jobInfoNav.results[].leaveOfAbsenceReason", name: loa_reason, disposition: NEVER,
+     category: leave_type}
+  - {path: "employmentNav.results[].compInfoNav", name: compensation, disposition: REMOVE, subtree: true}

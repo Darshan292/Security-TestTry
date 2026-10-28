@@ -47,6 +47,7 @@ DEMO_PUBKEYS = frozenset({
     "836eb89434c1ae57216a94529c1501bd9217fe24cbfc912a1c1f2d2bd5798d43",   # hr-email-composer@1
     "e6ed0bedd45b9b37ae920bdc53e9970c83924ae7c2bd175fb0a01a267d5a821d",   # hris-case-export@1
     "b5891a0dd6aa39298a8929885b9b28df72e4932a27b0e2d24133a3d21a8510b2",   # hr-workspace-forms@1
+    "e01541fb53f53c8a997de7a2a75deb15f2aad62aed9c854f4a56b1f508e7e53f",   # hrms-export@1
 })
 DEMO_KEYS_FILE = Path(__file__).resolve().parents[2] / "tests/fixtures/DEMO_ONLY_source_signing_keys.json"
 

@@ -1,0 +1,56 @@
+# Data contract: answer "how many / which people match <filter>" over an Active Directory, Workday or
+# SuccessFactors export (route RECORDS, docs/HRMS_CONTRACTS.md). Filters and groupings only on KEEP and GENERALIZE
+# fields, with values from their sealed enumerations or generalised formats; people are listed only as aliases.
+contract: roster_question
+version: 1
+task_type: roster_question
+route: RECORDS
+data_classes:
+  C1: ALIAS
+  C2: REDACT
+  C3: REDACT
+  C4: REFUSE
+restore: [C1]
+purpose_dependent:
+  leave_balance: NOT_EXPECTED
+  attendance: LOCAL_ONLY
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED    # NEVER fields of the schema: dropped at parse time
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: LOCAL_ONLY
+  derived_compensation: LOCAL_ONLY
+records:
+  sources: [ad_user]
+  select: [display_name, username, department, enabled, account_state, created_month, last_logon_month]
+  label: [display_name, username]
+  show: [department, last_logon_month]
+  compute: roster_question
+  max_rows: 50000
+  max_bytes: 20000000
+  max_listed: 200
+  timeout_s: 30
+outputs:
+  total_rows: {derived_from: C0, egress: RAW}
+  matched_count: {derived_from: C0, egress: RAW}
+  rows_missing_filter_field: {derived_from: C0, egress: RAW}
+  filter_text: {derived_from: C0, egress: RAW}
+  matched: {derived_from: C1, egress: RAW, justification: "aliased identities of matching records with sealed KEEP/GENERALIZE values only"}
+  group_counts: {derived_from: C0, egress: RAW}
+guidance: >-
+  You are answering a question about a directory export. You receive counts and aliased people only; answer from them
+  and do not guess anything that is not listed.
+prompt_template: |
+  Directory question computed inside the privacy gateway.
+  Records: {total_rows}. Filter: {filter_text}. Matching: {matched_count} (records without a value for a filtered field: {rows_missing_filter_field}).
+  Counts by group:
+  {group_counts}
+  Matching records:
+  {matched}
+  Answer the HR administrator's question about these accounts in two or three sentences.
+# Source-side input boundary (SECURITY_BOUNDARY.md §4): record payloads are accepted only when signed by the
+# exporting system's key pinned here. Unsigned payloads are refused (422), nothing is sent.
+# THE KEY BELOW IS A DEMO KEY (its private half is committed in tests/fixtures). Production refuses it.
+external_input:
+  sanitizers:
+    hrms-export@1: "e01541fb53f53c8a997de7a2a75deb15f2aad62aed9c854f4a56b1f508e7e53f"
+  unattested: REFUSE

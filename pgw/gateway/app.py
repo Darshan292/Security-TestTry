@@ -34,6 +34,7 @@ from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedConte
 from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer, compact_id
 from ..product import attest, integrity, local_compute, subjects
+from ..product import records as _records
 from ..product.content import unreliable_script
 from ..product.contracts import CLASS_OF, Contract, ContractError, DataClass, load_contract
 from ..types import BlockedRequest, Context, EgressViolation, EntityType
@@ -398,6 +399,10 @@ def create_app(settings: Settings) -> Starlette:
 
     registry = load_registry(settings.registry_path, read(settings.registry_path))
     sealed = _sealed_paths(settings, [c for a in registry for _, c in a.tasks])
+    # Field schemas and computation rules of RECORDS contracts (docs/HRMS_CONTRACTS.md): every file under
+    # registry/schemas and registry/rules is sealed, used or not, so an unsealed one stops startup too.
+    schema_root = Path(settings.registry_path).resolve().parent
+    sealed += _records.schema_files(schema_root)
     if loc is not None and profile_bytes is not None:
         sealed.append(str(loc[1]))
     # The roster is a detection input: swapping it for an empty one silently disables roster matching (audit S4).
@@ -425,6 +430,7 @@ def create_app(settings: Settings) -> Starlette:
     from ..keys import build_keys   # per-tenant key file if configured, else the single master key
     keys: Keys = build_keys(settings, registry)   # or pgw.keys.TenantKeyring: same interface
     contracts, policy = load_contracts(registry, policy, snapshot, allow_demo_keys=not prod)
+    record_plans = {p: _records.bind(p, c, schema_root, read) for p, c in contracts.items() if c.route == "RECORDS"}
     for p in contracts:   # contracted (RESTRICTED-by-default) purposes never stream unrestored text
         if policy.stream_mode(p) != "buffered":
             raise ContractError(f"purpose {p!r}: contracted purposes must use buffered output")
@@ -509,9 +515,10 @@ def create_app(settings: Settings) -> Starlette:
     _log(logging.INFO if prod else logging.WARNING, event="started", mode=settings.mode, integrity=integrity_ref,
          ner=settings.ner_model if contracts else None, provider=upstream.name)
 
-    async def bounded(fn, *args):
+    async def bounded(fn, *args, timeout: float | None = None):
         """Run CPU work in a worker with a deadline. The slot is released only when the worker really finishes,
-        so a request that times out still occupies capacity and cannot be multiplied into a CPU exhaustion."""
+        so a request that times out still occupies capacity and cannot be multiplied into a CPU exhaustion.
+        timeout: a sealed per-contract deadline (RECORDS compute); default the profile's protect_timeout_s."""
         if not slots.acquire(blocking=False):
             raise _Reject(503, "gateway_busy", "gateway at capacity; request not sent")
 
@@ -522,12 +529,12 @@ def create_app(settings: Settings) -> Starlette:
                 slots.release()
         try:
             return await asyncio.wait_for(to_thread.run_sync(work, abandon_on_cancel=True),
-                                          settings.protect_timeout_s)
+                                          timeout or settings.protect_timeout_s)
         except TimeoutError:
             raise _Reject(503, "protection_timeout", "protection took too long; request not sent") from None
 
-    async def read_body(request: Request) -> bytes:
-        limit = settings.max_body_bytes
+    async def read_body(request: Request, limit: int | None = None) -> bytes:
+        limit = limit or settings.max_body_bytes
         cl = request.headers.get("content-length")
         if cl is not None and (not cl.isdigit() or int(cl) > limit):
             raise _Reject(413, "request_too_large", "request body exceeds the size limit")
@@ -651,7 +658,10 @@ def create_app(settings: Settings) -> Starlette:
         if conv and len(conv) > 128:
             raise _Reject(400, "invalid_conversation_id", "conversation id too long")
 
-        raw_body = await read_body(request)
+        # RECORDS contracts carry whole HRMS exports (only small computed results leave): their sealed size bound
+        # replaces the profile's free-text limits for the body and the message content.
+        plan = record_plans.get(purpose) if contract is not None else None
+        raw_body = await read_body(request, plan.spec.max_bytes if plan is not None else None)
         try:
             body = json.loads(raw_body)
         except ValueError:
@@ -669,7 +679,7 @@ def create_app(settings: Settings) -> Starlette:
             raise _Reject(403, "model_forbidden", "model not permitted for this app")
         if len(body["messages"]) > settings.max_messages:
             raise _Reject(413, "content_too_large", "too many messages")
-        if _text_size(body["messages"]) > settings.max_content_chars:
+        if _text_size(body["messages"]) > (plan.spec.max_bytes if plan is not None else settings.max_content_chars):
             raise _Reject(413, "content_too_large", "message content exceeds the size limit")
         stream = bool(body.get("stream", False))
 
@@ -692,6 +702,7 @@ def create_app(settings: Settings) -> Starlette:
                 restore=sorted(c.value for c in contract.restore), guidance=bool(contract.guidance),
                 org_contacts=len(contract.org_contacts), public_constants=len(contract.public_constants))
         messages, declared, withheld, subj, raw_outputs = body["messages"], None, [], [], None
+        record_result = None
         input_source = None
         if contract is not None:
             ctx = dataclasses.replace(ctx, alias_ns=contract.ref)
@@ -713,8 +724,10 @@ def create_app(settings: Settings) -> Starlette:
             rep.end("received")
             rep.skip("verify_source", "compute")
         if contract is not None:
-            texts = subjects.request_texts(messages)    # every string, incl. list-form content parts and tool args
-            if _text_size(messages) > contract.max_chars:
+            # every string, incl. list-form content parts and tool args. A RECORDS payload is not free text: its values
+            # are classified by the field schema, so the script and content checks below do not read it.
+            texts = subjects.request_texts(messages) if plan is None else []
+            if _text_size(messages) > (plan.spec.max_bytes if plan is not None else contract.max_chars):
                 raise _Reject(413, "content_too_large", "request exceeds the data contract's size limit")
             rep.end("received")
             rep.begin("verify_source")
@@ -801,7 +814,7 @@ def create_app(settings: Settings) -> Starlette:
                 raise _Reject(422, "content_requires_private_route",
                               "content in a script the gateway cannot protect reliably; not sent externally")
             rep.carry("protect", (time.perf_counter() - t_c4) * 1000)
-            if contract.route != "LOCAL_COMPUTE":
+            if contract.route not in ("LOCAL_COMPUTE", "RECORDS"):
                 rep.skip("compute")
             if contract.route == "LOCAL_COMPUTE":
                 _tr("route", route="LOCAL_COMPUTE", reason="contract computes inside the gateway")
@@ -824,6 +837,30 @@ def create_app(settings: Settings) -> Starlette:
                     outputs=[{"name": n, "egress": (contract.outputs[n].egress if n in contract.outputs
                                                      else "INTERNAL")} for n in cr.outputs],
                     withheld_forms=len(cr.withheld), prompt_built=True)
+            if plan is not None:
+                _tr("route", route="RECORDS", reason="field contract: computed results and aliases only")
+                rep.begin("compute")
+                try:
+                    rr = await bounded(_records.run, plan, messages, timeout=plan.spec.timeout_s)
+                except _Reject:
+                    rep.end("compute", "failed")
+                    raise
+                except local_compute.PayloadError as e:
+                    rep.end("compute", "failed")
+                    ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                                "invalid_record_payload", contract)
+                    raise _Reject(400, "invalid_contract_payload", str(e)) from None
+                except Exception as e:
+                    rep.end("compute", "failed")
+                    _log(logging.ERROR, event="compute_failed", request_id=rid, error_type=type(e).__name__)
+                    raise _Reject(503, "compute_unavailable", "local computation failed; request not sent") from None
+                rep.end("compute")
+                if rep.enabled:
+                    rep.compute, rep.records = rr, rr.report
+                messages = [{"role": "user", "content": rr.prompt}]
+                declared, raw_outputs, record_result = rr.declared, rr.raw, rr
+                _tr("records", schema=rr.report["schema"], rows=rr.report["rows"], left=rr.report["left"],
+                    unknown_fields=rr.report["unknown"]["fields"])
 
         rep.begin("protect")
         if subj:   # after all size checks, off the event loop, under the deadline
@@ -887,6 +924,8 @@ def create_app(settings: Settings) -> Starlette:
                     key = "content" if part is m else "text"
                     for i, oc in enumerate(held):
                         part[key] = part[key].replace(chr(_ORG_SENTINEL + i), oc)
+        # RECORDS: the protected prompt with its computed values still behind sentinels (checked below)
+        record_protected = (prot.messages[0]["content"] if record_result is not None else None)
         if raw_outputs:   # contract-RAW local-compute outputs, held out of detection, go back in now
             for m in prot.messages:
                 if isinstance(m.get("content"), str):
@@ -924,6 +963,11 @@ def create_app(settings: Settings) -> Starlette:
             subjects.check_outbound(wire, declared if subj else [], (*own, *held))
             if subj:
                 rep.check("declared_absent", "pass")
+            if record_result is not None:   # no input value the schema did not classify KEEP, in any form
+                check_id = "records_egress"
+                record_result.check_protected(record_protected)
+                record_result.check_final(prot.messages[0]["content"])
+                rep.check("records_egress", "pass")
         except EgressViolation:
             rep.check(check_id, "fail")
             ms = (time.perf_counter() - t0) * 1000

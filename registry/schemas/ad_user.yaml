@@ -1,0 +1,58 @@
+# STARTER SCHEMA - verify against your directory's actual attributes before use.
+# Active Directory user objects (Get-ADUser -Properties ... | Export-Csv, or ConvertTo-Json; LDAP attribute names).
+# Usernames, UPNs, DNs and manager references are identities: aliased. Group memberships are removed (group names can
+# reveal health programmes, unions or investigations). userAccountControl is reduced to enabled/disabled.
+kind: pgw-field-schema
+schema: ad_user
+version: 1
+title: Active Directory user
+starter: true
+formats: [csv, json]
+records_at: "$[]"
+fields:
+  - {path: sAMAccountName, name: username, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: userPrincipalName, name: upn, type: string, disposition: ALIAS, entity: EMAIL}
+  - {path: displayName, name: display_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: givenName, name: given_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: sn, name: surname, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: cn, name: common_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: name, name: rdn_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: mail, name: mail, type: string, disposition: ALIAS, entity: EMAIL}
+  - {path: employeeID, name: employee_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: employeeNumber, name: employee_number, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: distinguishedName, name: dn, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: manager, name: manager_dn, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: department, name: department, type: enum, disposition: KEEP,
+     enum: [Finance, Engineering, Operations, Sales, Marketing, Human Resources, Legal, Administration, Support, Manufacturing],
+     justification: "Department names from the organisation's reference table; non-personal and shared by many users"}
+  - {path: Enabled, name: enabled, type: bool, disposition: KEEP,
+     justification: "Whether the directory account is enabled: an account state, not a personal attribute"}
+  - {path: userAccountControl, name: account_state, type: int, disposition: GENERALIZE, method: bitflag, bit: 1,
+     labels: [enabled, disabled]}
+  - {path: whenCreated, name: created_month, type: datetime, disposition: GENERALIZE, method: month}
+  - {path: lastLogonTimestamp, name: last_logon_month, type: datetime, disposition: GENERALIZE, method: month}
+  - {path: postalCode, name: pin_district, type: string, disposition: GENERALIZE, method: pin_prefix3}
+  - {path: title, name: title, disposition: REMOVE}
+  - {path: company, name: company, disposition: REMOVE}
+  - {path: physicalDeliveryOfficeName, name: office, disposition: REMOVE}
+  - {path: telephoneNumber, name: telephone, disposition: REMOVE}
+  - {path: mobile, name: mobile, disposition: REMOVE}
+  - {path: homePhone, name: home_phone, disposition: REMOVE}
+  - {path: streetAddress, name: street, disposition: REMOVE}
+  - {path: l, name: city, disposition: REMOVE}
+  - {path: st, name: state, disposition: REMOVE}
+  - {path: co, name: country, disposition: REMOVE}
+  - {path: description, name: description, disposition: REMOVE}
+  - {path: info, name: info, disposition: REMOVE}
+  - {path: pwdLastSet, name: pwd_last_set, disposition: REMOVE}
+  - {path: objectSid, name: object_sid, disposition: REMOVE}
+  - {path: objectGUID, name: object_guid, disposition: REMOVE}
+  - {path: "memberOf[]", name: member_of, disposition: REMOVE}
+  - {path: proxyAddresses, name: proxy_addresses, disposition: REMOVE, subtree: true}
+  - {path: thumbnailPhoto, name: photo, disposition: NEVER, category: photo}
+  - {path: jpegPhoto, name: jpeg_photo, disposition: NEVER, category: photo}
+  - {path: extensionAttribute1, name: ext1, disposition: REMOVE}
+  - {path: extensionAttribute2, name: ext2, disposition: REMOVE}
+  - {path: extensionAttribute3, name: ext3, disposition: REMOVE}
+  - {path: extensionAttribute4, name: ext4, disposition: REMOVE}
+  - {path: extensionAttribute5, name: ext5, disposition: REMOVE}

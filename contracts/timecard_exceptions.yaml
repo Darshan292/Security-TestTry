@@ -1,0 +1,58 @@
+# Data contract: timecard exceptions from a UKG/Kronos timecard export (route RECORDS, docs/HRMS_CONTRACTS.md).
+# Absences are counted as "absence" only: the pay code / absence reason is NEVER and is dropped at parse time.
+contract: timecard_exceptions
+version: 1
+task_type: timecard_exceptions
+route: RECORDS
+data_classes:
+  C1: ALIAS
+  C2: REDACT
+  C3: REDACT
+  C4: REFUSE
+restore: [C1]
+purpose_dependent:
+  leave_balance: NOT_EXPECTED
+  attendance: LOCAL_ONLY
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED    # NEVER fields of the schema: dropped at parse time
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: LOCAL_ONLY
+  derived_compensation: LOCAL_ONLY
+records:
+  sources: [ukg_timecard]
+  select: [employee_id, employee_name, work_date, punch_in, punch_out, hours, overtime_hours, overtime_approved,
+           is_absence]
+  label: [employee_name, employee_id]
+  compute: timecard_exceptions
+  rules: timecard_india_default
+  max_rows: 200000
+  max_bytes: 20000000
+  max_listed: 200
+  timeout_s: 30
+outputs:
+  rows_checked: {derived_from: C0, egress: RAW}
+  employees_checked: {derived_from: C0, egress: RAW}
+  employees_with_exceptions: {derived_from: C2, egress: RAW, justification: "a count of employees with at least one timecard exception"}
+  exception_counts: {derived_from: C2, egress: RAW, justification: "fixed exception codes with their counts; no time, date or reason"}
+  exceptions: {derived_from: C2, egress: RAW, justification: "per employee: the aliased employee and exception codes with counts; no dates, times or absence reasons"}
+  absence_days: {derived_from: C2, egress: RAW, justification: "a total count of absence days across the export; never the reason"}
+  employees_with_absence: {derived_from: C2, egress: RAW, justification: "a count of employees with any absence; never the reason"}
+guidance: >-
+  You are reviewing automated timecard exception results. Codes: MISSING_PUNCH, PUNCH_ORDER, SHIFT_OVER_LIMIT and
+  SPREAD_OVER_LIMIT (daily limits), WEEKLY_OVER_LIMIT, OT_WITHOUT_APPROVAL, MISSING/INVALID (a field problem). Absence
+  reasons are deliberately not available; never speculate about why someone was absent.
+prompt_template: |
+  Timecard exception check computed inside the privacy gateway (punch times, dates and absence reasons are not shared with you).
+  Rows checked: {rows_checked}. Employees: {employees_checked}. Employees with exceptions: {employees_with_exceptions}.
+  Absence days in the export: {absence_days} (employees with any absence: {employees_with_absence}).
+  Exception counts: {exception_counts}
+  Employees with exceptions (code x number of occurrences):
+  {exceptions}
+  Write a short note for the time-office supervisor listing what to correct before the payroll cut-off.
+# Source-side input boundary (SECURITY_BOUNDARY.md §4): record payloads are accepted only when signed by the
+# exporting system's key pinned here. Unsigned payloads are refused (422), nothing is sent.
+# THE KEY BELOW IS A DEMO KEY (its private half is committed in tests/fixtures). Production refuses it.
+external_input:
+  sanitizers:
+    hrms-export@1: "e01541fb53f53c8a997de7a2a75deb15f2aad62aed9c854f4a56b1f508e7e53f"
+  unattested: REFUSE

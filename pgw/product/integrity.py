@@ -31,7 +31,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "policies" / "MANIFEST.json"
-SEALED_GLOBS = ("registry/*.yaml", "policies/*.yaml", "contracts/*.yaml", "roster/*.jsonl")
+SEALED_GLOBS = ("registry/*.yaml", "registry/schemas/*.yaml", "registry/rules/*.yaml", "policies/*.yaml",
+                "contracts/*.yaml", "roster/*.jsonl")
 _SIG_CONTEXT = b"pgw-config-manifest-v1\n"   # domain separation for the Ed25519 signature
 
 

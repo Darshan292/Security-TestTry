@@ -3,7 +3,7 @@
 # (an added purpose or model, a key hash) needs a re-seal, and production needs that seal signed (SECURITY_BOUNDARY.md).
 # Every purpose MUST be bound to a data contract under `tasks`; an uncontracted purpose stops startup.
 # `transparency: true` opts an app in to the pgw_report (default false); like every field here it is sealed.
-version: 3
+version: 4
 apps:
   # PILOT (product slice). The demo key below is "pilot-hr-helpdesk-key-change-me"; replace it.
   - app_id: hr-helpdesk-pilot
@@ -37,6 +37,22 @@ apps:
       salary_comparison: ../contracts/salary_comparison.yaml
       esi_letter: ../contracts/esi_letter.yaml
       band_position: ../contracts/band_position.yaml
+    restore_output: true
+    transparency: true
+    models: [mock-1, claude-opus-5-5, openai/gpt-oss-120b]
+  # HRMS connector (docs/HRMS_CONTRACTS.md): sends whole HRMS exports (payroll register, timecards, Fieldglass,
+  # directory) on the RECORDS route. Values are classified by the sealed field schemas in registry/schemas; only
+  # computed results and aliased identities leave. Payloads must be signed by the export's source key
+  # (hrms-export@1, a DEMO key in the shipped contracts). The demo key below is "hrms-connector-key-change-me".
+  - app_id: hrms-connector
+    tenant: acme
+    key_sha256: a3e9d666b7c93ae1e39aca3db3b82f9941b3111f8c91a853ef25f5a75d51e2c7
+    purposes: [payroll_register_check, timecard_exceptions, contractor_budget, roster_question]
+    tasks:
+      payroll_register_check: ../contracts/payroll_register_check.yaml
+      timecard_exceptions: ../contracts/timecard_exceptions.yaml
+      contractor_budget: ../contracts/contractor_budget.yaml
+      roster_question: ../contracts/roster_question.yaml
     restore_output: true
     transparency: true
     models: [mock-1, claude-opus-5-5, openai/gpt-oss-120b]

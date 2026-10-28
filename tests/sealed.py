@@ -1,6 +1,7 @@
 """Test configuration helpers.
 
-production(): a throwaway registry inside a sealed, Ed25519-signed copy of the repo configuration, so gateway tests
+production(): a throwaway registry inside a sealed, Ed25519-signed copy of the repo configuration (including the field
+schemas and rules under registry/schemas and registry/rules), so gateway tests
 run in PRODUCTION mode (signed manifest, mandatory contracts, signed deployment profile) instead of switching
 integrity off. Security-relevant settings (limits, NER, egress) are passed as `deployment={...}` and flow through the
 signed profile, as in a real deployment; passing them to Settings instead stops startup.
@@ -112,6 +113,10 @@ def production(tmp: Path, apps: list[dict], policy: str | Path | None = None, si
     base = Path(tmp) / "cfg"
     for d in ("registry", "policies", "contracts", "roster"):
         (base / d).mkdir(parents=True, exist_ok=True)
+    for sub in ("schemas", "rules"):   # field schemas and computation rules of RECORDS contracts (sealed config)
+        (base / "registry" / sub).mkdir(parents=True, exist_ok=True)
+        for f in sorted((ROOT / "registry" / sub).glob("*.yaml")):
+            (base / "registry" / sub / f.name).write_bytes(f.read_bytes())
     pol = Path(policy) if policy else ROOT / "policies/hris-default.yaml"
     pol_name = _place(pol, base / "policies")
     out, needs_private = [], False

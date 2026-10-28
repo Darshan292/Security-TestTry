@@ -5,6 +5,10 @@
    "sha256": "0ed927c1e461fe005cd853d026f4d40700c9d32bda8c05979820a9ce9118b866",
    "version": 5
   },
+  "contracts/contractor_budget.yaml": {
+   "sha256": "a83f7dc493e0c83d897f9bb68665653c114cdb622c25c809508852f2d57b85d0",
+   "version": 1
+  },
   "contracts/esi_letter.yaml": {
    "sha256": "f3220f80849af44be00d4f10c147e163cb559c89377bd829361f43ff8f26824b",
    "version": 5
@@ -16,6 +20,14 @@
   "contracts/hr_email_draft.yaml": {
    "sha256": "cac05d98b90e7590edf6346ffe91d80fbe888edd1f13acbd196dc496f2450f7c",
    "version": 9
+  },
+  "contracts/payroll_register_check.yaml": {
+   "sha256": "b24b3067e1b4ba31f7a0344f915cc123d3f6255d55dcee572129128fd5742fc0",
+   "version": 1
+  },
+  "contracts/roster_question.yaml": {
+   "sha256": "6f7d09e3bc272d69c464e37891933b009e6a3ab8a6f19788e2637a6ae35bf7a3",
+   "version": 1
   },
   "contracts/salary_comparison.yaml": {
    "sha256": "1580cfd74f235a071064b8cbcd1a4b84e7a1898ccbf4dfbb27e4aac23e4601d2",
@@ -29,17 +41,61 @@
    "sha256": "c8a29acf250b4f46071b13a98f1f36d8da83a4fdbf6d52294775cf27164544cf",
    "version": 6
   },
+  "contracts/timecard_exceptions.yaml": {
+   "sha256": "fe80517d1d8e3b279b4319ff8b4509d4131b5382682708107edb474588ce98b1",
+   "version": 1
+  },
   "policies/hris-default.yaml": {
    "sha256": "3e0e317566635d7eb387eba49ac336ab54813f0020b466f789ec990d81d7ebae",
    "version": 3
   },
   "registry/apps.yaml": {
-   "sha256": "ebfe8573925039bb1fdfb1e420883c16f586190ccaa308db12992b439594c472",
-   "version": 3
+   "sha256": "1b184a532b9dfad344ae61c536340db167b9aebd4a0fde55d4a2d44e3901963c",
+   "version": 4
   },
   "registry/deployment.yaml": {
    "sha256": "ae74a78161cdaa1a1a111aa32d624d78b53f5501fc662a4ea40ceedc9474e3b1",
    "version": 3
+  },
+  "registry/rules/contractor_budget_default.yaml": {
+   "sha256": "9216d92f705b8e4aaf3c1a7d522547b3987274cffe48276cf98960501e742cc8",
+   "version": 1
+  },
+  "registry/rules/india_payroll_statutory.yaml": {
+   "sha256": "e1a71e536bf5ae8faf6a741ad59484ac739b93c096ee6e874bc2d26a3d811bc2",
+   "version": 1
+  },
+  "registry/rules/timecard_india_default.yaml": {
+   "sha256": "0d7acdbefcb8facf2c959f25816c04e114334f51ffc543d4d29896dfd37185b5",
+   "version": 1
+  },
+  "registry/schemas/ad_user.yaml": {
+   "sha256": "08f3aeedc573550fa9f89af8b94d737374ec9e3d55c083789affaee30888e668",
+   "version": 1
+  },
+  "registry/schemas/india_payroll_register.yaml": {
+   "sha256": "65010ffb5fc2f1baadbcefd07e45069a98a51f70fd8d0e462fd1148ae32cf740",
+   "version": 1
+  },
+  "registry/schemas/sap_fieldglass_worker.yaml": {
+   "sha256": "de1dbe1b4ebdbc0689ee04879cee0d12817466c68869d9a8810d8f53da32b124",
+   "version": 1
+  },
+  "registry/schemas/successfactors_employee.yaml": {
+   "sha256": "0fa6d3ca391fd983305623c83703e563187c085999b35617598b616b77ecdd21",
+   "version": 1
+  },
+  "registry/schemas/ukg_timecard.yaml": {
+   "sha256": "36350e632852e703cec7839892c178c02f40a698d226c2962d60e6c7b64e385b",
+   "version": 1
+  },
+  "registry/schemas/workday_get_workers.yaml": {
+   "sha256": "80d079cc3d15125af5753c17a4362081917b74fe7bc0a6884f19371a365fa8b4",
+   "version": 1
+  },
+  "registry/schemas/workday_worker_rest.yaml": {
+   "sha256": "ca98a250e516bc799e26bde54422ae746869660b03eddf62e0ade6f32e45c3c4",
+   "version": 1
   }
  },
  "signature": null

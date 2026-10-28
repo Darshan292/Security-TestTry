@@ -1,0 +1,18 @@
+# STARTER RULES - VERIFY against the law and the standing orders / Shops and Establishments Act that apply to each
+# site before relying on them. Used by: timecard_exceptions (contracts/timecard_exceptions.yaml).
+kind: pgw-compute-rules
+rules: timecard_india_default
+version: 1
+compute: timecard_exceptions
+starter: true
+# Factories Act 1948 s.54: no adult worker to work more than 9 hours in any day.
+max_shift_hours: 9
+# Factories Act 1948 s.56: spread-over (punch-in to punch-out, intervals included) not more than 10.5 hours.
+max_spread_hours: 10.5
+# Factories Act 1948 s.51: no adult worker to work more than 48 hours in any week. (The Occupational Safety, Health
+# and Working Conditions Code 2020 keeps 48 h/week once in force: verify which regime applies to the site.)
+max_weekly_hours: 48
+# A punch-out earlier than the punch-in is read as an overnight shift ending the next day.
+overnight_shifts: true
+fields: {date: work_date, in: punch_in, out: punch_out, hours: hours, overtime: overtime_hours,
+         approved: overtime_approved, absence: is_absence}
