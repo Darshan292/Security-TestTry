@@ -282,10 +282,14 @@ print(json.dumps(lat, indent=2))
 # %% Write the artifact bundle: model.onnx, tokenizer, labels.json, metrics.json, MODEL_CARD.md, sha256sums
 import shutil  # noqa: E402
 
+# Runtime bundle contract (pgw/ml/artifact.py): flat dir with model.onnx (int8, weights inline), tokenizer.json, labels.json
+# ("pgw-ml-labels/1"), MODEL_CARD.md. id2label is read from the TRAINED model's config, in index order, never re-derived.
 tokenizer.save_pretrained(str(OUT))
-shutil.copyfile(best_dir / "config.json", OUT / "config.json")
-(OUT / "labels.json").write_text(json.dumps({"bio_labels": list(BIO_LABELS), "entity_types": list(ENTITY_TYPES), "max_len": MAX_LEN,
-                                              "stride": STRIDE, "operating_tau": OPERATING_TAU, "base_model": BASE_MODEL}, indent=2))
+ONNX_PARTS = [p.name for p in OUT.iterdir() if p.name.endswith((".onnx_data", ".onnx.data"))]
+assert not ONNX_PARTS, f"external ONNX data is not supported by the gateway: {ONNX_PARTS}"
+card.write_labels(OUT / "labels.json", card.token_labels_doc(model.config.id2label, tokenizer, MAX_LEN, STRIDE, scheme="BIO", aggregation="first"))
+card.write_train_meta(OUT / "train_meta.json", {"operating_tau": OPERATING_TAU, "base_model": BASE_MODEL, "max_len": MAX_LEN, "stride": STRIDE,
+                                                "entity_types": list(ENTITY_TYPES), "recall_target": 0.95})
 metrics_json = {"training_data": "synthetic-only", "real_data_validated": False, "base_model": BASE_MODEL, "licence": LICENCE,
                 "loss": LOSS, "seed": SEED, "train_docs": len(train_recs), "dev_docs": len(dev_recs), "templates": len(templates),
                 "micro_recall": int8_report["strict_at_operating_tau"]["micro"]["recall"], "labels": list(ENTITY_TYPES),
@@ -298,7 +302,8 @@ card.write_card(OUT / "MODEL_CARD.md", "PGW token classifier (PII and identifier
                 "AADHAAR, PAN, BANK_ACCOUNT, CARD, UPI_ID, SECRET, IFSC and IDENTIFIER spans to mask before text leaves the boundary.",
                 BASE_MODEL, LICENCE, ENTITY_TYPES, {"micro_recall": metrics_json["micro_recall"], "recall_sweep": int8_report["recall_sweep"],
                                                     "int8_vs_fp32": metrics_json["int8_vs_fp32"], "latency_ms_per_512_tokens": lat})
+card.check_bundle_dir(OUT)     # flat, one model.onnx, no external data / torch weights, tokenizer.json present
 sums = card.write_sha256sums(OUT)
-print("model_sha256 (pin this):", sums["model.onnx"])
-print(json.dumps(sums, indent=2))
+print("file hashes:", json.dumps(sums, indent=2))
+print("The profile pin is the runtime manifest digest: run scripts/ml/import_artifacts.py (needs the pgw package) on the downloaded folder.")
 print("\nDownload the 'token_classifier' folder from Output and run scripts/ml/import_artifacts.py on it.")

@@ -89,12 +89,15 @@ def test_package_contains_only_python_and_is_deterministic(tmp_path):
 def make_bundle(d: Path, drop=0.004, card="Trained on synthetic data only. Not validated on real data."):
     d.mkdir()
     (d / "model.onnx").write_bytes(b"onnx-bytes")
-    (d / "labels.json").write_text("[]")
+    (d / "labels.json").write_text(json.dumps({"format": "pgw-ml-labels/1", "task": "token-classification",
+                                               "id2label": ["O", "B-PERSON", "I-PERSON"], "max_length": 512, "stride": 128}))
+    (d / "train_meta.json").write_text(json.dumps({"operating_tau": 0.3}))
     (d / "metrics.json").write_text(json.dumps({"training_data": "synthetic-only", "int8_vs_fp32": {"max_recall_drop": drop}}))
     (d / "MODEL_CARD.md").write_text(card)
     (d / "tokenizer.json").write_text("{}")
     (d / "sha256sums").write_text("".join(f"{hashlib.sha256((d / n).read_bytes()).hexdigest()}  {n}\n"
-                                          for n in ("model.onnx", "labels.json", "metrics.json", "MODEL_CARD.md", "tokenizer.json")))
+                                          for n in ("model.onnx", "labels.json", "metrics.json", "MODEL_CARD.md", "tokenizer.json",
+                                                                 "train_meta.json")))
 
 
 def test_import_artifacts_verifies_and_detects_tampering(tmp_path, capsys):
@@ -103,6 +106,8 @@ def test_import_artifacts_verifies_and_detects_tampering(tmp_path, capsys):
     assert ia.main([str(d)]) == 0
     out = capsys.readouterr().out
     assert hashlib.sha256(b"onnx-bytes").hexdigest() in out
+    from pgw.ml import artifact
+    assert f"PIN (profile sha256 = runtime manifest digest): {artifact.digest_dir(d)[0]}" in out
     (d / "model.onnx").write_bytes(b"tampered")
     assert ia.main([str(d)]) == 1
     bad = tmp_path / "drop"

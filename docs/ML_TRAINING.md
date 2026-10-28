@@ -99,13 +99,27 @@ python scripts/ml/import_artifacts.py work/nb02/token_classifier --kind token_cl
 python scripts/ml/import_artifacts.py work/nb03/content_gate --kind content_gate
 ```
 It verifies `sha256sums`, rejects unlisted files, checks the model card says synthetic-only and not validated on real data, checks the recorded int8
-recall gate, and prints `model_sha256` (the hash of `model.onnx`) and `bundle_sha256` to pin in the signed profile. The runtime package (`pgw/ml`) is built
-separately; if its profile uses a different field name, pin the model file hash. `--dest DIR` copies the verified bundle.
+recall gate, and then runs the gateway's own artefact validation (`pgw.ml.artifact`: flat directory, regular files only, `labels.json` in format
+`pgw-ml-labels/1` with the right task, no external ONNX data). Any failure exits 1; a bundle the gateway would reject at startup never passes.
+
+**The pin is the runtime manifest digest**, printed as `PIN (profile sha256 = runtime manifest digest)`; it equals `python -m pgw.ml.artifact <dir>`.
+`model_sha256` and `bundle_sha256` are informational only and must not be used in the profile. The script also prints a ready-to-paste snippet:
+
+- token classifier: an `ml_detector` entry (`path` placeholder, `sha256`, `backend: token`, `labels` mapping each model entity label to the gateway type of
+  the same name, `min_score_by_type`). `DEFAULT` is the notebook's operating tau (0.3); a type gets a lower value only when its dev recall at tau 0.3
+  is below 0.95 and a lower swept tau reaches it (from the recall sweep in `metrics.json`).
+- content gate: a `content_gate_model` entry (`labels` = the model's labels) and the contract's `content_gate` (`labels` without `NONE`, `threshold`,
+  `action`). The contract field takes ONE threshold, so the recommendation is the **minimum** of the notebook's per-label thresholds (chosen for dev
+  recall >= 0.95): the most conservative single value, which keeps recall for every label at the cost of more false positives on labels whose own
+  threshold is higher. The per-label values stay in `thresholds.json` for information. Runtime semantics are unchanged.
+
+`--dest DIR` copies the verified bundle.
 
 ## What the bundle contains
 
-`model.onnx` (int8, dynamic per-channel), tokenizer files, `config.json`, `labels.json` (label order, max length 512, stride 128, operating threshold),
-`thresholds.json` (gate only), `metrics.json`, `MODEL_CARD.md`, `sha256sums`. `metrics.json` includes per-type precision/recall/F1 (strict and lenient), a
+`model.onnx` (int8, dynamic per-channel, weights inline: no `.onnx_data`), `tokenizer.json` (+ other tokenizer files), `labels.json` (runtime format
+`pgw-ml-labels/1`: label order from the trained model's config, max length, stride, special tokens; written by `ml/train/card.py`), `train_meta.json`
+(training-only: operating tau, base model, recall target; not read by the gateway), `thresholds.json` (gate only), `metrics.json`, `MODEL_CARD.md`, `sha256sums`. `metrics.json` includes per-type precision/recall/F1 (strict and lenient), a
 recall-versus-threshold sweep (entity if P(not O) >= tau; lower tau = more recall, less precision), per-genre recall, fp32-vs-int8 comparison and CPU latency
 (ms per 512 tokens at 1 and 4 threads).
 

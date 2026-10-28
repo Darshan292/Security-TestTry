@@ -64,3 +64,109 @@ def max_recall_drop(fp32: dict, int8: dict, min_support: int = 30) -> float:
         if sup >= min_support and k in int8["per_type"]:
             drops.append(r - int8["per_type"][k][0])
     return round(max(drops), 4)
+
+
+# ------------------------------------------------------------------------------------------ runtime bundle contract
+# The gateway (pgw/ml/artifact.py) loads a flat directory: model.onnx (weights inline), tokenizer.json, labels.json
+# (format "pgw-ml-labels/1"), MODEL_CARD.md. These writers are pure functions (no torch, no pgw import) so notebooks can
+# use them; scripts/ml/import_artifacts.py and the tests validate their output with pgw.ml.artifact itself.
+LABELS_FORMAT = "pgw-ml-labels/1"
+
+
+def _special_tokens(tokenizer) -> dict[str, str]:
+    out = {}
+    for key, attr in (("cls", "cls_token"), ("sep", "sep_token"), ("pad", "pad_token")):
+        v = getattr(tokenizer, attr, None)
+        if isinstance(v, str) and v:
+            out[key] = v
+    return out
+
+
+def _id2label_in_index_order(config_id2label) -> list[str]:
+    """The model's own id2label (keys may be int or str after a JSON round trip), as a list in index order."""
+    items = {int(k): v for k, v in dict(config_id2label).items()}
+    if sorted(items) != list(range(len(items))):
+        raise ValueError("model config id2label indices are not 0..n-1")
+    return [items[i] for i in range(len(items))]
+
+
+def token_labels_doc(config_id2label, tokenizer, max_length: int, stride: int, scheme: str = "BIO",
+                     aggregation: str = "first") -> dict:
+    """labels.json for a token classifier. id2label comes from the TRAINED model's config, never from a list."""
+    doc = {"format": LABELS_FORMAT, "task": "token-classification", "id2label": _id2label_in_index_order(config_id2label),
+           "scheme": scheme, "max_length": int(max_length), "stride": int(stride), "aggregation": aggregation}
+    sp = _special_tokens(tokenizer)
+    if sp:
+        doc["special_tokens"] = sp
+    return doc
+
+
+def sequence_labels_doc(config_id2label, tokenizer, max_length: int, stride: int = 64,
+                        problem_type: str = "multi_label") -> dict:
+    """labels.json for a sequence classifier; labels are in model index order (the model's config id2label)."""
+    doc = {"format": LABELS_FORMAT, "task": "sequence-classification", "labels": _id2label_in_index_order(config_id2label),
+           "problem_type": problem_type, "max_length": int(max_length), "stride": int(stride)}
+    sp = _special_tokens(tokenizer)
+    if sp:
+        doc["special_tokens"] = sp
+    return doc
+
+
+def write_labels(path, doc: dict) -> None:
+    Path(path).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+
+
+def write_train_meta(path, meta: dict) -> None:
+    """Training-only metadata (operating tau, base model, mapping, recall target): NOT read by the gateway."""
+    Path(path).write_text(json.dumps(meta, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
+
+
+def check_bundle_dir(directory, forbid_extra_model_files: bool = True) -> None:
+    """Notebook-time sanity checks of a bundle directory (stdlib only). Raises AssertionError."""
+    d = Path(directory)
+    names = sorted(p.name for p in d.iterdir())
+    for p in d.iterdir():
+        assert p.is_file() and not p.is_symlink(), f"bundle must be flat regular files: {p.name}"
+    assert "model.onnx" in names, "model.onnx missing"
+    assert "tokenizer.json" in names, "tokenizer.json missing (a fast tokenizer is required)"
+    if forbid_extra_model_files:
+        bad = [n for n in names if n.endswith((".onnx_data", ".onnx.data", ".bin", ".safetensors", ".pt", ".pth", ".ckpt", ".h5"))
+               or (n.endswith(".onnx") and n != "model.onnx")]
+        assert not bad, f"unexpected model/weight files in the bundle: {bad}"
+    # inline weights: ONNX external-data references would name a location; the file must stand alone
+    with open(d / "model.onnx", "rb") as fh:
+        head = fh.read(1 << 20)
+    assert b"onnx_data" not in head and b"external_data" not in head, "model.onnx references external data"
+    assert (d / "model.onnx").stat().st_size < 2 * 1024 ** 3, "model.onnx exceeds the 2 GiB protobuf limit"
+
+
+def min_score_by_type(recall_sweep: dict, operating_tau: float, types, recall_target: float = 0.95) -> dict[str, float]:
+    """Profile `min_score_by_type`: {DEFAULT: tau, TYPE: tau_t}. Per type, the highest swept tau whose dev recall for
+    that type is >= recall_target, but never above operating_tau; types the sweep cannot satisfy (or has no
+    support for) use operating_tau. recall_sweep is metrics.recall_sweep's output ({str(tau): {"recall": {type: r}}}).
+    The decision rule is "entity if P(not O) >= tau"; the gateway's min_score applies to the same kind of score."""
+    out = {"DEFAULT": float(operating_tau)}
+    by_tau = {float(k): v for k, v in recall_sweep.items()}
+    taus = sorted(by_tau, reverse=True)
+    for t in types:
+        pick = None
+        for tau in taus:
+            if tau > operating_tau + 1e-9:
+                continue
+            r = by_tau[tau]["recall"].get(t)
+            if r is not None and r >= recall_target:
+                pick = tau
+                break
+        if pick is not None and pick != operating_tau:
+            out[t] = pick
+    return out
+
+
+def contract_gate_threshold(thresholds: dict[str, float]) -> float:
+    """The runtime contract field content_gate has ONE threshold for all its labels. The most conservative
+    (recall-preserving) single value is the MINIMUM of the per-label thresholds: every label then scores at least
+    its own recall-0.95 point; the price is more false positives on labels whose own threshold is higher."""
+    vals = [float(v) for v in thresholds.values()]
+    if not vals:
+        raise ValueError("no thresholds")
+    return min(vals)
