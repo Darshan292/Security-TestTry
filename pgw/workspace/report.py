@@ -22,7 +22,8 @@ from __future__ import annotations
 import math
 import re
 
-STAGES = ("received", "verify_source", "content_gate", "compute", "protect", "egress_check", "provider", "restore")
+STAGES = ("received", "verify_source", "content_gate", "structure_check", "compute", "protect", "egress_check",
+          "provider", "restore")
 OUTCOMES = ("sent", "kept_inside", "refused", "error")
 ROUTES = ("EXT_PSEUDO", "LOCAL_COMPUTE", "PRIVATE_LOCAL")
 # Alternative spellings accepted for top-level keys and stage ids (spec name first).
@@ -234,6 +235,12 @@ ERRORS: dict[str, tuple[str, str, bool | None]] = {
                                  "The text is about a topic this task keeps inside the company.", False),
     "content_gate_unavailable": ("Stopped: check unavailable",
                                  "The sensitive-topic check could not run, so nothing was sent.", False),
+    "structured_data_in_free_text": ("Stopped: table or export in the text",
+                                     "The text contains a table, an export or data records. Records are not sent "
+                                     "to an external AI as free text; use the records form for this task or the "
+                                     "in-house route.", False),
+    "structure_check_unavailable": ("Stopped: check unavailable",
+                                    "The check for tables and exports could not run, so nothing was sent.", False),
     "content_requires_private_route": ("Stopped on purpose",
                                        "Part of the text is in a script the gateway cannot check reliably.", False),
     "sensitive_data_in_parameters": ("Stopped on purpose", "The request carried personal details where none are "

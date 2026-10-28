@@ -88,20 +88,29 @@ HEADER = "EMP_ID  EMPLOYEE NAME  BASIC  HRA  NET_PAY"
 
 
 def test_header_line_does_not_fail_the_request(gw, caplog):
+    # A header plus a payroll row is a table: no 500, and (since the structure check) never sent externally.
     caplog.set_level(logging.INFO)
     r, wire = gw(HEADER + "\n57304 VARSHA GOKHALE 38420.00 15368.00 49102.00")
-    assert r.status_code == 200 and "Traceback" not in r.text
-    assert "EMPLOYEE NAME" in wire                               # header words are field names, not values
+    assert r.status_code == 422 and r.json()["error"]["type"] == "structured_data_in_free_text"
+    assert wire is None and "Traceback" not in r.text and "VARSHA" not in r.text
     _no_traceback(caplog)
 
 
+def test_header_words_are_field_names_not_values():
+    text = HEADER + "\n57304 VARSHA GOKHALE 38420.00 15368.00 49102.00"
+    (dets,) = PROT.analyze([{"role": "user", "content": text}], CTX)
+    assert all(d.start >= len(HEADER) for d in dets)
+
+
 def test_space_aligned_table_is_read_by_column(gw):
-    r, wire = gw(HEADER + "\n57304  VARSHA GOKHALE  38420.00  15368.00  49102.00\n"
-                          "57311  NITIN APTE      29950.00  11980.00  38870.00")
-    assert r.status_code == 200
-    for v in ("VARSHA GOKHALE", "NITIN APTE", "57304", "38420.00", "49102.00"):
-        assert v not in wire
-    assert HEADER in wire
+    text = (HEADER + "\n57304  VARSHA GOKHALE  38420.00  15368.00  49102.00\n"
+                     "57311  NITIN APTE      29950.00  11980.00  38870.00")
+    r, wire = gw(text)
+    assert r.status_code == 422 and wire is None             # a table never crosses on the free-text route
+    (dets,) = PROT.analyze([{"role": "user", "content": text}], CTX)   # the detector still reads it by column
+    found = {text[d.start:d.end] for d in dets}
+    assert {"VARSHA GOKHALE", "NITIN APTE", "57304", "38420.00", "49102.00"} <= found
+    assert all(d.start >= len(HEADER) for d in dets)
 
 
 def test_gateway_text_never_trips_the_egress_check():

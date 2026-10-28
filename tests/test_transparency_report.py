@@ -39,8 +39,8 @@ PURPOSES = ("ticket_summary", "salary_comparison", "hr_email_draft", "ticket_sum
 REQUESTER = {"requester": {"name": "Imran Ansari"}}
 TOP_KEYS = ["version", "request_id", "purpose", "contract", "route", "outcome", "input_source", "stages", "detected",
             "truncated", "counts", "outbound", "restore", "checks", "error"]
-STAGE_IDS = ["received", "verify_source", "compute", "protect", "egress_check", "provider", "restore"]
-CHECK_IDS = ["egress_clean", "declared_absent", "source_verified", "c3_not_returned"]
+STAGE_IDS = ["received", "verify_source", "structure_check", "compute", "protect", "egress_check", "provider", "restore"]
+CHECK_IDS = ["egress_clean", "declared_absent", "source_verified", "structure_check", "c3_not_returned"]
 LABELS = list(LABELS_BY_ID.values())
 
 
@@ -369,7 +369,7 @@ def test_private_route_reports_in_house_destination_honestly(tmp_path):
     assert (rep["route"], rep["outcome"]) == ("PRIVATE_LOCAL", "kept_inside")
     assert rep["input_source"] == {"id": None, "verified": False}
     st = {s["id"]: s["status"] for s in rep["stages"]}
-    assert [s["id"] for s in rep["stages"]] == STAGE_IDS
+    assert [s["id"] for s in rep["stages"]] == [s for s in STAGE_IDS if s != "structure_check"]   # never reached
     assert st == {"received": "done", "verify_source": "failed", "compute": "skipped", "protect": "skipped",
                   "egress_check": "skipped", "provider": "done", "restore": "done"}
     out = rep["outbound"]

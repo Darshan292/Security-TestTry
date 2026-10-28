@@ -144,6 +144,9 @@ class Contract:
     # Special-category content gate (pgw.ml.gate): {labels, threshold, action PRIVATE|REFUSE} or None. When any
     # listed label scores at or above the threshold the request stays in-house or is refused, even when signed.
     content_gate: dict | None = field(default=None, compare=False, hash=False)
+    # Record-structured data in the free text (pgw.detect.structure: tables, exports, JSON/XML/LDIF records) never
+    # goes to the external model, signed or not: REFUSE (422) or PRIVATE (in-house model). EXT_PSEUDO only.
+    structured_content: str = "REFUSE"
 
     @property
     def ref(self) -> str:
@@ -331,6 +334,16 @@ def _parse_content_gate(raw) -> dict | None:
         raise ContractError(str(e)) from None
 
 
+def _parse_structured_content(raw) -> str:
+    if raw is None:
+        return "REFUSE"
+    action = str(raw.get("action", "")).upper() if isinstance(raw, dict) else ""
+    if set(raw if isinstance(raw, dict) else ()) - {"action"} or action not in ("REFUSE", "PRIVATE"):
+        raise ContractError("structured_content: {action: REFUSE|PRIVATE} (record-structured data in free text is "
+                            "never sent externally)")
+    return action
+
+
 def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
     raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
     try:
@@ -385,7 +398,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      external_input=_parse_external_input(raw.get("external_input")), reference=reference,
                      business_identifiers=_parse_business_identifiers(raw.get("business_identifiers")),
                      org_identifiers=_parse_org_identifiers(raw.get("org_identifiers")),
-                     content_gate=_parse_content_gate(raw.get("content_gate")))
+                     content_gate=_parse_content_gate(raw.get("content_gate")),
+                     structured_content=_parse_structured_content(raw.get("structured_content")))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:
@@ -396,6 +410,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
         raise ContractError("C4: PRIVATE applies to EXT_PSEUDO contracts only")
     if c.content_gate is not None and c.content_gate["action"] == "PRIVATE" and c.route != "EXT_PSEUDO":
         raise ContractError("content_gate.action: PRIVATE applies to EXT_PSEUDO contracts only")
+    if c.structured_content == "PRIVATE" and c.route != "EXT_PSEUDO":
+        raise ContractError("structured_content.action: PRIVATE applies to EXT_PSEUDO contracts only")
     if c.subjects is not None and (c.route != "EXT_PSEUDO" or c.classes[DataClass.C1] == "REFUSE"):
         raise ContractError("declared_subjects need an EXT_PSEUDO route whose C1 action replaces identities")
     if c.route == "LOCAL_COMPUTE":

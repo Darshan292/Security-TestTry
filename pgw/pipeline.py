@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from .alias import AliasAllocator, canon, scope_key
-from .detect import idshape, recognizers
+from .detect import idshape, recognizers, structure
 from .detect import names as _names
 from .detect.lexicon import ends_name, is_english
 from .detect.numwords import only_digit_words
@@ -312,6 +312,14 @@ def legal_titles(text: str, dets: list[Detection]) -> tuple[list[tuple[int, int]
         return [], dets
     return spans, [d for d in dets if not (d.type is EntityType.PERSON and not d.source.startswith(_STRONG_SOURCES)
                                            and _overlaps_any(d.start, d.end, spans))]
+
+
+def _outside(dets: list[Detection], spans: list[tuple[int, int]]) -> list[Detection]:
+    """`dets` without the weak hits in `spans` (table header rows). Strong hits (roster, declared, restore ledger) stay:
+    a value the app declared is protected wherever it is written."""
+    if not spans:
+        return dets
+    return [d for d in dets if d.source.startswith(_STRONG_SOURCES) or not _overlaps_any(d.start, d.end, spans)]
 
 
 def _overlaps_any(s: int, e: int, spans: list[tuple[int, int]]) -> bool:
@@ -732,6 +740,9 @@ class Protector:
             titles.append(spans)
             if _abl.get().CUES and self.heuristics:   # a column of names in a pasted table: its other cells too
                 per_seg[i] += _names.table_columns(seg.text, _resolve(per_seg[i]))
+        # The header row of a recognised table holds field labels, never values ("Gross" is not a person).
+        headers = [structure.header_rows(seg.text) for seg in segs]
+        per_seg = [_outside(d, h) for d, h in zip(per_seg, headers, strict=True)]
 
         if not _abl.get().D5:   # ablation: no propagation step at all (still resolve overlaps)
             return [_resolve(_drop_possessive(seg.text, d)) for seg, d in zip(segs, per_seg, strict=True)]
@@ -760,7 +771,9 @@ class Protector:
         initials = _initials(s for t, s in known if t is EntityType.PERSON)
         if initials:
             per_seg = [_extend_initials(seg.text, dets, initials) for seg, dets in zip(segs, per_seg, strict=True)]
-        return self._grow_names(segs, per_seg, titles) if _abl.get().CUES and self.heuristics else per_seg
+        if _abl.get().CUES and self.heuristics:
+            per_seg = self._grow_names(segs, per_seg, titles)
+        return [_outside(d, h) for d, h in zip(per_seg, headers, strict=True)]   # propagation never enters a header
 
     def _grow_names(self, segs: list[Segment], per_seg: list[list[Detection]],
                     titles: list[list[tuple[int, int]]]) -> list[list[Detection]]:

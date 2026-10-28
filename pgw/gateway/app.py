@@ -26,7 +26,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from ..detect import idshape
+from ..detect import idshape, structure
 from ..detect.edm import RestoreLedger, RosterIndex
 from ..detect.recognizers import detect_d2
 from ..egress import blank_own, check as egress_check
@@ -130,6 +130,9 @@ _MARKER = re.compile(r"\[(" + "|".join(sorted(
     {t.value for t, c in CLASS_OF.items() if c is DataClass.C3} | {EntityType.IDENTIFIER.value},
     key=len, reverse=True)) + r")\]")
 _ORG_SENTINEL = 0xE100
+STRUCTURED_MESSAGE = ("the free text contains record-structured data (a table, an export or JSON/XML/key-value "
+                      "records); records are not sent to an external model on the free-text route. Send them "
+                      "through this purpose's field-contract route or the in-house route; not sent externally")
 
 
 def render_markers(text, contract) -> str:
@@ -499,7 +502,11 @@ def create_app(settings: Settings) -> Starlette:
         if c.content_gate["action"] == "PRIVATE" and private is None:
             raise ContractError(f"purpose {p!r} routes gated content privately but no private endpoint is configured")
     needs_private = any(c.classes[DataClass.C4] == "PRIVATE" or c.external_input.unattested == "PRIVATE"
-                        or (c.content_gate or {}).get("action") == "PRIVATE" for c in contracts.values())
+                        or (c.content_gate or {}).get("action") == "PRIVATE"
+                        or (c.structured_content == "PRIVATE" and private is not None) for c in contracts.values())
+    for p, c in contracts.items():   # without an in-house model, structured content is refused (never sent out)
+        if c.structured_content == "PRIVATE" and private is None:
+            _log(logging.WARNING, event="structured_content_private_without_endpoint_refuses", purpose=p[:64])
     private_kind = probe_private(private, settings.private_model, prod) if needs_private else None
     egress_ledger = EgressLedger(settings.egress_ledger_path, keys if settings.tenant_keys_file else None)
     slots = threading.BoundedSemaphore(settings.max_concurrent_protect)
@@ -788,6 +795,36 @@ def create_app(settings: Settings) -> Starlette:
                                 "content_gate", contract)
                     raise _Reject(422, "special_category_content",
                                   "content in a category this purpose keeps in-house; not sent externally")
+            if contract.route == "EXT_PSEUDO":
+                # Record-structured data (tables, exports, JSON/XML/LDIF records) never goes to the external model on
+                # the free-text path, signed or not (SECURITY_BOUNDARY.md §11). A check failure fails closed.
+                rep.begin("structure_check")
+                try:
+                    regions = await bounded(structure.find_in, texts)
+                except _Reject:
+                    rep.end("structure_check", "failed")
+                    raise
+                except Exception as e:
+                    rep.end("structure_check", "failed")
+                    _log(logging.ERROR, event="structure_check_failed", request_id=rid, error_type=type(e).__name__)
+                    ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                                "structure_check_unavailable", contract)
+                    raise _Reject(503, "structure_check_unavailable",
+                                  "structure check unavailable; request not sent") from None
+                in_house = bool(regions) and contract.structured_content == "PRIVATE" and private is not None
+                rep.end("structure_check", "failed" if regions and not in_house else "done")
+                rep.check("structure_check", "fail" if regions else "pass")
+                found = [r.summary() for _, r in regions[:10]]
+                _tr("structure_check", regions=found, action=contract.structured_content)
+                if in_house:
+                    return await _private(rid, app, purpose, model, body, ctx, contract, t0, "structured_content",
+                                          declared=declared_ids(contract, subj), rep=rep)
+                if regions:
+                    if rep.enabled:
+                        rep.skip("compute", "protect", "egress_check")
+                    ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                                "structured_content", contract)
+                    raise _Reject(422, "structured_data_in_free_text", STRUCTURED_MESSAGE, regions=found)
             t_c4 = time.perf_counter()
             if contract.classes[DataClass.C4] == "PRIVATE" and any(unreliable_script(t) for t in texts):
                 return await _private(rid, app, purpose, model, body, ctx, contract, t0,
@@ -993,7 +1030,8 @@ def create_app(settings: Settings) -> Starlette:
         p_body["model"] = settings.private_model
         _tr("route", route="PRIVATE_LOCAL", reason={
             "input_not_sanitized": "input not attested as source-sanitized: in-boundary model only",
-            "content_gate": "special-category content (content gate): in-boundary model only"}.get(
+            "content_gate": "special-category content (content gate): in-boundary model only",
+            "structured_content": "record-structured data in free text: in-boundary model only"}.get(
             reason, "content the gateway cannot read reliably (C4): in-boundary model only"))
         p_wire = private.wire_bytes(p_body)
         _tr("send", provider="private (in-boundary)", model=settings.private_model, bytes=len(p_wire),

@@ -23,16 +23,18 @@ from ..types import Action, EntityType
 
 VERSION = 1
 MAX_DETECTED = 2000      # entries in `detected`; past that the list is cut and `truncated` is true
-STAGES = ("received", "verify_source", "content_gate", "compute", "protect", "egress_check", "provider", "restore")
+STAGES = ("received", "verify_source", "content_gate", "structure_check", "compute", "protect", "egress_check",
+          "provider", "restore")
 CHECKS = {
     "egress_clean": "No value detected or declared in THIS request appears in what left",
     "declared_absent": "No declared subject appears in what left",
     "source_verified": "The input carries a valid signature from a source this contract allowlists",
+    "structure_check": "The free text holds no record-structured data (table, export, JSON/XML/key-value records)",
     "c3_not_returned": "No government or financial identifier (C3) appears in the answer",
     "content_gate": "No special-category label of the contract's content gate reached its threshold",
 }
 # Reported only when the contract declares the check (otherwise the report is exactly as before the ML layer).
-OPTIONAL_CHECKS = frozenset({"content_gate"})
+OPTIONAL_CHECKS = frozenset({"content_gate", "structure_check"})
 ACTION = {Action.TOKENIZE: "alias", Action.REDACT: "remove", Action.GENERALIZE: "generalize", Action.ALLOW: "allow",
           Action.BLOCK_REQUEST: "block"}
 _REPLACED = ("alias", "generalize")

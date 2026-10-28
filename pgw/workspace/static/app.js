@@ -16,7 +16,7 @@
 
   const TASK_ICON = { ticket_summary: "i-doc", hr_case_explanation: "i-case", hr_email_draft: "i-mail",
                       salary_comparison: "i-scale", esi_letter: "i-heart", band_position: "i-band" };
-  const NODE_OF = { received: 0, verify_source: 1, content_gate: 1, compute: 1, protect: 1, egress_check: 2, provider: 3, restore: 4 };
+  const NODE_OF = { received: 0, verify_source: 1, content_gate: 1, structure_check: 1, compute: 1, protect: 1, egress_check: 2, provider: 3, restore: 4 };
   const CATEGORY = { PERSON: "person", EMPLOYEE_ID: "id", PAN: "id", AADHAAR: "id", AADHAAR_LIKE: "id",
                      BANK_ACCOUNT: "id", IFSC: "id", CARD: "id", UPI_ID: "id", IDENTIFIER: "id", SECRET: "id",
                      COMPENSATION: "money", DERIVED: "money", DATE_OF_BIRTH: "date", EMAIL: "contact", PHONE: "contact" };
@@ -500,6 +500,11 @@
         if (st.status === "skipped") return ["Sensitive-topic check", "Not needed for this task."];
         return ["Sensitive-topic check", inHouse ? "Sensitive topic found, so the request stayed inside the company."
           : "No topic this task keeps in-house was found."];
+      case "structure_check":
+        if (failed) return ["Table and export check", stopped];
+        if (st.status === "skipped") return ["Table and export check", "Not needed for this task."];
+        return ["Table and export check", inHouse ? "A table or export was found, so the request stayed inside the company."
+          : "No table, export or data records in the text."];
       case "compute":
         if (st.status === "skipped") return ["Calculation inside the gateway", "Not needed for this task."];
         return ["Calculation inside the gateway", failed ? stopped : "Worked out from the exact values; they stay inside."];
