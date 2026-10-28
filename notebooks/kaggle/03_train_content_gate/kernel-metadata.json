@@ -1,0 +1,18 @@
+{
+  "id": "your-kaggle-username/03-train-content-gate",
+  "title": "PGW 03 Train content gate",
+  "code_file": "03_train_content_gate.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "your-kaggle-username/pgw-ml-train",
+    "your-kaggle-username/pgw-templates"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

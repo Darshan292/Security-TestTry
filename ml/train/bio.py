@@ -43,7 +43,7 @@ def spans_to_bio(text: str, spans: Sequence[dict], offsets: Sequence[tuple[int, 
     si = 0
     started: set[int] = set()
     for i, (a, b) in enumerate(offsets):
-        if a == b:  # special token or empty offset
+        if a == b or not text[a:b].strip():  # special token, empty offset, or a bare "▁" whitespace piece
             continue
         while si < len(ordered) and ordered[si]["end"] <= a:
             si += 1

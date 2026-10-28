@@ -1,0 +1,17 @@
+{
+  "id": "your-kaggle-username/01-generate-templates",
+  "title": "PGW 01 Generate templates",
+  "code_file": "01_generate_templates.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "your-kaggle-username/pgw-ml-train"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
