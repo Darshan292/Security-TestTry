@@ -1,0 +1,5 @@
+extend = "../../ruff.toml"
+[lint]
+# Notebook cells share one namespace (the common cell defines os, json, time, WORK, pip_install, ... for the later cells),
+# pip is invoked through subprocess on purpose, and the shuffles are of synthetic data, not security-relevant randomness.
+ignore = ["S101", "F821", "F401", "S603", "S311", "S607"]
