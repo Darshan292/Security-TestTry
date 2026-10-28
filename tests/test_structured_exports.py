@@ -187,6 +187,13 @@ def test_fixed_width_payroll_export_is_never_sent_with_names(refuse_gw, header, 
     assert not any(rec.exc_info or "Traceback" in rec.getMessage() for rec in caplog.records)
 
 
+def test_a_lone_export_row_is_refused(refuse_gw):
+    for row in ROWS:
+        r = refuse_gw.send(row)
+        assert r.status_code == 422 and not refuse_gw.ext.received
+    _no_leak(refuse_gw, NAMES)
+
+
 # --- the earlier bug fixes stay fixed: no 500 ----------------------------------------------------------------------
 
 def _rs_texts(n: int, seed: int = 99):

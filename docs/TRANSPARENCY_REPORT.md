@@ -66,6 +66,7 @@ request lists the stages up to and including the one that stopped it, which has 
 | `received` | from the request's arrival to a validated body: reading, JSON, parameters, sizes, declared subjects |
 | `verify_source` | checking the source attestation signature (`skipped` on the dev legacy path) |
 | `content_gate` | the special-category content gate (pgw.ml.gate). **Listed only when the contract declares a `content_gate`**; a triggered gate with action PRIVATE continues on PRIVATE_LOCAL, with REFUSE stops with 422 `special_category_content`; a gate that cannot answer stops with 503 `content_gate_unavailable` (`failed`) |
+| `structure_check` | the record-structure check of the free text (pgw.detect.structure; SECURITY_BOUNDARY.md §11). **Listed on EXT_PSEUDO contracts once the source is verified.** No structured region: `done`. A table, export or JSON/XML/key-value records: with `structured_content: {action: PRIVATE}` and an in-house model the request continues on PRIVATE_LOCAL (`done`); otherwise it stops with 422 `structured_data_in_free_text` (`failed`). A check that errors stops with 503 `structure_check_unavailable`, one that runs out of time with 503 `protection_timeout` (`failed`) |
 | `compute` | the local computation of LOCAL_COMPUTE; `skipped` on other routes |
 | `protect` | the script check (C4), detection and replacement |
 | `egress_check` | building the exact outbound bytes and checking them for every value detected or declared in this request |
@@ -174,6 +175,11 @@ report.
 | `source_verified` | the input carries a valid signature from a source that this contract allowlists | no contract (dev legacy path) |
 | `c3_not_returned` | the answer returned to the app contains no C3 value (scan of the final answer text) | no answer was produced |
 | `content_gate` | `pass`: no label of the contract's content gate reached its threshold; `fail`: one did, and the request was kept in-house or refused (this is the gate working, not an error) | never `n/a`: the check is **omitted** unless the gate ran (no gate in the contract, or the request stopped before it), so reports of other contracts are unchanged |
+
+| `structure_check` | `pass`: no record-structured region in the free text; `fail`: one was found and the request was refused or kept in-house (the check working, not an error) | omitted unless the check ran (LOCAL_COMPUTE, unattested input diverted in-house, or stopped earlier) |
+
+The 422 `structured_data_in_free_text` error also carries `regions`: up to ten `{format, records, fields}` entries
+(format family and counts only; never a key, header or value).
 
 `egress_clean: pass` is not a statement that the text is free of personal data. It cannot see a value that
 detection missed.

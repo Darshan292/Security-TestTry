@@ -56,8 +56,10 @@ def test_payroll_line_amounts_are_not_joined_into_a_card(gw, caplog):
     line = "57304 VARSHA GOKHALE 38420.00 15368.00 49102.00"     # the three salaries joined pass Luhn
     assert any(n == "digits_joined" for n, *_ in views("x 4111 1111.1111 1111"))   # the evasion view still exists
     r, wire = gw(line)
-    assert r.status_code == 200
-    assert "[CARD" not in wire and "38420.00" in wire and "49102.00" in wire
+    # A lone export row is record-structured data (pgw.detect.structure): refused with a 4xx, never a 500, never sent.
+    assert r.status_code == 422 and r.json()["error"]["type"] == "structured_data_in_free_text" and wire is None
+    (dets,) = PROT.analyze([{"role": "user", "content": line}], CTX)
+    assert not any(d.type is T.CARD for d in dets)
     _no_traceback(caplog)
 
 

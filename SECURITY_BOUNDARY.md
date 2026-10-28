@@ -438,3 +438,52 @@ stops); inference runs in bounded worker processes and any failure, timeout or f
 (503, nothing sent); the content gate keeps a request in-house (PRIVATE) or refuses it even when the input is validly
 signed. What is NOT enforced: that a model finds what it should. Its recall is a measured property
 ([docs/ML_EVALUATION.md](docs/ML_EVALUATION.md)), released only through the human-set release gate.
+
+## 11. Record-structured data never crosses on the free-text route
+
+**Why.** Detection is built for prose. A record export pasted into free text (a fixed-width payroll register, a CSV,
+an HRIS API payload, a directory dump) puts values in columns or under keys with no sentence context; ALL-CAPS names,
+manager names, addresses, PIN codes, rates, leave and medical codes, gender or TDS then cross unrecognised. An
+external tester showed both (a fixed-width export sent with two employees' names and pay after the 500 that used to
+stop it was fixed; 27/198 values from ten HRMS exports leaked with a valid source signature). A signature says who
+produced the text, not that records may leave. Records belong on a typed field-contract route or in-house.
+
+**What is enforced.** On every EXT_PSEUDO purpose, after the source signature is verified (and after the content
+gate), `pgw.detect.structure` scans every string of the request (`structure_check` stage and check, §9). If it finds a
+record-structured region the request is NOT sent externally:
+
+| contract `structured_content` | result |
+|---|---|
+| absent, or `{action: REFUSE}` (default) | 422 `structured_data_in_free_text`: fixed message pointing to the field-contract or in-house route, plus `regions` (format family and counts only, never a key or value) |
+| `{action: PRIVATE}` | the in-house model (PRIVATE_LOCAL, as for unattested input); with no in-house model configured: refused as above |
+| detector error / timeout | 503 `structure_check_unavailable` / `protection_timeout`, nothing sent |
+
+The detector reads shape only (no vendor names, field names or values): delimited and markdown/ASCII tables, space-
+aligned and fixed-width tables, repeated record lines with one token-shape signature (`48211 SHANTANU DESHMUKH
+41250.00 16500.00` is ID WORD AMOUNT AMOUNT), a lone export row (>= 5 fields, >= 2 amounts, no labels, no more words
+than values), key/value blocks (LDIF, YAML lists, INI, `.env`), logfmt lines, JSON (also NDJSON, escaped, truncated)
+and XML records. Thresholds: >= 2 rows of >= 3 fields with rows x fields >= 8 (a header row counts as a row);
+records in record syntax (JSON/XML/identifier-keyed key/value) from 2 x 3; one record with >= 6 leaf fields in record
+syntax or >= 12 fields in a human-written `Label: value` form. Linear time (1 MB in about 2 s worst case; requests are
+capped far below that). Header rows of recognised tables are labels: weak detections there are dropped
+(`pgw.pipeline._outside`), with no list of header words.
+
+**Measured (dev and synthetic only; nothing held out was read).** Refused share per slice: `eval/data/dev` hr_free_text
+0/1593, hris_structured 1110/1110, integration_debug 212/524, negatives 365/750; `tune` hr_free_text 0/535,
+hris_structured 356/356; `dev2` hr_free_text 37/620 (all 37 are the `legend_then_rows` genre, which is a table),
+hris_structured 420/420; `dev3build` positive 445/720, negative 94/180. Synthetic ticket genres (`ml/train`
+programs, 500 each): email threads, chats, letters/forms, OCR forms, address blocks, bank-change forms, salary slips,
+Form 16 extracts 0/500 each, BGV forms 1/500; table genres 500/500. The generator in `tests/structured_exports.py`
+(22 formats, 2-500 records): 1200/1200 detected.
+
+**The trade-off, stated.** A refused ticket is recoverable (re-send through the field route or in-house); a leaked
+export is not, so real exports are refused even when non-personal: invoice, GL, order, inventory and market tables
+in the negative slices (~40-50 %), `.env` files, HTTP/log dumps with JSON bodies and raw MIME sources with long
+header blocks are refused too. Ordinary tickets (signatures with `Phone: ... / Email: ...`, a two-line salary breakup,
+short bullet or numbered lists, dates, chat exports, quoted email headers) are not.
+
+**Not covered.** A sentence that lists several employees' pay ("Ravi's basic is Rs 41,250 and Meera's is Rs 39,100")
+is prose: it goes through ordinary detection, which can miss a name. Inline pairs on one line without separators
+("SHANTANU DESHMUKH 41250.00, MEERA KULKARNI 39100.00"), a labelled single form below 12 fields, and a table pasted
+as a single flattened line are not "structured" either. Multi-turn conversations whose earlier assistant answer is a
+table are refused like any other table. LOCAL_COMPUTE purposes take a JSON payload by design and are not checked.

@@ -40,6 +40,7 @@ __all__ = ["Region", "scan", "find", "find_in", "is_structured", "header_rows", 
 MIN_FIELDS = 3               # a record has at least this many fields
 MIN_CELLS = 8                # rows x fields of a multi-record region (2 x 4, 3 x 3, ...)
 SINGLE_RECORD_FIELDS = 12    # one human-written record (a form, a table row) with this many fields is an export
+SINGLE_ROW_FIELDS = 5        # a lone line of >= 5 fields that is mostly values (ID NAME AMOUNT AMOUNT AMOUNT)
 SINGLE_SYNTAX_FIELDS = 6     # one record in record syntax (JSON, XML, LDIF/INI/YAML keys) with this many leaf fields
 _EXPLICIT = frozenset({"json", "xml", "key_value", "logfmt"})
 MAX_LINE = 2000              # a longer line is not a table row (JSON/XML are scanned separately)
@@ -61,6 +62,8 @@ class Region:
     @property
     def structured(self) -> bool:
         rows = max(self.rows, self.records)
+        if self.format == "record_line":
+            return True     # a single export row: an id, a name and amounts with nothing around them
         if self.format in _EXPLICIT and self.records >= 2 and self.fields >= MIN_FIELDS:
             return True     # record syntax (JSON, XML, key/value blocks) is unambiguous: no cell minimum
         if self.records >= 1 and rows >= 2 and self.fields >= MIN_FIELDS and rows * self.fields >= MIN_CELLS:
@@ -137,8 +140,8 @@ _LABEL_IN_CELL = re.compile(r"(?:^|\s)[A-Za-z][\w .'/()\-]{0,40}: +\S")
 _SPACED_DATE = re.compile(r"\b\d{1,2}(?:st|nd|rd|th)? [A-Za-z]{3,9},? \d{4}\b|\b[A-Za-z]{3,9} \d{1,2}(?:st|nd|rd|th)?,? \d{4}\b")
 
 
-def _signature(line: str) -> tuple[tuple, int, int]:
-    """(shape signature with word runs collapsed and punctuation dropped, data tokens, word tokens). A leading list
+def _signature(line: str) -> tuple[tuple, int, int, int]:
+    """(shape signature with word runs collapsed and punctuation dropped, data tokens, word tokens, amounts). A leading list
     marker ("1.", "-", "a)") is not part of the record; short digit groups written apart ("7522 7979 9411",
     "+91 620 581 3630") are one value."""
     if any(c.isdigit() for c in line):
@@ -154,7 +157,7 @@ def _signature(line: str) -> tuple[tuple, int, int]:
     if toks and _LIST_MARK.fullmatch(toks[0]) and len(toks) > 1:
         toks = toks[1:]
     sig: list[str] = []
-    data = words = 0
+    data = words = amounts = 0
     grp = 0
     for t in toks[:80]:
         k = _kind(t)
@@ -173,9 +176,10 @@ def _signature(line: str) -> tuple[tuple, int, int]:
             if sig and sig[-1] == "W":
                 continue
         data += k in _DATA
+        amounts += k == "D"
         k = "V" if k in "NDA" else k      # a number, an amount, an id: one column may hold any of them
         sig.append(k)
-    return tuple(sig), data, words
+    return tuple(sig), data, words, amounts
 
 
 def _has_data(cell: str) -> bool:
@@ -354,14 +358,20 @@ def _tables(text: str, lines, out: list[Region]) -> None:
 def _record_lines(text: str, lines, out: list[Region]) -> None:
     """Runs of lines with one token-shape signature (>= 3 fields, >= 2 data tokens): rows of an export whatever the
     separator, including single spaces. A single such row counts under a recognised header line."""
-    sigs = []
+    sigs, dense = [], []
     for r in lines.raw:
         if not r or _DIGIT.search(r) is None:
             sigs.append(None)
+            dense.append(False)
             continue
-        sig, data, words = _signature(r)
+        sig, data, words, amounts = _signature(r)
         # a record line is mostly values: prose lines that happen to share a shape carry many more words than data
         sigs.append(sig if len(sig) >= MIN_FIELDS and data >= 2 and 2 * data > words else None)
+        # one export row on its own: >= 5 fields, >= 3 values of which >= 2 amounts, a word run (a name) and no more
+        # words than values ("48211 SHANTANU DESHMUKH 41250.00 16500.00 52318.00")
+        # A labelled line ("Current CTC: ... | Expected: ...") gives detection its context and is not counted.
+        dense.append(len(sig) >= SINGLE_ROW_FIELDS and data >= 3 and amounts >= 2 and words <= data and "W" in sig
+                     and _LABEL_IN_CELL.search(r) is None and "=" not in r)
     n, i = len(sigs), 0
     while i < n:
         if sigs[i] is None:
@@ -370,7 +380,7 @@ def _record_lines(text: str, lines, out: list[Region]) -> None:
         j = i + 1
         while j < n and sigs[j] == sigs[i]:
             j += 1
-        if j - i >= 2 or len(sigs[i]) > MIN_FIELDS:
+        if j - i >= 2 or len(sigs[i]) > MIN_FIELDS or dense[i]:
             hdr = _shape_header(text, lines, i, len(sigs[i]))
             if j - i == 1 and hdr is not None:
                 # one row: only under a header whose columns are visibly separated (gaps or a delimiter)
@@ -378,7 +388,9 @@ def _record_lines(text: str, lines, out: list[Region]) -> None:
                 cols = _gap_cells(h) or next((c for d in _DELIMS if (c := _cells(h, d)) is not None), None)
                 if cols is None or len(cols) < len(sigs[i]) - 1:
                     hdr = None
-            if j - i >= 2 or hdr is not None:
+            if j - i == 1 and hdr is None and dense[i]:
+                out.append(Region(lines[i][0], lines[i][1], "record_line", 1, len(sigs[i]), 1))
+            elif j - i >= 2 or hdr is not None:
                 a = lines[hdr][0] if hdr is not None else lines[i][0]
                 out.append(Region(a, lines[j - 1][1], "record_lines", j - i, len(sigs[i]),
                                   j - i + (hdr is not None), (), lines[hdr] if hdr is not None else None))
@@ -672,7 +684,7 @@ def scan(text: str) -> list[Region]:
     lines = _lines(text)
     if len(lines) >= 2:
         _tables(text, lines, out)
-        _record_lines(text, lines, out)
+    _record_lines(text, lines, out)
     _key_values(text, lines, out)
     _json(text, out)
     _xml(text, out)
