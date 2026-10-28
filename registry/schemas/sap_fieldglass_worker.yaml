@@ -1,0 +1,47 @@
+# STARTER SCHEMA - verify against your tenant's actual field names before use.
+# SAP Fieldglass worker / work order download (CSV report or the same rows as JSON). Names follow commonly seen
+# Fieldglass report columns; they are not an exact API contract: map your headers in `csv:` and re-seal.
+# Bill rates, pay rates, budgets and spend are compute-only: only flags and sealed percentage bands leave.
+kind: pgw-field-schema
+schema: sap_fieldglass_worker
+version: 1
+title: SAP Fieldglass worker and work order
+starter: true
+formats: [csv, json]
+records_at: "$[]"
+fields:
+  - {path: Worker_ID, name: worker_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID, csv: ["Worker ID", "Worker"]}
+  - {path: Worker_Name, name: worker_name, type: string, disposition: ALIAS, entity: PERSON, csv: ["Worker Name", "Name"]}
+  - {path: First_Name, name: first_name, type: string, disposition: ALIAS, entity: PERSON, csv: ["First Name", "Worker First Name"]}
+  - {path: Last_Name, name: last_name, type: string, disposition: ALIAS, entity: PERSON, csv: ["Last Name", "Worker Last Name"]}
+  - {path: Worker_Email, name: worker_email, type: string, disposition: ALIAS, entity: EMAIL, csv: ["Worker Email", "Email"]}
+  - {path: Work_Order_ID, name: work_order_id, type: string, disposition: ALIAS, entity: IDENTIFIER, csv: ["Work Order ID", "Work Order"]}
+  - {path: PO_Number, name: po_number, type: string, disposition: ALIAS, entity: IDENTIFIER, csv: ["PO Number", "Purchase Order", "PO"]}
+  - {path: Work_Order_Owner, name: owner_name, type: string, disposition: ALIAS, entity: PERSON, csv: ["Work Order Owner", "Manager", "Hiring Manager"]}
+  - {path: Supplier, name: supplier, disposition: REMOVE, csv: ["Supplier", "Vendor", "Supplier Name"]}
+  - {path: Job_Posting_Title, name: job_title, disposition: REMOVE, csv: ["Job Posting Title", "Job Title", "Title"]}
+  - {path: Site, name: site, disposition: REMOVE, csv: ["Site", "Location"]}
+  - {path: Phone, name: phone, disposition: REMOVE, csv: ["Phone", "Mobile"]}
+  - {path: Home_Address, name: home_address, disposition: REMOVE, csv: ["Home Address", "Address"]}
+  - {path: PAN, name: pan, disposition: REMOVE, csv: ["PAN", "Tax ID"]}
+  - {path: Bill_Rate, name: bill_rate, type: amount, disposition: COMPUTE_ONLY, csv: ["Bill Rate", "Current Bill Rate", "ST Bill Rate"]}
+  - {path: Approved_Bill_Rate, name: approved_rate, type: amount, disposition: COMPUTE_ONLY, csv: ["Approved Bill Rate", "Rate Card Max", "Max Bill Rate"]}
+  - {path: Pay_Rate, name: pay_rate, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Pay Rate"]}
+  - {path: Work_Order_Budget, name: po_budget, type: amount, disposition: COMPUTE_ONLY, csv: ["Work Order Budget", "Committed Spend", "Max Budget", "PO Amount"]}
+  - {path: Spend_To_Date, name: spend_to_date, type: amount, disposition: COMPUTE_ONLY, csv: ["Spend to Date", "Cumulative Spend", "Invoiced Amount", "Actual Spend"]}
+  - {path: Hours_Billed, name: hours_billed, type: number, disposition: COMPUTE_ONLY, optional: true, csv: ["Hours Billed", "Billable Hours"]}
+  - {path: Currency, name: currency, type: enum, disposition: KEEP, csv: ["Currency"], enum: [INR, USD, EUR, GBP, SGD],
+     justification: "ISO currency code of the work order; a non-personal property of the contract"}
+  - {path: Cost_Center, name: cost_center, type: enum, disposition: KEEP, csv: ["Cost Center", "Cost Centre"],
+     enum: [Finance, Engineering, Operations, Sales, Marketing, Human Resources, Legal, Administration, Support, Manufacturing],
+     justification: "Cost centre names from the organisation's reference table; non-personal and shared by many workers"}
+  - {path: Start_Date, name: start_month, type: date, disposition: GENERALIZE, method: month, csv: ["Start Date", "Work Order Start Date"]}
+  - {path: End_Date, name: end_month, type: date, disposition: GENERALIZE, method: month, csv: ["End Date", "Work Order End Date"]}
+  - {path: Date_of_Birth, name: birth_year, type: date, disposition: GENERALIZE, method: year, csv: ["Date of Birth", "DOB"]}
+  - {path: Worker_Status, name: worker_status, type: enum, disposition: KEEP, csv: ["Worker Status", "Status"],
+     enum: [Active, Pending, Closed, Terminated, Completed],
+     justification: "Workflow status of the work order from the Fieldglass status list; not a personal attribute"}
+  - {path: Background_Check_Status, name: bgv_status, disposition: NEVER, category: background_check, csv: ["Background Check Status", "BGV Status"]}
+  - {path: Background_Check_Result, name: bgv_result, disposition: NEVER, category: background_check, csv: ["Background Check Result", "BGV Result", "Criminal Record Check"]}
+  - {path: Gender, name: gender, disposition: NEVER, category: gender, csv: ["Gender"]}
+  - {path: Nationality, name: nationality, disposition: NEVER, category: nationality, csv: ["Nationality", "Citizenship"]}

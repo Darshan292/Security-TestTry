@@ -28,6 +28,10 @@
     "hris-case-export@1": {
       "private_key": "4bf915a2b6ea466b9164a14df5b2f7c8f421aee4523dc11b88a4e269f422bc1d",
       "public_key": "e6ed0bedd45b9b37ae920bdc53e9970c83924ae7c2bd175fb0a01a267d5a821d"
+    },
+    "hrms-export@1": {
+      "private_key": "5147272d92708d69118962cad34ea1c148ad4b5dfb378656d708fc55ec893c51",
+      "public_key": "e01541fb53f53c8a997de7a2a75deb15f2aad62aed9c854f4a56b1f508e7e53f"
     }
   }
 }

@@ -1,0 +1,36 @@
+# STARTER SCHEMA - verify against your tenant's actual field names before use.
+# UKG Pro Workforce Management / Kronos Workforce Central timecard export, flattened to one row per employee per day
+# (a "Timecard" or "Time Detail" report exported as CSV, or the same rows as a JSON array). Column names follow the
+# usual report headings, not an exact UKG API schema: map your headers in `csv:` and re-seal.
+# The pay code mixes work codes with absence codes ("Sick", "Maternity", "Oncology OPD", ...): it is NEVER. Only a
+# presence flag `is_absence` (a non-work pay code is present) is available to the computation; the reason never is.
+kind: pgw-field-schema
+schema: ukg_timecard
+version: 1
+title: UKG/Kronos timecard (one row per employee-day)
+starter: true
+formats: [csv, json]
+records_at: "$[]"
+fields:
+  - {path: Person_Number, name: employee_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID,
+     csv: ["Person Number", "Person ID", "Employee ID", "Badge Number"]}
+  - {path: Full_Name, name: employee_name, type: string, disposition: ALIAS, entity: PERSON,
+     csv: ["Full Name", "Name", "Employee Name", "Employee"]}
+  - {path: Manager_Name, name: manager_name, type: string, disposition: ALIAS, entity: PERSON,
+     csv: ["Manager", "Supervisor", "Reports To"]}
+  - {path: Apply_Date, name: work_date, type: date, disposition: COMPUTE_ONLY, csv: ["Apply Date", "Date", "Work Date", "Shift Date"]}
+  - {path: In_Punch, name: punch_in, type: time, disposition: COMPUTE_ONLY, csv: ["In Punch", "In", "Punch In", "Time In"]}
+  - {path: Out_Punch, name: punch_out, type: time, disposition: COMPUTE_ONLY, csv: ["Out Punch", "Out", "Punch Out", "Time Out"]}
+  - {path: Hours, name: hours, type: number, disposition: COMPUTE_ONLY, optional: true, csv: ["Hours", "Worked Hours", "Total Hours", "Shift Total"]}
+  - {path: Overtime_Hours, name: overtime_hours, type: number, disposition: COMPUTE_ONLY, optional: true, csv: ["Overtime Hours", "OT Hours", "Overtime"]}
+  - {path: Overtime_Approved, name: overtime_approved, type: bool, disposition: COMPUTE_ONLY, optional: true, csv: ["Overtime Approved", "OT Approved", "Approved"]}
+  - {path: Pay_Code, name: pay_code, disposition: NEVER, category: absence_reason, csv: ["Pay Code", "Paycode", "Pay Code Name"],
+     presence_flag: {name: is_absence, work_values: [REG, REGULAR, WORKED, OT, OVERTIME, "Regular", "Worked", "Overtime", "Holiday Worked", "Shift"]}}
+  - {path: Absence_Reason, name: absence_reason, disposition: NEVER, category: absence_reason, csv: ["Absence Reason", "Leave Type", "Reason"]}
+  - {path: Department, name: department, type: enum, disposition: KEEP, csv: ["Department", "Home Department", "Primary Account"],
+     enum: [Finance, Engineering, Operations, Sales, Marketing, Human Resources, Legal, Administration, Support, Manufacturing],
+     justification: "Department names from the organisation's reference table; non-personal and shared by many employees"}
+  - {path: Location, name: location, disposition: REMOVE, csv: ["Location", "Site"]}
+  - {path: Schedule, name: schedule, disposition: REMOVE, csv: ["Schedule", "Shift", "Scheduled Shift"]}
+  - {path: Comments, name: comments, disposition: REMOVE, csv: ["Comments", "Comment", "Notes"]}
+  - {path: Labor_Level, name: labor_level, disposition: REMOVE, csv: ["Labor Level", "Labor Account", "Cost Center"]}

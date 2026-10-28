@@ -33,7 +33,7 @@ Tests: `tests/test_transparency_report.py`.
   "request_id": "req_…",                       // equals the X-PGW-Request-Id header
   "purpose": "ticket_summary" | null,          // null if the purpose header was missing or not permitted
   "contract": "ticket_summary@8" | null,       // null before the contract was resolved, or on the dev legacy path
-  "route": "EXT_PSEUDO" | "LOCAL_COMPUTE" | "PRIVATE_LOCAL" | null,
+  "route": "EXT_PSEUDO" | "LOCAL_COMPUTE" | "RECORDS" | "PRIVATE_LOCAL" | null,
   "outcome": "sent" | "kept_inside" | "refused" | "error",
   "input_source": {"id": "helpdesk-ticket-export@1" | null, "verified": true | false},
   "stages": [ {"id": STAGE, "status": "done" | "skipped" | "failed", "ms": 0.412}, … ],
@@ -175,6 +175,7 @@ report.
 | `source_verified` | the input carries a valid signature from a source that this contract allowlists | no contract (dev legacy path) |
 | `c3_not_returned` | the answer returned to the app contains no C3 value (scan of the final answer text) | no answer was produced |
 | `content_gate` | `pass`: no label of the contract's content gate reached its threshold; `fail`: one did, and the request was kept in-house or refused (this is the gate working, not an error) | never `n/a`: the check is **omitted** unless the gate ran (no gate in the contract, or the request stopped before it), so reports of other contracts are unchanged |
+| `records_egress` | RECORDS route only: the protected prompt, with every computed token held out and aliases blanked, contains no input value the field schema did not classify KEEP (strings case-insensitively, numbers in any grouping or unit, dates in any common format), and the regex/identifier detectors find no identity or C3 value in the final text | never `n/a`: **omitted** unless the route is RECORDS and the check ran |
 
 | `structure_check` | `pass`: no record-structured region in the free text; `fail`: one was found and the request was refused or kept in-house (the check working, not an error) | omitted unless the check ran (LOCAL_COMPUTE, unattested input diverted in-house, or stopped earlier) |
 
@@ -188,6 +189,29 @@ detection missed.
 
 `error` is `null` on success. Otherwise it is the same `type` and `message` as the response's error object. These
 messages are fixed strings, never built from content.
+
+### `records` (RECORDS route only)
+
+Present only for a contract with `route: RECORDS` ([HRMS_CONTRACTS.md](HRMS_CONTRACTS.md)) once the payload was
+classified; absent otherwise, so reports of other routes are unchanged (the schema stays `version: 1`; the key is an
+addition). `route` is `"RECORDS"`. It holds paths, dispositions and counts, never a value. `detected` lists the
+aliased identities found in the prompt (`field: "prompt"`, `source: "declared"`), not every input value.
+
+```text
+"records": {
+  "schema": "india_payroll_register@1", "starter_schema": true, "format": "csv",
+  "rows": 2000,
+  "fields": [ {"path": "Basic", "name": "basic", "disposition": "COMPUTE_ONLY", "selected": true, "values": 2000}, … ],
+  "by_disposition": {"ALIAS": {"fields": 3, "values": 6000}, "NEVER": {"fields": 7, "values": 9100}, … },
+  "unknown": {"fields": 2, "values_dropped": 4000, "paths": ["Blood Group", "Emergency Contact"],
+              "paths_truncated": false},          // paths: the caller's own field names, at most 100; never upstream
+  "invalid_values": 0, "keep_rejected": 0,
+  "computation": {"name": "payroll_register_check", "rules": "india_payroll_statutory@1", "starter_rules": true},
+  "outputs": [ {"name": "exceptions", "kind": "list", "egress": "RAW"},
+               {"name": "total_gross", "kind": "amount", "egress": "INTERNAL"}, … ],
+  "left": {"outputs": ["rows_checked", …], "aliased_identities": 74, "listed_rows": 37, "not_listed": 0}
+}
+```
 
 ## Size
 

@@ -32,9 +32,11 @@ CHECKS = {
     "structure_check": "The free text holds no record-structured data (table, export, JSON/XML/key-value records)",
     "c3_not_returned": "No government or financial identifier (C3) appears in the answer",
     "content_gate": "No special-category label of the contract's content gate reached its threshold",
+    "records_egress": "No record value the field schema did not classify KEEP appears in what left, in any form",
 }
 # Reported only when the contract declares the check (otherwise the report is exactly as before the ML layer).
-OPTIONAL_CHECKS = frozenset({"content_gate", "structure_check"})
+# records_egress: RECORDS route only (docs/HRMS_CONTRACTS.md).
+OPTIONAL_CHECKS = frozenset({"content_gate", "structure_check", "records_egress"})
 ACTION = {Action.TOKENIZE: "alias", Action.REDACT: "remove", Action.GENERALIZE: "generalize", Action.ALLOW: "allow",
           Action.BLOCK_REQUEST: "block"}
 _REPLACED = ("alias", "generalize")
@@ -88,6 +90,7 @@ class Report:
         self.prot = None              # pgw.pipeline.Protected (references, read at build time)
         self.held_maps: dict = {}     # (message, part) -> (starts, ends): held-out text -> original offsets
         self.compute = None           # pgw.product.local_compute.ComputeResult (LOCAL_COMPUTE)
+        self.records = None           # RECORDS route: the `records` section (paths, dispositions, counts; no values)
         self.declared = ()            # declared-subject matchers (pgw.product.subjects) of this request
         self.outbound: dict | None = None
         self.restored = 0
@@ -241,6 +244,7 @@ class Report:
             "checks": [{"id": k, "status": v, "label": CHECKS[k]} for k, v in self.checks.items()
                        if not (k in OPTIONAL_CHECKS and v == "n/a")],
             "error": error,
+            **({"records": self.records} if self.records is not None else {}),
         }
 
 

@@ -58,7 +58,7 @@ _ALLOWED = {DataClass.C1: {"ALIAS", "REDACT", "REFUSE"},
             DataClass.C3: {"REDACT", "REFUSE"},          # never aliased to an external model either
             DataClass.REF: {"ALIAS", "REDACT", "REFUSE"},
             DataClass.C4: {"REFUSE", "PRIVATE"}}         # PRIVATE: only to the in-boundary model endpoint
-ROUTES = {"EXT_PSEUDO", "LOCAL_COMPUTE"}
+ROUTES = {"EXT_PSEUDO", "LOCAL_COMPUTE", "RECORDS"}   # RECORDS: field contracts over HRMS records (records.py)
 EGRESS = {"RAW", "TRANSFORMED", "INTERNAL"}
 
 # Purpose-dependent personal attributes (PRODUCT_ARCHITECTURE §2): sensitivity depends on the purpose and the
@@ -147,6 +147,9 @@ class Contract:
     # Record-structured data in the free text (pgw.detect.structure: tables, exports, JSON/XML/LDIF records) never
     # goes to the external model, signed or not: REFUSE (422) or PRIVATE (in-house model). EXT_PSEUDO only.
     structured_content: str = "REFUSE"
+    # RECORDS route only: the `records:` block (pgw.product.records.RecordSpec), bound to its sealed field schemas
+    # and rules at startup (docs/HRMS_CONTRACTS.md).
+    records: object = field(default=None, compare=False, hash=False)
 
     @property
     def ref(self) -> str:
@@ -344,6 +347,19 @@ def _parse_structured_content(raw) -> str:
     return action
 
 
+def _parse_records(route: str, raw: dict):
+    if route != "RECORDS":
+        if "records" in raw:
+            raise ContractError("a records block needs route RECORDS")
+        return None
+    from .records import parse_spec
+    if not raw.get("prompt_template") or not raw.get("outputs"):
+        raise ContractError("RECORDS contracts need records, outputs and prompt_template")
+    if raw.get("compute") is not None or raw.get("input_schema"):
+        raise ContractError("RECORDS contracts name their computation in records.compute and take no input_schema")
+    return parse_spec(raw.get("records"), raw.get("outputs"))
+
+
 def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
     raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
     try:
@@ -399,7 +415,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      business_identifiers=_parse_business_identifiers(raw.get("business_identifiers")),
                      org_identifiers=_parse_org_identifiers(raw.get("org_identifiers")),
                      content_gate=_parse_content_gate(raw.get("content_gate")),
-                     structured_content=_parse_structured_content(raw.get("structured_content")))
+                     structured_content=_parse_structured_content(raw.get("structured_content")),
+                     records=_parse_records(route, raw))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:

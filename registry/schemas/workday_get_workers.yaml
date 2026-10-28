@@ -1,0 +1,85 @@
+# STARTER SCHEMA - verify against your tenant's actual field names before use.
+# Workday Human_Resources Get_Workers response (SOAP/XML, or the same structure as JSON from an integration layer).
+# Paths are relative to each wd:Worker element; namespace prefixes are dropped, attributes appear as "@name" and an
+# element's text next to attributes as "#text" (pgw.product.recparse). Element names follow Workday's public WSDL
+# for recent versions; optional elements and response groups vary by version and request: check and re-seal.
+# A SOAP envelope (Envelope/Body) around the response is accepted.
+kind: pgw-field-schema
+schema: workday_get_workers
+version: 1
+title: Workday Get_Workers (SOAP/XML or JSON of the same shape)
+starter: true
+formats: [xml, json]
+records_at: "Get_Workers_Response.Response_Data.Worker[]"
+fields:
+  - {path: "Worker_Reference.ID[].#text", name: worker_ref, type: string, disposition: ALIAS, entity: IDENTIFIER}
+  - {path: "Worker_Reference.ID[].@type", name: worker_ref_type, disposition: REMOVE}
+  - {path: Worker_Descriptor, name: worker_descriptor, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: Worker_Data.Worker_ID, name: employee_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: Worker_Data.User_ID, name: username, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: Worker_Data.Personal_Data.Name_Data.Legal_Name_Data.Name_Detail_Data.@Formatted_Name, name: legal_name,
+     type: string, disposition: ALIAS, entity: PERSON}
+  - {path: Worker_Data.Personal_Data.Name_Data.Legal_Name_Data.Name_Detail_Data.@Reporting_Name, name: reporting_name,
+     type: string, disposition: ALIAS, entity: PERSON}
+  - {path: Worker_Data.Personal_Data.Name_Data.Legal_Name_Data.Name_Detail_Data.First_Name, name: first_name,
+     type: string, disposition: ALIAS, entity: PERSON}
+  - {path: Worker_Data.Personal_Data.Name_Data.Legal_Name_Data.Name_Detail_Data.Last_Name, name: last_name,
+     type: string, disposition: ALIAS, entity: PERSON}
+  - {path: Worker_Data.Personal_Data.Name_Data.Legal_Name_Data.Name_Detail_Data.Country_Reference, name: name_country,
+     disposition: REMOVE, subtree: true}
+  - {path: Worker_Data.Personal_Data.Name_Data.Preferred_Name_Data, name: preferred_name, disposition: REMOVE, subtree: true}
+  - {path: Worker_Data.Personal_Data.Gender_Reference, name: gender, disposition: NEVER, category: gender, subtree: true}
+  - {path: Worker_Data.Personal_Data.Birth_Date, name: birth_year, type: date, disposition: GENERALIZE, method: year}
+  - {path: Worker_Data.Personal_Data.Marital_Status_Reference, name: marital_status, disposition: NEVER,
+     category: marital_status, subtree: true}
+  - {path: Worker_Data.Personal_Data.Ethnicity_Reference, name: ethnicity, disposition: NEVER, category: ethnicity, subtree: true}
+  - {path: Worker_Data.Personal_Data.Primary_Nationality_Reference, name: nationality, disposition: NEVER,
+     category: nationality, subtree: true}
+  - {path: Worker_Data.Personal_Data.Additional_Nationality_Reference, name: nationality2, disposition: NEVER,
+     category: nationality, subtree: true}
+  - {path: Worker_Data.Personal_Data.Citizenship_Status_Reference, name: citizenship, disposition: NEVER,
+     category: nationality, subtree: true}
+  - {path: Worker_Data.Personal_Data.Religion_Reference, name: religion, disposition: NEVER, category: religion, subtree: true}
+  - {path: Worker_Data.Personal_Data.Disability_Status_Data, name: disability, disposition: NEVER, category: disability, subtree: true}
+  - {path: Worker_Data.Personal_Data.Military_Service_Data, name: military, disposition: NEVER,
+     category: other_special_category, subtree: true}
+  - {path: Worker_Data.Personal_Data.Identification_Data, name: identification, disposition: REMOVE, subtree: true}
+  - {path: Worker_Data.Personal_Data.Contact_Data.Address_Data, name: address, disposition: REMOVE, subtree: true}
+  - {path: Worker_Data.Personal_Data.Contact_Data.Phone_Data, name: phone, disposition: REMOVE, subtree: true}
+  - {path: "Worker_Data.Personal_Data.Contact_Data.Email_Address_Data[].Email_Address", name: email, type: string,
+     disposition: ALIAS, entity: EMAIL}
+  - {path: "Worker_Data.Personal_Data.Contact_Data.Email_Address_Data[].Usage_Data", name: email_usage,
+     disposition: REMOVE, subtree: true}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Business_Title", name: business_title,
+     disposition: REMOVE}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Position_ID", name: position_id, disposition: REMOVE}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Job_Profile_Summary_Data", name: job_profile,
+     disposition: REMOVE, subtree: true}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Business_Site_Summary_Data", name: site,
+     disposition: REMOVE, subtree: true}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Worker_Type_Reference", name: worker_type,
+     disposition: REMOVE, subtree: true}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Full_Time_Equivalent_Percentage", name: fte_pct,
+     type: number, disposition: COMPUTE_ONLY}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Manager_as_of_last_detected_manager_change_Reference.ID[].#text",
+     name: manager_ref, type: string, disposition: ALIAS, entity: IDENTIFIER}
+  - {path: "Worker_Data.Employment_Data.Worker_Job_Data[].Position_Data.Manager_as_of_last_detected_manager_change_Reference.ID[].@type",
+     name: manager_ref_type, disposition: REMOVE}
+  - {path: Worker_Data.Employment_Data.Worker_Status_Data.Active, name: active, type: bool, disposition: KEEP,
+     justification: "Whether the worker record is active: an employment-record state, not a personal attribute"}
+  - {path: Worker_Data.Employment_Data.Worker_Status_Data.Hire_Date, name: hire_month, type: date, disposition: GENERALIZE, method: month}
+  - {path: Worker_Data.Employment_Data.Worker_Status_Data.Original_Hire_Date, name: original_hire_year, type: date,
+     disposition: GENERALIZE, method: year}
+  - {path: Worker_Data.Employment_Data.Worker_Status_Data.Terminated, name: terminated, type: bool, disposition: KEEP,
+     justification: "Whether the worker record is terminated: an employment-record state, not a personal attribute"}
+  - {path: Worker_Data.Employment_Data.Worker_Status_Data.Termination_Date, name: termination_month, type: date,
+     disposition: GENERALIZE, method: month}
+  - {path: Worker_Data.Employment_Data.Worker_Status_Data.Primary_Termination_Reason_Reference, name: termination_reason,
+     disposition: REMOVE, subtree: true}
+  - {path: Worker_Data.Employment_Data.Worker_Status_Data.Leave_Status_Data, name: leave_status, disposition: NEVER,
+     category: leave_type, subtree: true}
+  - {path: Worker_Data.Leave_Status_Data, name: leave_status_data, disposition: NEVER, category: leave_type, subtree: true}
+  - {path: Worker_Data.Compensation_Data, name: compensation, disposition: REMOVE, subtree: true}
+  - {path: Worker_Data.Organization_Data, name: organizations, disposition: REMOVE, subtree: true}
+  - {path: Worker_Data.Background_Check_Data, name: bgv, disposition: NEVER, category: background_check, subtree: true}
+  - {path: Worker_Data.Photo_Data, name: photo, disposition: NEVER, category: photo, subtree: true}

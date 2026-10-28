@@ -487,3 +487,31 @@ is prose: it goes through ordinary detection, which can miss a name. Inline pair
 ("SHANTANU DESHMUKH 41250.00, MEERA KULKARNI 39100.00"), a labelled single form below 12 fields, and a table pasted
 as a single flattened line are not "structured" either. Multi-turn conversations whose earlier assistant answer is a
 table are refused like any other table. LOCAL_COMPUTE purposes take a JSON payload by design and are not checked.
+
+## 12. HRMS records: field contracts (route RECORDS)
+
+[docs/HRMS_CONTRACTS.md](docs/HRMS_CONTRACTS.md). HRMS exports (Workday, UKG/Kronos, Fieldglass, SuccessFactors,
+payroll registers, Active Directory) are typed fields with known names; on the free-text path they were flattened
+and guessed at, and an independent test measured 14% of personal values leaking with special categories crossing
+verbatim. On the RECORDS route values are classified by field, not by detection.
+
+| Property | Enforced by | Tests (`tests/test_hrms_records.py`) |
+|---|---|---|
+| Every field has a sealed disposition; unknown paths are NEVER (dropped, counted, names reported only to the caller) | `fieldschema.load_schema`, `records._Extractor`; schemas and rules under `registry/schemas`, `registry/rules` sealed by the manifest (all files, used or not) | `test_nothing_but_computed_results_and_aliases_leaves[*]`, `test_tampered_schema_stops_startup`, `test_unsealed_schema_or_rules_file_stops_startup`, `test_tampered_statutory_rule_stops_startup` |
+| A schema cannot mark free text KEEP, or a special-category field (by path, name or CSV header word) anything but NEVER | `fieldschema._field` | `test_unsafe_field_schemas_are_refused[*]` |
+| NEVER, REMOVE and unselected fields are unavailable to computations; amounts never leave raw (INTERNAL or a sealed band) | `records.bind`, `hrcompute` catalogs | `test_selecting_a_never_or_removed_field_is_refused`, `test_amount_outputs_never_leave_raw` |
+| No input value classified other than KEEP is in what leaves, in any surface form; no word of a NEVER value | `RecordResult.check_protected` (prompt with computed tokens held out: Aho-Corasick over withheld strings, numeric comparison over every number, date comparison), then `check_final` (regex + identifier detectors on the final text); violation = 500, nothing sent | `test_nothing_but_computed_results_and_aliases_leaves[*]`, `test_special_category_words_never_leave_even_when_every_row_has_one`, `test_absence_is_counted_without_its_reason` |
+| Unsigned or modified payloads are refused like free text | the contract's `external_input` (REFUSE only) | `test_unsigned_record_payload_is_refused`, `test_tampered_payload_after_signing_is_refused` |
+| Parsing is bounded and safe: size, rows, depth, CSV shape; XML with any DTD/entity is refused (XXE, billion laughs) | `recparse`, contract `max_bytes`/`max_rows`/`timeout_s` | `test_malformed_payloads_are_400_without_values[*]`, `test_xml_external_entities_dtds_and_bombs_are_refused[*]`, `test_row_and_size_bounds`, `test_large_register_within_time_and_output_bounds` |
+
+**Computed tokens.** Counts, exception codes, sealed band labels, KEEP enumeration values and generalised values are
+the gateway's own validated output. A count can coincide with an input amount (20,000 rows; a Rs 20,000 basic): the
+withheld-value check therefore reads the prompt with these tokens held out, and each token is valid by construction
+(an integer count, a code from a fixed vocabulary, a label from sealed config). That is the precise claim: no input
+value appears in what leaves **outside** a validated computed token.
+
+**Not enforced.** That the schema names a vendor field correctly (a misnamed special category under a field mapped
+KEEP would leave; review schemas like code; unknown fields are safe). That small counts cannot single a person out
+(no small-cell suppression). That the starter statutory values are current (they are sealed config with sources
+cited; verify them). The payload is parsed on the gateway host: the caller's JSON body and the attestation digest are
+computed on the event loop (bounded by `max_bytes`).

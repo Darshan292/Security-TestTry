@@ -1,0 +1,65 @@
+# Data contract: check a monthly payroll register (route RECORDS, docs/HRMS_CONTRACTS.md).
+# The register arrives as typed fields classified by the sealed field schema; only per-row exception codes, counts
+# and aliased employee identities leave. No amount leaves: totals are INTERNAL unless a reviewed change marks one
+# TRANSFORMED with sealed band edges.
+contract: payroll_register_check
+version: 1
+task_type: payroll_register_check
+route: RECORDS
+data_classes:
+  C1: ALIAS
+  C2: REDACT
+  C3: REDACT
+  C4: REFUSE
+restore: [C1]
+purpose_dependent:
+  leave_balance: NOT_EXPECTED
+  attendance: LOCAL_ONLY
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED    # NEVER fields of the schema: dropped at parse time
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: LOCAL_ONLY
+  derived_compensation: LOCAL_ONLY
+records:
+  sources: [india_payroll_register]
+  # Minimisation: only these fields are projected from the register; everything else is withheld unread.
+  select: [employee_id, employee_name, basic, da, hra, conveyance, medical_allowance, special_allowance,
+           other_earnings, gross, pf_employee, esic_employee, professional_tax, tds, other_deductions, net_pay,
+           state, pay_period]
+  label: [employee_name, employee_id]
+  compute: payroll_register_check
+  rules: india_payroll_statutory
+  max_rows: 50000
+  max_bytes: 20000000
+  max_listed: 200
+  max_prompt_chars: 30000
+  timeout_s: 30
+outputs:
+  rows_checked: {derived_from: C0, egress: RAW}
+  rows_with_exceptions: {derived_from: C2, egress: RAW, justification: "a count of register rows with at least one exception code; no amount"}
+  rows_incomplete: {derived_from: C2, egress: RAW, justification: "a count of rows missing a required field; no amount"}
+  exception_counts: {derived_from: C2, egress: RAW, justification: "fixed exception codes with their counts; codes name a rule, never a value"}
+  exceptions: {derived_from: C2, egress: RAW, justification: "per row: the aliased employee and fixed exception codes; no amount, date or identifier"}
+  total_gross: {derived_from: C2, egress: INTERNAL}
+  total_net: {derived_from: C2, egress: INTERNAL}
+guidance: >-
+  You are reviewing the results of an automated payroll register check. Exception codes name the rule that failed
+  (GROSS_MISMATCH: earnings do not add up to gross; NET_MISMATCH: gross minus deductions is not net; PF_MISMATCH,
+  ESIC_MISSING/ESIC_MISMATCH/ESIC_ABOVE_CEILING, PT_MISMATCH: statutory deduction differs from the configured rule;
+  TDS_BELOW_THRESHOLD/TDS_SHARE_HIGH: TDS sanity flags; MISSING/INVALID/NEGATIVE: a field problem). You do not have
+  the amounts; do not guess them.
+prompt_template: |
+  Payroll register check computed inside the privacy gateway (exact pay values are not shared with you).
+  Rows checked: {rows_checked}. Rows with exceptions: {rows_with_exceptions}. Rows missing a required field: {rows_incomplete}.
+  Exception counts: {exception_counts}
+  Rows with exceptions:
+  {exceptions}
+  Write a short review note for the payroll team: group the problems by rule, say which employees need attention
+  first and what to check for each rule.
+# Source-side input boundary (SECURITY_BOUNDARY.md §4): record payloads are accepted only when signed by the
+# exporting system's key pinned here. Unsigned payloads are refused (422), nothing is sent.
+# THE KEY BELOW IS A DEMO KEY (its private half is committed in tests/fixtures). Production refuses it.
+external_input:
+  sanitizers:
+    hrms-export@1: "e01541fb53f53c8a997de7a2a75deb15f2aad62aed9c854f4a56b1f508e7e53f"
+  unattested: REFUSE

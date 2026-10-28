@@ -1,0 +1,46 @@
+# STARTER SCHEMA - verify against your tenant's actual field names before use.
+# Workday worker as returned by the REST API's workers collection (GET /workers: {"total": n, "data": [...]}) and
+# the personal-information resource merged in by the integration layer. Field names follow Workday's public REST
+# naming (descriptor/id/href references); your tenant's version and integration may differ: check and re-seal.
+# Supervisory organisation names are REMOVED: in many tenants they carry the manager's name ("Finance (Asha Rao)").
+kind: pgw-field-schema
+schema: workday_worker_rest
+version: 1
+title: Workday worker (REST, workers collection)
+starter: true
+formats: [json]
+records_at: "data[]"
+fields:
+  - {path: id, name: worker_wid, type: string, disposition: ALIAS, entity: IDENTIFIER}
+  - {path: workerId, name: employee_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID}
+  - {path: descriptor, name: worker_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: href, name: href, disposition: REMOVE}
+  - {path: primaryWorkEmail, name: work_email, type: string, disposition: ALIAS, entity: EMAIL}
+  - {path: primaryWorkPhone, name: work_phone, disposition: REMOVE}
+  - {path: businessTitle, name: business_title, disposition: REMOVE}
+  - {path: primarySupervisoryOrganization, name: supervisory_org, disposition: REMOVE, subtree: true}
+  - {path: location, name: location, disposition: REMOVE, subtree: true}
+  - {path: manager.descriptor, name: manager_name, type: string, disposition: ALIAS, entity: PERSON}
+  - {path: manager.id, name: manager_wid, type: string, disposition: ALIAS, entity: IDENTIFIER}
+  - {path: manager.href, name: manager_href, disposition: REMOVE}
+  - {path: isManager, name: is_manager, type: bool, disposition: KEEP,
+     justification: "Whether the worker manages a team: an organisational role flag, not a personal attribute"}
+  - {path: workerType.descriptor, name: worker_type, type: enum, disposition: KEEP, enum: [Employee, Contingent Worker],
+     justification: "Workday worker type from the fixed Workday list; non-personal classification"}
+  - {path: workerType.id, name: worker_type_id, disposition: REMOVE}
+  - {path: timeType.descriptor, name: time_type, type: enum, disposition: KEEP, enum: [Full time, Part time],
+     justification: "Full/part-time classification from the fixed Workday list; shared by many workers"}
+  - {path: timeType.id, name: time_type_id, disposition: REMOVE}
+  - {path: hireDate, name: hire_month, type: date, disposition: GENERALIZE, method: month}
+  - {path: dateOfBirth, name: birth_year, type: date, disposition: GENERALIZE, method: year}
+  - {path: homeAddress, name: home_address, disposition: REMOVE, subtree: true}
+  - {path: nationalId, name: national_id, disposition: REMOVE, subtree: true}
+  - {path: gender, name: gender, disposition: NEVER, category: gender, subtree: true}
+  - {path: maritalStatus, name: marital_status, disposition: NEVER, category: marital_status, subtree: true}
+  - {path: nationality, name: nationality, disposition: NEVER, category: nationality, subtree: true}
+  - {path: ethnicity, name: ethnicity, disposition: NEVER, category: ethnicity, subtree: true}
+  - {path: religion, name: religion, disposition: NEVER, category: religion, subtree: true}
+  - {path: disabilityStatus, name: disability, disposition: NEVER, category: disability, subtree: true}
+  - {path: militaryService, name: military_service, disposition: NEVER, category: other_special_category, subtree: true}
+  - {path: onLeave, name: on_leave, disposition: NEVER, category: leave_type, subtree: true}
+  - {path: leaveType, name: leave_type, disposition: NEVER, category: leave_type, subtree: true}

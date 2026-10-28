@@ -1,0 +1,183 @@
+# HRMS field contracts (route `RECORDS`)
+
+HRMS data does not arrive as prose. Workday, UKG/Kronos, SAP Fieldglass, SuccessFactors, payroll registers and
+Active Directory all export **typed fields with known names**. Pasting such an export into the free-text path makes
+the gateway flatten it and guess, value by value, with detectors; an independent test of exactly that found 14% of
+personal values leaking, special-category codes (sick, maternity, oncology, dialysis, criminal record check)
+crossing verbatim, gender/marital status/nationality always crossing and TDS crossing raw.
+
+The `RECORDS` route classifies values by **field**, not by guessing. It is the LOCAL_COMPUTE pattern
+(`pgw/product/local_compute.py`) extended from a few typed form fields to whole exports:
+
+```
+signed export ──▶ verify source signature ──▶ parse (bounded; JSON / CSV / XML) ──▶ classify every field by the
+sealed field schema (unknown → NEVER) ──▶ project the fields the purpose SELECTS ──▶ deterministic local computation
+(sealed rules) ──▶ prompt = sealed template + computed tokens + aliased identities ──▶ protect (pipeline aliases
+identities) ──▶ withheld-value check ──▶ detectors over the final text ──▶ provider ──▶ aliases restored
+```
+
+Code: `pgw/product/fieldschema.py` (schemas, types), `pgw/product/records.py` (contract block, extraction,
+rendering, egress check), `pgw/product/hrcompute.py` (computations), `pgw/product/recparse.py` (safe parsers).
+Config: `registry/schemas/*.yaml`, `registry/rules/*.yaml`, `contracts/{payroll_register_check,
+timecard_exceptions,contractor_budget,roster_question}.yaml`. Tests: `tests/test_hrms_records.py` with the seeded
+synthetic generators in `tests/hrms_synth.py`.
+
+## Dispositions
+
+| Disposition | What happens to the value | Typical fields |
+|---|---|---|
+| `ALIAS` (entity) | scoped alias in the prompt; restored in the answer | names, employee ids, usernames, emails, manager references, work orders (`IDENTIFIER`) |
+| `REMOVE` | dropped | addresses, phones, PAN/UAN/ESIC/Aadhaar/bank a/c/IFSC, free text, titles, group memberships |
+| `GENERALIZE` (method) | only the coarse form exists for the purpose: `year`, `month` (dates), `band` (amounts, sealed edges, every band ≥ 20% wide), `pin_prefix3` (3-digit PIN = sorting district) or `drop`, `bitflag` (one bit → one of two labels) | date of birth, hire date, PIN, `userAccountControl` |
+| `COMPUTE_ONLY` | exact value used by the computation only; never leaves | every pay component, PF/ESIC/PT/TDS, net, bill rates, budgets, punches, hours |
+| `NEVER` (category) | dropped at parse time, unavailable even to computations, never leaves in any form, not even generalised; its words are also withheld | gender, marital status, nationality, religion, caste, disability, health, absence reason, leave type, BGV status/result, union, biometrics/photo |
+| `KEEP` | may leave as is | only an enumeration from a sealed reference table, or a boolean, with a written justification |
+
+`KEEP` is deliberately narrow: free text can never be `KEEP` (refused at startup), an enumeration may not contain
+values with four or more digits, and a value outside the enumeration is not kept (counted as `keep_rejected` and
+withheld). TDS, PF, ESI, PT and any pay-derived amount are compensation-derived (C2): `COMPUTE_ONLY`, or a band.
+
+A `NEVER` field may declare a **presence flag**: a `COMPUTE_ONLY` boolean "this row carries a non-work value"
+(`presence_flag: {name: is_absence, work_values: [REG, ...]}`). The timecard computation uses it to count absence
+days without ever seeing the reason.
+
+## Unknown fields → NEVER
+
+Any path the schema does not name is treated as `NEVER`: dropped, its values withheld, the count reported and the
+path names returned to the caller in the transparency report (never upstream, never logged). The alternative,
+letting unknown fields through or classifying them by detectors, is exactly the failure this route replaces:
+vendors add fields with every release, tenants add custom fields (`extensionAttribute9`, `customString7`), and a
+schema can only vouch for what it names. Fail closed; add the field to the schema when you need it.
+
+## Writing a schema
+
+```yaml
+# STARTER SCHEMA - verify against your tenant's actual field names before use.
+kind: pgw-field-schema
+schema: my_export            # = file name (registry/schemas/my_export.yaml)
+version: 1
+title: My export
+starter: true                # shown in the report as starter_schema
+formats: [csv, json]         # json | csv | xml
+records_at: "$[]"            # the records array: "$[]" top level, "data[]", "d.results[]",
+                             # "Get_Workers_Response.Response_Data.Worker[]"
+fields:
+  - {path: Employee_Code, name: employee_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID,
+     csv: ["Employee Code", "Emp ID"]}            # CSV headers (case/spacing ignored); JSON keys may use them too
+  - {path: "Worker_Data.Personal_Data.Contact_Data.Email_Address_Data[].Email_Address", name: email,
+     type: string, disposition: ALIAS, entity: EMAIL}   # nested objects and arrays
+  - {path: Worker_Data.Personal_Data.Gender_Reference, name: gender, disposition: NEVER, category: gender,
+     subtree: true}                               # NEVER/REMOVE may cover a whole subtree
+  - {path: Basic, name: basic, type: amount, disposition: COMPUTE_ONLY}
+  - {path: DOB, name: birth_year, type: date, disposition: GENERALIZE, method: year}
+  - {path: Department, name: department, type: enum, disposition: KEEP, enum: [Finance, Legal],
+     justification: "Department names from the reference table; shared by many employees"}
+```
+
+- Paths are relative to each record; `[]` marks an array (a single object is accepted where an array is declared,
+  as XML produces). XML: namespace prefixes are dropped, attributes are `@name`, text next to attributes `#text`;
+  a SOAP `Envelope/Body` is unwrapped.
+- Types: `string`, `amount` (₹/Rs/INR, Indian or western grouping, `(1,234)` negative), `number`, `int`, `date`
+  (ISO, DD/MM/YYYY or `date_order: MDY`, DD-Mon-YYYY, Mon DD YYYY, AD generalized time, FILETIME), `datetime`,
+  `time`, `bool`, `enum`, `any` (NEVER/REMOVE only).
+- `optional: true`: a schema field allowed to be absent from the whole input. A selected, non-optional field absent
+  from every record is a 400 naming the field; absent or unparseable in one row it is `MISSING:<field>` /
+  `INVALID:<field>` for that row. Nothing passes silently.
+- Startup refuses: a disposition outside the list, ALIAS with a non-identity entity, KEEP on free text or without a
+  justification, a band narrower than 20%, duplicate names/headers/paths, a field inside another field's subtree,
+  and **any field whose path, name or CSV header carries a special-category word** (gender, marital, religion,
+  caste, nationality, disability, maternity, sick, BGV, criminal, photo, "leave type", "absence reason", "trade
+  union", ...) unless it is NEVER (`fieldschema.SPECIAL_WORDS`, `SPECIAL_BIGRAMS`).
+
+### Starter-schema caveats
+
+The shipped schemas (`workday_worker_rest`, `workday_get_workers`, `ukg_timecard`, `sap_fieldglass_worker`,
+`successfactors_employee`, `india_payroll_register`, `ad_user`) are **starters**: names follow the vendors' public
+naming as best known (Workday REST/WSDL, SuccessFactors OData PerPerson/EmpJob, LDAP attributes, common register
+headings) but are not claimed exact, and they vary by version, report definition, expansion and tenant
+customisation. Before use: export a sample from your tenant, compare every path/header, check the
+transparency report's `unknown.paths` on a real (test-tenant) export, replace the enumerations (departments, cost
+centres) with your reference tables, and re-seal. Unknown paths are safe (dropped) but make computations fail with
+`MISSING`; misnamed paths are what you are looking for.
+
+## Purpose contracts
+
+```yaml
+route: RECORDS
+records:
+  sources: [india_payroll_register]   # schema ids (each must define every selected name the same way)
+  select: [employee_id, employee_name, basic, ...]   # projection first: nothing else is read for the purpose
+  label: [employee_name, employee_id] # ALIAS fields that name a row in listed outputs
+  show: [department]                  # KEEP/GENERALIZE fields shown next to listed rows (roster_question)
+  compute: payroll_register_check
+  rules: india_payroll_statutory      # registry/rules/<id>.yaml
+  max_rows: 50000                     # ceiling 200,000
+  max_bytes: 20000000                 # request body and payload bound (ceiling 64 MiB); replaces the profile's
+                                      # free-text limits for this purpose only
+  max_listed: 200                     # rows listed in the prompt (the rest counted)
+  max_prompt_chars: 30000             # output bound
+  timeout_s: 30                       # compute deadline (ceiling 120)
+outputs:                              # per computed output; anything unlisted is INTERNAL
+  exceptions: {derived_from: C2, egress: RAW, justification: "..."}
+  total_gross: {derived_from: C2, egress: INTERNAL}
+  overall_utilisation_pct: {derived_from: C2, egress: TRANSFORMED, band: [0, 50, 80, 100], unit: "%"}
+prompt_template: |                    # only non-INTERNAL outputs; no free-text instruction field
+```
+
+Output kinds (`hrcompute.KINDS`): `count`, `codes` (fixed vocabulary with counts), `label`, `list` (rows named by
+aliased identities, with codes/bands), `groups` (sealed KEEP value → token) may leave `RAW` with a justification;
+`amount` and `percent` are `INTERNAL` or `TRANSFORMED` as a sealed band, **never RAW** (startup refuses).
+There is no caller-written instruction on this route: the template is the whole prompt. Contracts must also state
+`data_classes` (C1 `ALIAS` or `REDACT`), `purpose_dependent` stances and `external_input` (unsigned payloads are
+refused with 422 exactly like free text); `content_gate` does not apply.
+
+### Computations (`pgw/product/hrcompute.py`)
+
+| Computation | Checks | What leaves |
+|---|---|---|
+| `payroll_register_check` | Gross = Σ earnings and Net = Gross − Σ deductions (tolerance); PF = rate × PF wages, capped at the wage ceiling or on full wages (both accepted), zero allowed above the ceiling; ESIC only while gross ≤ ceiling (rounded up; above the ceiling flagged for review); PT by state slab (February top-up; several schedules accepted where the law differs by gender; half-yearly states not checked); TDS sanity (TDS > 0 while annualised taxable ≤ the nil-tax threshold; TDS share of gross above a bound) | counts, codes, per-row aliased employee + codes |
+| `timecard_exceptions` | missing punch, punch order, shift > max hours, spread-over > max, weekly hours > max (ISO week), overtime without approval; absence days counted from the presence flag | counts, codes, per-employee aliased identity + code × n, absence counts (never reasons) |
+| `contractor_budget` | spend vs PO/budget (over / near), bill rate vs approved rate, missing/negative/no budget | counts, codes, utilisation and rate-excess **bands**, cost-centre bands |
+| `roster_question` | `params: {filter: [{field, op, value}], group_by, list}` on selected KEEP/GENERALIZE fields; values must be enumeration members, booleans, sealed labels or the generalised format (`2024`, `2024-03`, `560xxx`) | counts, filter text, aliased matches, group counts |
+
+Statutory and policy values live in `registry/rules/*.yaml` (sealed, signed), each with its source cited and a
+"verify current rates" note; nothing is a constant in code. **Add a computation:** write a function
+`fn(rows, params, rules, ctx) -> {name: Out(kind, value)}`, a rules parser that raises `SchemaError` on anything
+malformed, an `inputs(rules)` map of the selected names it reads and the dispositions each may have, and register
+it in `hrcompute.COMPUTATIONS` with its output catalog. Rows give typed values (`None` + `row.errors[name]` when
+missing/invalid; emit `MISSING:`/`INVALID:` codes, never skip silently). Add hand-computed fixtures with the edge
+cases (ceilings, slab boundaries, zero, negative, missing) to `tests/test_hrms_records.py`.
+
+## Requests
+
+```json
+{"model": "...", "messages": [{"role": "user", "content": "{\"source\": \"india_payroll_register\", \"format\": \"csv\", \"data\": \"Employee Code,...\\n...\"}"}]}
+```
+
+Envelope keys: `source`, `format`, `data` (JSON value, or CSV/XML text), optional `params`, `delimiter`
+(`,` `;` tab `|`). Headers as for every contracted purpose, including the source attestation over the messages.
+Errors are 4xx with content-free messages (row numbers and schema field names only). Large inputs: the payload is
+parsed in a bounded worker under the contract's deadline; JSON body parsing and the attestation digest run on the
+event loop (a 20 MB body costs a few hundred ms there).
+
+**Chunking and alias consistency.** The gateway has a conversation scope: aliases are an HMAC of the value under a
+key derived per tenant/contract/conversation (`X-PGW-Conversation-Id`). Send the chunks of one large export with
+the same conversation id and the same person gets the same alias in every chunk's prompt and answer
+(`test_aliases_are_consistent_across_chunks_of_one_conversation`); without an id each request gets fresh aliases.
+Counts are per chunk; aggregating them is the caller's job.
+
+## What this route still cannot do
+
+- It cannot vouch for a schema that misnames a field: a special category under an innocuous vendor name
+  (`customString7` holding religion) is safe only because unknown → NEVER; if a schema author maps it as `REMOVE`
+  it is still dropped, but if they map it as `KEEP` with a matching enumeration, it leaves. Review schemas like
+  code.
+- Free text **inside** a selected field (a comment column) is never selectable as anything but REMOVE/NEVER; there
+  is no "summarise these comments" purpose here (use the free-text path, with its limits).
+- Small counts can still single people out (a roster filter matching one person in a department; a cost centre
+  with one contractor). There is no small-cell suppression yet.
+- The TDS checks are sanity flags, not a tax computation (regime, declarations, perquisites, arrears unknown).
+  ESIC contribution-period continuation is flagged for review, not resolved. PT schedules are starters.
+- Excel workbooks are not parsed (export CSV). XML is supported only via the standard library's expat with every
+  DTD refused.
+- No workspace UI task yet: the HR Workspace still sends only the existing forms (see the report).

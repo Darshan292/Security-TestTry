@@ -1,0 +1,13 @@
+# STARTER RULES (company policy values, not statute) - set them to your procurement policy and re-seal.
+# Used by: contractor_budget (contracts/contractor_budget.yaml). Bill rates and spend never leave raw: only flags and
+# the sealed percentage bands below.
+kind: pgw-compute-rules
+rules: contractor_budget_default
+version: 1
+compute: contractor_budget
+starter: true
+near_budget_pct: 90          # spend at or above 90% of the PO/budget is NEAR_BUDGET
+rate_tolerance_pct: 0        # bill rate above the approved rate by more than this is RATE_ABOVE_APPROVED
+utilisation_bands_pct: [0, 50, 80, 90, 100, 110, 125]
+rate_excess_bands_pct: [0, 5, 10, 25, 50]
+fields: {budget: po_budget, spend: spend_to_date, rate: bill_rate, approved: approved_rate, group: cost_center}

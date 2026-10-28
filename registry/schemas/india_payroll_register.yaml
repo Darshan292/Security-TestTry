@@ -1,0 +1,80 @@
+# STARTER SCHEMA - verify against your tenant's actual field names before use.
+# Indian monthly payroll register, one row per employee per pay period, as payroll software exports it (CSV with a
+# header row, or a JSON array of row objects). Column names below are common register headings, not any vendor's
+# exact export: map your register's headers in `csv:` (case and spacing are ignored) and re-seal.
+# Field-level contract (docs/HRMS_CONTRACTS.md): every value is classified HERE, not by detectors. Any column this
+# schema does not name is treated as NEVER (dropped, counted, never sent).
+kind: pgw-field-schema
+schema: india_payroll_register
+version: 1
+title: Indian payroll register (monthly)
+starter: true
+formats: [csv, json]
+records_at: "$[]"
+fields:
+  # --- identities: aliased, restored in the answer -------------------------------------------------------------
+  - {path: Employee_Code, name: employee_id, type: string, disposition: ALIAS, entity: EMPLOYEE_ID,
+     csv: ["Employee Code", "Emp Code", "Emp ID", "Employee ID", "EmpCode"]}
+  - {path: Employee_Name, name: employee_name, type: string, disposition: ALIAS, entity: PERSON,
+     csv: ["Employee Name", "Name", "Emp Name"]}
+  - {path: Official_Email, name: email, type: string, disposition: ALIAS, entity: EMAIL,
+     csv: ["Email", "Official Email", "Email ID"]}
+  # --- statutory and bank identifiers: removed (C3) --------------------------------------------------------------
+  - {path: UAN, name: uan, disposition: REMOVE, csv: ["UAN", "UAN No", "UAN Number"]}
+  - {path: PF_Number, name: pf_number, disposition: REMOVE, csv: ["PF No", "PF Number", "PF Account No"]}
+  - {path: ESIC_Number, name: esic_number, disposition: REMOVE, csv: ["ESIC No", "ESIC IP No", "ESI Number", "IP Number"]}
+  - {path: PAN, name: pan, disposition: REMOVE, csv: ["PAN", "PAN No", "PAN Number"]}
+  - {path: Aadhaar, name: aadhaar, disposition: REMOVE, csv: ["Aadhaar", "Aadhaar No", "Aadhar Number"]}
+  - {path: Bank_Account, name: bank_account, disposition: REMOVE, csv: ["Bank A/c No", "Bank Account", "Account Number", "Bank Account No"]}
+  - {path: IFSC, name: ifsc, disposition: REMOVE, csv: ["IFSC", "IFSC Code"]}
+  - {path: Bank_Name, name: bank_name, disposition: REMOVE, csv: ["Bank Name", "Bank"]}
+  # --- contact details and free text: removed --------------------------------------------------------------------
+  - {path: Mobile, name: mobile, disposition: REMOVE, csv: ["Mobile", "Mobile No", "Phone"]}
+  - {path: Address, name: address, disposition: REMOVE, csv: ["Address", "Residential Address", "Permanent Address"]}
+  - {path: PIN, name: pin_district, type: string, disposition: GENERALIZE, method: pin_prefix3, csv: ["PIN", "Pincode", "PIN Code"]}
+  - {path: Father_Name, name: father_name, disposition: REMOVE, csv: ["Father Name", "Father's Name", "Father/Husband Name"]}
+  - {path: Remarks, name: remarks, disposition: REMOVE, csv: ["Remarks", "Comments", "Note"]}
+  - {path: Designation, name: designation, disposition: REMOVE, csv: ["Designation", "Title"]}
+  # --- organisation (non-personal, from the reference table; replace the enumeration with yours) ----------------
+  - {path: Department, name: department, type: enum, disposition: KEEP, csv: ["Department", "Dept"],
+     enum: [Finance, Engineering, Operations, Sales, Marketing, Human Resources, Legal, Administration, Support, Manufacturing],
+     justification: "Department names from the organisation's reference table; non-personal and shared by many employees"}
+  - {path: State, name: state, type: enum, disposition: COMPUTE_ONLY, csv: ["State", "Work State", "PT State", "Location State"],
+     enum: [KA, MH, TN, WB, TS, AP, GJ, DL, HR, UP, KL, Karnataka, Maharashtra, Tamil Nadu, West Bengal, Telangana,
+            Andhra Pradesh, Gujarat, Delhi, Haryana, Uttar Pradesh, Kerala]}
+  - {path: Pay_Period, name: pay_period, type: date, disposition: GENERALIZE, method: month,
+     csv: ["Pay Period", "Month", "Payroll Month", "Salary Month"]}
+  # --- dates about the person: generalised -------------------------------------------------------------------
+  - {path: Date_of_Birth, name: birth_year, type: date, disposition: GENERALIZE, method: year, csv: ["DOB", "Date of Birth"]}
+  - {path: Date_of_Joining, name: joining_month, type: date, disposition: GENERALIZE, method: month, csv: ["DOJ", "Date of Joining", "Joining Date"]}
+  # --- attendance-derived quantities: compute only ----------------------------------------------------------------
+  - {path: Days_Paid, name: days_paid, type: number, disposition: COMPUTE_ONLY, optional: true, csv: ["Days Paid", "Paid Days", "Payable Days"]}
+  - {path: LOP_Days, name: lop_days, type: number, disposition: COMPUTE_ONLY, optional: true, csv: ["LOP Days", "LOP", "Loss of Pay Days"]}
+  # --- earnings (C2, compensation): compute only, never raw ------------------------------------------------------
+  - {path: Basic, name: basic, type: amount, disposition: COMPUTE_ONLY, csv: ["Basic", "Basic Salary", "Basic Pay"]}
+  - {path: DA, name: da, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["DA", "Dearness Allowance"]}
+  - {path: HRA, name: hra, type: amount, disposition: COMPUTE_ONLY, csv: ["HRA", "House Rent Allowance"]}
+  - {path: Conveyance, name: conveyance, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Conveyance", "Conveyance Allowance"]}
+  - {path: Medical_Allowance, name: medical_allowance, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Medical Allowance"]}
+  - {path: Special_Allowance, name: special_allowance, type: amount, disposition: COMPUTE_ONLY, csv: ["Special Allowance", "Spl Allowance", "Special Allow"]}
+  - {path: Other_Earnings, name: other_earnings, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Other Earnings", "Other Allowance", "Arrears"]}
+  - {path: Gross, name: gross, type: amount, disposition: COMPUTE_ONLY, csv: ["Gross", "Gross Salary", "Gross Earnings", "Total Earnings"]}
+  # --- deductions (C2, compensation-derived): compute only, never raw -------------------------------------------
+  - {path: PF_Employee, name: pf_employee, type: amount, disposition: COMPUTE_ONLY, csv: ["PF", "EPF", "PF Employee", "Employee PF"]}
+  - {path: ESIC_Employee, name: esic_employee, type: amount, disposition: COMPUTE_ONLY, csv: ["ESIC", "ESI", "ESIC Employee", "Employee ESIC"]}
+  - {path: Professional_Tax, name: professional_tax, type: amount, disposition: COMPUTE_ONLY, csv: ["PT", "Professional Tax", "Prof Tax"]}
+  - {path: TDS, name: tds, type: amount, disposition: COMPUTE_ONLY, csv: ["TDS", "Income Tax", "IT/TDS"]}
+  - {path: Other_Deductions, name: other_deductions, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Other Deductions", "Loan Recovery", "Advance Recovery"]}
+  - {path: Total_Deductions, name: total_deductions, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Total Deductions"]}
+  - {path: Net_Pay, name: net_pay, type: amount, disposition: COMPUTE_ONLY, csv: ["Net Pay", "Net Salary", "Take Home", "Net Amount"]}
+  - {path: Employer_PF, name: employer_pf, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Employer PF", "PF Employer"]}
+  - {path: Employer_ESIC, name: employer_esic, type: amount, disposition: COMPUTE_ONLY, optional: true, csv: ["Employer ESIC", "ESIC Employer"]}
+  # --- special categories and protected attributes: NEVER -------------------------------------------------------
+  - {path: Gender, name: gender, disposition: NEVER, category: gender, csv: ["Gender", "Sex"]}
+  - {path: Marital_Status, name: marital_status, disposition: NEVER, category: marital_status, csv: ["Marital Status"]}
+  - {path: Nationality, name: nationality, disposition: NEVER, category: nationality, csv: ["Nationality"]}
+  - {path: Religion, name: religion, disposition: NEVER, category: religion, csv: ["Religion"]}
+  - {path: Category, name: caste_category, disposition: NEVER, category: caste, csv: ["Category", "Caste", "Caste Category"]}
+  - {path: Disability, name: disability, disposition: NEVER, category: disability, csv: ["Disability", "PwD", "Differently Abled"]}
+  - {path: Leave_Type, name: leave_type, disposition: NEVER, category: leave_type, csv: ["Leave Type", "Leave Category"]}
+  - {path: LOP_Reason, name: lop_reason, disposition: NEVER, category: absence_reason, csv: ["LOP Reason", "Absence Reason", "Leave Reason"]}

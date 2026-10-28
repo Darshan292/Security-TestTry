@@ -1,0 +1,80 @@
+# STARTER RULES - VERIFY CURRENT RATES before relying on them. Statutory values change by notification and by state;
+# this file is the only place they live (pgw.product.hrcompute reads them; nothing is hard-coded). Sealed and signed
+# like every configuration file: a change needs review, a version bump and a re-seal (OPERATIONS.md).
+# Used by: payroll_register_check (contracts/payroll_register_check.yaml).
+kind: pgw-compute-rules
+rules: india_payroll_statutory
+version: 1
+compute: payroll_register_check
+starter: true
+# Absolute tolerance, in rupees, for every comparison (register rounding).
+tolerance: 1
+# Register components (canonical field names of the source schema).
+earnings: [basic, da, hra, conveyance, medical_allowance, special_allowance, other_earnings]
+deductions: [pf_employee, esic_employee, professional_tax, tds, other_deductions]
+# Components a register may leave blank (blank = 0). Any other blank or unparseable amount is MISSING/INVALID.
+optional: [da, conveyance, medical_allowance, other_earnings, other_deductions]
+fields: {gross: gross, net: net_pay, pf: pf_employee, esic: esic_employee, pt: professional_tax, tds: tds,
+         state: state, month: pay_period}
+pf:
+  # Employees' Provident Funds and Misc. Provisions Act 1952 / EPF Scheme 1952 para 29: employee contribution 12% of
+  # basic wages + dearness allowance (+ retaining allowance). Statutory wage ceiling Rs 15,000/month (EPF Scheme
+  # para 2(f)/26A, as amended by G.S.R. 609(E), 22 Aug 2014). Contribution on wages above the ceiling is permitted
+  # (joint option), so both the capped and the full-wage amount are accepted. An employee who joined with wages
+  # above the ceiling may be an "excluded employee" (para 2(f)): zero PF is then accepted above the ceiling.
+  # Some establishments use 10% (para 29(1) proviso, notified industries): change `rate` if that applies.
+  rate: "0.12"
+  wage_ceiling: 15000
+  wages: [basic, da]
+  accept: [capped, uncapped]
+  allow_zero_above_ceiling: true
+esic:
+  # Employees' State Insurance Act 1948 s.39 / ESI (Central) Rules r.51: employee contribution 0.75% of wages from
+  # 1 July 2019 (G.S.R. 423(E), 13 Jun 2019); coverage wage ceiling Rs 21,000/month from 1 January 2017. Wages that
+  # rise above the ceiling during a contribution period keep contributions until the period ends: such rows are
+  # flagged ESIC_ABOVE_CEILING for review, not as an error. Employee share rounded up to the next rupee.
+  # Employees with average daily wages up to Rs 176 pay no employee share (r.51 proviso, as last revised): set
+  # employee_exempt_below_monthly if relevant to your workforce.
+  employee_rate: "0.0075"
+  gross_ceiling: 21000
+  rounding: up
+  employee_exempt_below_monthly: null
+pt:
+  # Professional tax: state law, monthly slab on gross salary; February carries the top-up in some states.
+  # Values below are STARTER values from the state acts/schedules as commonly published - verify each state's
+  # current schedule. `slabs` are [monthly gross from (inclusive), monthly PT]. A state with several schedules
+  # accepts any of them (Maharashtra's schedule differs for women; gender is NEVER here, so both are accepted).
+  # `not_monthly`: PT is deducted half-yearly or annually (Tamil Nadu, Kerala): not checked per month.
+  states:
+    KA:   # Karnataka Tax on Professions, Trades, Callings and Employments Act 1976, Schedule entry 1 (2023 amendment)
+      slabs: [[0, 0], [25000, 200]]
+      february: {200: 300}
+    MH:   # Maharashtra State Tax on Professions... Act 1975, Schedule entry 1
+      - slabs: [[0, 0], [7501, 175], [10001, 200]]
+        february: {200: 300}
+      - slabs: [[0, 0], [25001, 200]]
+        february: {200: 300}
+    WB:   # West Bengal State Tax on Professions... Act 1979, Schedule
+      slabs: [[0, 0], [10001, 110], [15001, 130], [25001, 150], [40001, 200]]
+    TS:   # Telangana Tax on Professions... Act 1987, Schedule
+      slabs: [[0, 0], [15001, 150], [20001, 200]]
+    AP:   # Andhra Pradesh Tax on Professions... Act 1987, Schedule
+      slabs: [[0, 0], [15001, 150], [20001, 200]]
+    GJ:   # Gujarat State Tax on Professions... Act 1976, Schedule (threshold raised to Rs 12,000 in 2023)
+      slabs: [[0, 0], [12000, 200]]
+    TN: not_monthly   # Tamil Nadu: half-yearly (municipal), not a monthly deduction
+    KL: not_monthly   # Kerala: half-yearly
+    DL: {slabs: [[0, 0]]}   # Delhi: no professional tax
+    HR: {slabs: [[0, 0]]}   # Haryana: no professional tax
+    UP: {slabs: [[0, 0]]}   # Uttar Pradesh: no professional tax
+  state_alias: {Karnataka: KA, Maharashtra: MH, Tamil Nadu: TN, West Bengal: WB, Telangana: TS,
+                Andhra Pradesh: AP, Gujarat: GJ, Delhi: DL, Haryana: HR, Uttar Pradesh: UP, Kerala: KL}
+tds:
+  # Income-tax Act 1961 s.192 (TDS on salary). These are SANITY FLAGS, not a tax computation: the regime choice,
+  # declarations, perquisites, arrears and previous-employer income are unknown here.
+  # New tax regime (s.115BAC) FY 2025-26: standard deduction Rs 75,000 (s.16(ia)); rebate u/s 87A makes tax nil up
+  # to total income Rs 12,00,000 (Finance Act 2025). Verify for the financial year of the register.
+  standard_deduction: 75000
+  no_tax_upto_annual_taxable: 1200000
+  max_share_of_gross: "0.35"   # TDS above 35% of the month's gross is flagged for review (company policy value)
+  annualise_months: 12

@@ -1,0 +1,59 @@
+# Data contract: contractor spend vs budget and bill rate vs approved rate, from a SAP Fieldglass worker export
+# (route RECORDS, docs/HRMS_CONTRACTS.md). Bill rates, budgets and spend never leave: only flags and sealed bands.
+contract: contractor_budget
+version: 1
+task_type: contractor_budget
+route: RECORDS
+data_classes:
+  C1: ALIAS
+  C2: REDACT
+  C3: REDACT
+  C4: REFUSE
+restore: [C1, REF]
+purpose_dependent:
+  leave_balance: NOT_EXPECTED
+  attendance: LOCAL_ONLY
+  performance_rating: NOT_EXPECTED
+  health_or_leave_reason: NOT_EXPECTED    # NEVER fields of the schema: dropped at parse time
+  disciplinary_outcome: NOT_EXPECTED
+  eligibility_result: LOCAL_ONLY
+  derived_compensation: LOCAL_ONLY
+records:
+  sources: [sap_fieldglass_worker]
+  select: [worker_id, worker_name, work_order_id, po_budget, spend_to_date, bill_rate, approved_rate, cost_center]
+  label: [worker_name, worker_id, work_order_id]
+  compute: contractor_budget
+  rules: contractor_budget_default
+  max_rows: 50000
+  max_bytes: 20000000
+  max_listed: 200
+  timeout_s: 30
+outputs:
+  rows_checked: {derived_from: C0, egress: RAW}
+  rows_flagged: {derived_from: C2, egress: RAW, justification: "a count of work orders with at least one flag"}
+  flag_counts: {derived_from: C2, egress: RAW, justification: "fixed flag codes with their counts; no amount or rate"}
+  flagged: {derived_from: C2, egress: RAW, justification: "per work order: aliased worker and work order, flag codes and sealed percentage bands; never a rate or an amount"}
+  group_utilisation: {derived_from: C2, egress: RAW, justification: "per cost centre (sealed list): the utilisation band; no amount"}
+  total_spend: {derived_from: C2, egress: INTERNAL}
+  total_budget: {derived_from: C2, egress: INTERNAL}
+  overall_utilisation_pct: {derived_from: C2, egress: TRANSFORMED, band: [0, 50, 80, 90, 100, 110, 125], unit: "%"}
+guidance: >-
+  You are reviewing contractor budget flags. OVER_BUDGET: spend above the work order budget; NEAR_BUDGET: at or above
+  the near-budget threshold; RATE_ABOVE_APPROVED: bill rate above the approved rate (by the band shown); NO_BUDGET,
+  INVALID_RATE, NEGATIVE_AMOUNT, MISSING/INVALID: data problems. Rates and amounts are not available to you.
+prompt_template: |
+  Contractor budget check computed inside the privacy gateway (bill rates, budgets and spend are not shared with you).
+  Work orders checked: {rows_checked}. Flagged: {rows_flagged}. Overall utilisation: {overall_utilisation_pct}.
+  Flag counts: {flag_counts}
+  Utilisation by cost centre:
+  {group_utilisation}
+  Flagged work orders:
+  {flagged}
+  Write a short note for the procurement lead: what needs action this week and with which supplier manager.
+# Source-side input boundary (SECURITY_BOUNDARY.md §4): record payloads are accepted only when signed by the
+# exporting system's key pinned here. Unsigned payloads are refused (422), nothing is sent.
+# THE KEY BELOW IS A DEMO KEY (its private half is committed in tests/fixtures). Production refuses it.
+external_input:
+  sanitizers:
+    hrms-export@1: "e01541fb53f53c8a997de7a2a75deb15f2aad62aed9c854f4a56b1f508e7e53f"
+  unattested: REFUSE
