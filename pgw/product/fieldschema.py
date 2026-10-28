@@ -149,7 +149,7 @@ def parse_edges(raw, where: str, *, min_width: bool = True, percent: bool = Fals
     return tuple(raw)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)   # identity semantics: a spec is a dict key on the per-value hot path
 class FieldSpec:
     path: str
     segments: tuple

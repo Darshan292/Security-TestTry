@@ -268,8 +268,15 @@ class Withheld:
         self.dates: set = set()
         self.exempt: set = set()      # KEEP values (sealed enumerations): never needles
         self._auto = None
+        self._seen: set = set()       # (value, never, hint) already added: exports repeat values a lot
 
-    def add(self, v, never: bool = False, typed=None) -> None:
+    def add(self, v, never: bool = False, typed=None, hint: str = "") -> None:
+        """hint: the field's declared type ("amount", "date", ...) when known, so only that parse is tried."""
+        key = (v, never, hint) if isinstance(v, str) else None
+        if key is not None:
+            if key in self._seen:
+                return
+            self._seen.add(key)
         if v is None or isinstance(v, bool):
             return
         if isinstance(v, (int, float)):
@@ -296,6 +303,14 @@ class Withheld:
             self._typed(typed)
             return
         if any(c.isdigit() for c in s) and len(s) <= 40:
+            if hint in ("amount", "number", "int"):
+                try:
+                    d = parse_amount(s)
+                    if abs(d) >= 1000 or d != d.to_integral_value():
+                        self.numbers.add(_nkey(d))
+                except ValueInvalid:
+                    pass
+                return
             try:
                 d = parse_amount(s)
                 if abs(d) >= 1000 or d != d.to_integral_value():
@@ -378,6 +393,9 @@ class _Extractor:
         self.stats = _Stats()
         self.selected_specs = {n: schema.spec(n) for n in select}
         self.present = dict.fromkeys(select, 0)
+        self.typed_selected = {sp for n, sp in self.selected_specs.items()
+                               if view.get(n) in ("COMPUTE_ONLY", "GENERALIZE") and sp.presence_flag != n
+                               and not sp.multi}
 
     # -- leaves ------------------------------------------------------------------------------------------------
     def _drop(self, obj, path: str, never: bool, depth: int, unknown: bool) -> int:
@@ -451,12 +469,12 @@ class _Extractor:
         """Classify one record: every value is withheld unless KEEP; selected fields become typed row values."""
         row = hrcompute.Row(index)
         for spec, raws in rec.items():
-            if spec.disposition == "KEEP":
-                continue
+            if spec.disposition == "KEEP" or (spec in self.typed_selected):
+                continue                  # selected typed fields are withheld below, from their parsed value
             never = spec.disposition == "NEVER"
             for x in raws:
                 if x is not _INVALID:
-                    self.w.add(x, never=never)
+                    self.w.add(x, never=never, hint=spec.type)
         flags = {}
         for spec, raws in rec.items():
             if spec.presence_flag:
@@ -487,10 +505,13 @@ class _Extractor:
                     if not vals:
                         row.errors[name] = "MISSING"
                 elif disp == "GENERALIZE":
+                    self.w.add(raws[0], hint=spec.type)      # the raw form (e.g. "12/04/1987") as a string too
                     typed = parse_value(spec, raws[0])
                     self.w._typed(typed)
                     row.values[name] = generalize(spec, typed)
                 else:
+                    if disp != "KEEP" and spec.type not in ("amount", "number", "int"):
+                        self.w.add(raws[0], hint=spec.type)  # strings/dates/times: the raw form as a needle too
                     typed = parse_value(spec, raws[0])
                     if disp == "KEEP":
                         self.w.exempt.add(str(typed).casefold())
@@ -502,8 +523,8 @@ class _Extractor:
                 self.stats.invalid += 1
                 if disp == "KEEP":
                     self.stats.keep_rejected += 1
-                    for x in raws:     # not a sealed value: withheld like any other
-                        self.w.add(x)
+                for x in raws:         # not a parsed (or sealed) value: withheld as written
+                    self.w.add(x)
         # KEEP values that are not selected are not used; outside the enumeration they are withheld too
         for spec, raws in rec.items():
             if spec.disposition == "KEEP" and spec.name not in self.selected_specs:
