@@ -65,6 +65,7 @@ request lists the stages up to and including the one that stopped it, which has 
 |---|---|
 | `received` | from the request's arrival to a validated body: reading, JSON, parameters, sizes, declared subjects |
 | `verify_source` | checking the source attestation signature (`skipped` on the dev legacy path) |
+| `content_gate` | the special-category content gate (pgw.ml.gate). **Listed only when the contract declares a `content_gate`**; a triggered gate with action PRIVATE continues on PRIVATE_LOCAL, with REFUSE stops with 422 `special_category_content`; a gate that cannot answer stops with 503 `content_gate_unavailable` (`failed`) |
 | `compute` | the local computation of LOCAL_COMPUTE; `skipped` on other routes |
 | `protect` | the script check (C4), detection and replacement |
 | `egress_check` | building the exact outbound bytes and checking them for every value detected or declared in this request |
@@ -172,6 +173,7 @@ report.
 | `declared_absent` | no declared subject (any spelling the matchers know) is in the outbound text | the request declared no subjects, or did not get that far |
 | `source_verified` | the input carries a valid signature from a source that this contract allowlists | no contract (dev legacy path) |
 | `c3_not_returned` | the answer returned to the app contains no C3 value (scan of the final answer text) | no answer was produced |
+| `content_gate` | `pass`: no label of the contract's content gate reached its threshold; `fail`: one did, and the request was kept in-house or refused (this is the gate working, not an error) | never `n/a`: the check is **omitted** unless the gate ran (no gate in the contract, or the request stopped before it), so reports of other contracts are unchanged |
 
 `egress_clean: pass` is not a statement that the text is free of personal data. It cannot see a value that
 detection missed.

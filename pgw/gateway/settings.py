@@ -15,7 +15,11 @@ Rules (`apply_deployment_profile`, called by `create_app` before anything else i
   "Unset" means: for `from_env`, the variable is absent; for directly built Settings, the field holds its built-in
   default (such a value is replaced by the profile's, so it cannot weaken anything).
 - production: NER off (`ner_model: null`) is refused unless the profile also gives `ner_off_justification`, a
-  written reason of at least 20 characters. It is a signed decision, not an environment switch.
+  written reason of at least 20 characters, or configures an ML detector (`ml_detector`) that replaces spaCy. It is a
+  signed decision, not an environment switch.
+- ML models (`ml_detector`, `content_gate_model`; pgw.ml.config, docs/ML_ARCHITECTURE.md) are pinned by the sha256
+  manifest digest of their directory; a model that does not match its pin stops startup. `legacy_heuristics: false`
+  (name and amount heuristics off, for measuring "ML + checksum regex only") needs an `ml_detector`.
 - development: the profile is optional; when present, differences are logged as warnings and the Settings win.
 - rollback (re-audit N5): the profile carries a monotonic integer `config_serial`. Production refuses a serial below
   the pinned minimum (`min_config_serial`) or below the high-water mark recorded in `state_dir`
@@ -33,6 +37,8 @@ Classification of every Settings field (`FIELD_CLASS`; a test fails if a field i
 | upstream_timeout_s | profile | PGW_UPSTREAM_TIMEOUT_S | Limit (borderline: affects availability more than disclosure; pinned because the brief covers all limits) |
 | ner_model, ner_workers, ner_queue_max, ner_timeout_s | profile | PGW_NER_* | How much is inspected; workers=0 also drops the fail-closed worker pool |
 | max_body_bytes, max_content_chars, max_messages, protect_timeout_s, max_concurrent_protect | profile | PGW_MAX_*, PGW_PROTECT_TIMEOUT_S | How much is inspected and how much detection work a caller can force |
+| ml_detector, content_gate_model | profile | (not read from env) | Which ML models inspect content (pinned by sha256) and how many workers/threads/seconds they get: swapping or unsetting one changes what is detected or which requests stay in-house |
+| legacy_heuristics | profile | (not read from env) | Turns the legacy name/amount heuristics off when an ML detector is configured: changes what is detected |
 | private_upstream_url, private_allowlist | profile | PGW_PRIVATE_UPSTREAM_URL, (code only) | Where C4/unattested content goes; the allowlist is what keeps it in-boundary |
 | legacy_uncontracted, dev_allow_real_provider, trace | code | never read from env | Security-relevant development switches; production refuses them in code (`check_startup_mode`, `create_app`) |
 | upstream, private_upstream | code | never read from env | Injected objects (tests/demos). Only code already running in the process can set them, and such code is outside any configuration control |
@@ -177,6 +183,14 @@ class Settings:
     ner_workers: int = 0
     ner_queue_max: int = 8                 # requests allowed to wait for a worker; beyond it: fail closed at once
     ner_timeout_s: float = 8.0             # per NER call (queue wait + inference); must stay below protect_timeout_s
+    # ML span detector (pgw.ml; docs/ML_ARCHITECTURE.md): a mapping validated by pgw.ml.config.parse_detector, or None
+    # (off). Runs on contracted purposes alongside spaCy (ner_model set) or instead of it (ner_model None).
+    ml_detector: dict | None = None
+    # ML special-category content gate (pgw.ml.gate): mapping validated by pgw.ml.config.parse_gate, or None (off).
+    content_gate_model: dict | None = None
+    # Legacy name/amount heuristics (person cues, name growth, amount/compensation heuristics). False only together
+    # with an ml_detector: measures "ML + checksum regex only" against today's stack.
+    legacy_heuristics: bool = True
     # Resource limits (fail closed with 413/503; nothing is sent).
     max_body_bytes: int = 262_144
     max_content_chars: int = 50_000        # all strings in `messages`, summed
@@ -265,6 +279,7 @@ FIELD_CLASS: dict[str, str] = {
     "tenant_keys_file": OPERATIONAL, "provider_region": PROFILE, "provider_zero_retention": PROFILE,
     "egress_allowlist": PROFILE, "anthropic_base_url": PROFILE, "upstream_timeout_s": PROFILE,
     "ner_model": PROFILE, "ner_workers": PROFILE, "ner_queue_max": PROFILE, "ner_timeout_s": PROFILE,
+    "ml_detector": PROFILE, "content_gate_model": PROFILE, "legacy_heuristics": PROFILE,
     "max_body_bytes": PROFILE, "max_content_chars": PROFILE, "max_messages": PROFILE,
     "protect_timeout_s": PROFILE, "max_concurrent_protect": PROFILE,
     "integrity_manifest": OPERATIONAL, "trusted_config_pubkey": OPERATIONAL, "policy_signing_key": OPERATIONAL,
@@ -278,6 +293,7 @@ PROFILE_KIND: dict[str, str] = {
     "upstream_kind": "str", "upstream_url": "str", "anthropic_base_url": "str", "egress_allowlist": "hosts",
     "provider_region": "str?", "provider_zero_retention": "bool", "upstream_timeout_s": "float",
     "ner_model": "str?", "ner_workers": "int0", "ner_queue_max": "int0", "ner_timeout_s": "float",
+    "ml_detector": "mldetector?", "content_gate_model": "mlgate?", "legacy_heuristics": "bool",
     "max_body_bytes": "int", "max_content_chars": "int", "max_messages": "int", "protect_timeout_s": "float",
     "max_concurrent_protect": "int", "private_upstream_url": "str?", "private_allowlist": "hosts",
 }
@@ -288,6 +304,7 @@ PROFILE_ENV: dict[str, str] = {
     "provider_zero_retention": "PGW_PROVIDER_ZERO_RETENTION_ATTESTED", "upstream_timeout_s": "PGW_UPSTREAM_TIMEOUT_S",
     "ner_model": "PGW_NER_MODEL", "ner_workers": "PGW_NER_WORKERS", "ner_queue_max": "PGW_NER_QUEUE_MAX",
     "ner_timeout_s": "PGW_NER_TIMEOUT_S", "max_body_bytes": "PGW_MAX_BODY_BYTES",
+    "ml_detector": "", "content_gate_model": "", "legacy_heuristics": "",
     "max_content_chars": "PGW_MAX_CONTENT_CHARS", "max_messages": "PGW_MAX_MESSAGES",
     "protect_timeout_s": "PGW_PROTECT_TIMEOUT_S", "max_concurrent_protect": "PGW_MAX_CONCURRENT_PROTECT",
     "private_upstream_url": "PGW_PRIVATE_UPSTREAM_URL", "private_allowlist": "",
@@ -345,6 +362,12 @@ def _check(name: str, kind: str, v):
         if not isinstance(v, list) or not v or not all(isinstance(h, str) and h.strip() for h in v):
             raise bad
         return tuple(h.strip().lower() for h in v)
+    if k in ("mldetector", "mlgate"):
+        from ..ml.config import MlConfigError, parse_detector, parse_gate
+        try:
+            return (parse_detector if k == "mldetector" else parse_gate)(v).as_mapping()
+        except MlConfigError as e:
+            raise ProfileError(f"deployment profile: {name!r}: {e}") from None
     raise bad   # pragma: no cover - every kind is handled above
 
 
@@ -397,6 +420,15 @@ def _norm(kind: str, v, base: Path | None, from_profile: bool):
         return str(((base / p) if from_profile and base is not None else p).resolve())
     if k == "hosts":
         return tuple(sorted({str(h).strip().lower() for h in v}))
+    if k in ("mldetector", "mlgate"):
+        from ..ml.config import MlConfigError, parse_detector, parse_gate
+        try:
+            cfg = (parse_detector if k == "mldetector" else parse_gate)(v)
+        except MlConfigError:
+            return ("invalid", repr(v))
+        p = Path(cfg.path)
+        p = (base / p) if from_profile and base is not None and not p.is_absolute() else p
+        return cfg.with_path(str(p.resolve())).as_mapping()
     if k == "float":
         return float(v)
     if k == "str":
@@ -445,12 +477,25 @@ def apply_deployment_profile(settings: Settings, data: bytes | None, base: Path 
                            f"production takes it from the profile only. Unset it, or change the profile, have the "
                            f"change reviewed and re-signed (OPERATIONS.md)"
                            + (f" [also differ: {diff[1:]}]" if len(diff) > 1 else ""))
-    if vals["ner_model"] is None:
+    if vals["ner_model"] is None and vals["ml_detector"] is None:
         if not isinstance(just, str) or len(just.strip()) < MIN_JUSTIFICATION:
             raise ProfileError("production refuses NER off (ner_model: null) unless the signed deployment profile "
-                               f"gives ner_off_justification (at least {MIN_JUSTIFICATION} characters)")
-    elif just is not None:
+                               f"gives ner_off_justification (at least {MIN_JUSTIFICATION} characters) or configures "
+                               "an ml_detector")
+    elif just is not None and vals["ner_model"] is not None:
         raise ProfileError("deployment profile: ner_off_justification is only valid with ner_model: null")
+    check_ml_settings(vals)
     eff = {f: (str(base / v) if v is not None and PROFILE_KIND[f].startswith("path") else v)
            for f, v in vals.items()}
+    for f in ("ml_detector", "content_gate_model"):
+        if eff[f] is not None and not Path(eff[f]["path"]).is_absolute():
+            eff[f] = {**eff[f], "path": str(base / eff[f]["path"])}
     return dataclasses.replace(settings, **eff), []
+
+
+def check_ml_settings(vals) -> None:
+    """Cross-field rule for the ML settings (profile values or Settings attributes)."""
+    get = vals.get if isinstance(vals, dict) else (lambda f: getattr(vals, f))
+    if get("legacy_heuristics") is False and get("ml_detector") is None:
+        raise ProfileError("legacy_heuristics: false needs an ml_detector (the heuristics are only switched off to "
+                           "measure ML + checksum regex against the current stack)")

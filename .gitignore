@@ -38,3 +38,6 @@ eval/eutil/*.jsonl
 eval/eutil/out/*.jsonl
 eval/eutil/out/restore_*.json
 eval/eutil/.ext.json
+
+# ML evaluation run log (release-gate runs; dataset hashes only, but kept out of git)
+eval/ml/results/

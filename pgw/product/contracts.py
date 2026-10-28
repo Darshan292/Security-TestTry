@@ -141,6 +141,9 @@ class Contract:
     external_input: ExternalInput = ExternalInput(frozenset())   # required in every contract file
     business_identifiers: tuple = ()     # compiled, anchored C0 reference formats exempt from the shape backstop
     org_identifiers: tuple[str, ...] = ()   # the organisation's own registration numbers (GSTIN, CIN, TAN): exact, C0
+    # Special-category content gate (pgw.ml.gate): {labels, threshold, action PRIVATE|REFUSE} or None. When any
+    # listed label scores at or above the threshold the request stays in-house or is refused, even when signed.
+    content_gate: dict | None = field(default=None, compare=False, hash=False)
 
     @property
     def ref(self) -> str:
@@ -320,6 +323,14 @@ def _parse_org_identifiers(raw) -> tuple[str, ...]:
     return out
 
 
+def _parse_content_gate(raw) -> dict | None:
+    from ..ml.config import MlConfigError, parse_contract_gate
+    try:
+        return parse_contract_gate(raw)
+    except MlConfigError as e:
+        raise ContractError(str(e)) from None
+
+
 def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
     raw = yaml.safe_load(Path(path).read_text() if data is None else data.decode("utf-8"))
     try:
@@ -373,7 +384,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      redaction_text=_parse_redaction_text(raw.get("redaction_text")),
                      external_input=_parse_external_input(raw.get("external_input")), reference=reference,
                      business_identifiers=_parse_business_identifiers(raw.get("business_identifiers")),
-                     org_identifiers=_parse_org_identifiers(raw.get("org_identifiers")))
+                     org_identifiers=_parse_org_identifiers(raw.get("org_identifiers")),
+                     content_gate=_parse_content_gate(raw.get("content_gate")))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:
@@ -382,6 +394,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
         raise ContractError("external_input.unattested: PRIVATE applies to EXT_PSEUDO contracts only")
     if c.classes[DataClass.C4] == "PRIVATE" and c.route != "EXT_PSEUDO":
         raise ContractError("C4: PRIVATE applies to EXT_PSEUDO contracts only")
+    if c.content_gate is not None and c.content_gate["action"] == "PRIVATE" and c.route != "EXT_PSEUDO":
+        raise ContractError("content_gate.action: PRIVATE applies to EXT_PSEUDO contracts only")
     if c.subjects is not None and (c.route != "EXT_PSEUDO" or c.classes[DataClass.C1] == "REFUSE"):
         raise ContractError("declared_subjects need an EXT_PSEUDO route whose C1 action replaces identities")
     if c.route == "LOCAL_COMPUTE":

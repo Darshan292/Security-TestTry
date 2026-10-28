@@ -25,3 +25,11 @@ the WordNet 3.0 license (permission to use, copy, modify and distribute with thi
 IS PROVIDED "AS IS" AND PRINCETON UNIVERSITY MAKES NO REPRESENTATIONS OR WARRANTIES). spaCy Copyright (C) 2016-2024
 ExplosionAI GmbH, MIT License. The list holds no personal data; it is used only to tell ordinary words from name
 words (pgw.detect.lexicon).
+
+## ML extra (requirements/ml.txt, dev.txt), installed packages, not vendored
+
+ONNX Runtime (MIT License, Microsoft), Hugging Face `tokenizers` and `huggingface-hub` (Apache License 2.0),
+NumPy (BSD 3-Clause), `onnx` (Apache License 2.0; tests only). No model weights are included in this repository;
+each model artefact carries its own licence in its MODEL_CARD.md and must be commercial-friendly
+(docs/ML_ARCHITECTURE.md). The `llama-server` container image (llama.cpp, MIT License) is referenced by pinned
+digest in deploy/docker-compose.yml, not redistributed.

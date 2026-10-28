@@ -568,14 +568,51 @@ class Protected:
         return c
 
 
+# --- ML precedence (docs/ML_ARCHITECTURE.md) ------------------------------------------------------------------------
+# With an ML detector configured, overlapping detections are resolved by tier first, then by score and length:
+#   tier 0  facts and validated identifiers: roster, contract-declared values, the conversation's restore ledger, and
+#           the ID regexes: checksummed (Aadhaar and the cue-less Aadhaar backstop: Verhoeff; card: Luhn) plus the
+#           strict-format schemes whose partial masking would leak the rest of the value (PAN, IFSC, UPI, email,
+#           phone, secrets)
+#   tier 1  statistical models: the ML detector (D4:ml) and spaCy NER (D4:ner)
+#   tier 2  heuristics: person cues and name growth, context-cued numbers and amounts, the identifier-shape backstop
+# Scores are mapped into disjoint bands (tier 0: 0.9-1.0, tier 1: 0.5-0.88, tier 2: 0-0.49), monotone within a tier,
+# so the existing overlap resolution (`_resolve`) and propagation keep working unchanged. Without an ML detector no
+# score is touched (behaviour identical to the stack before the ML layer).
+ID_REGEX_TYPES = frozenset({EntityType.AADHAAR, EntityType.AADHAAR_LIKE, EntityType.CARD, EntityType.PAN,
+                            EntityType.IFSC, EntityType.UPI_ID, EntityType.EMAIL, EntityType.PHONE, EntityType.SECRET})
+# Legacy name and amount heuristics inside D2, switched off with `legacy_heuristics: false`.
+_HEURISTIC_D2 = ("D2:person_", "D2:compensation")
+_MODEL_VIEWS = ("base", "casefold_titled", "despaced")
+
+
+def precedence_tier(d: Detection) -> int:
+    src = d.source
+    if src.startswith(_STRONG_SOURCES) or (src.startswith(("D2:", "D2c:")) and d.type in ID_REGEX_TYPES):
+        return 0
+    if src.startswith("D4:"):
+        return 1
+    return 2
+
+
+def _banded(d: Detection) -> Detection:
+    s = min(1.0, max(0.0, float(d.score)))
+    band = (0.9 + 0.1 * s, 0.5 + 0.38 * s, 0.49 * s)[precedence_tier(d)]
+    return Detection(d.start, d.end, d.type, band, d.source)
+
+
 class Protector:
     def __init__(self, policy: PolicyPack, keys: Keys, roster: RosterIndex | None = None,
-                 ledger: RestoreLedger | None = None, ner=None):
+                 ledger: RestoreLedger | None = None, ner=None, ml=None, heuristics: bool = True):
         self.policy = policy
         self.keys = keys
         self.roster = roster
         self.ledger = ledger
         self.ner = ner          # D4 (pgw.detect.ner.NerDetector) or None; its errors propagate = fail closed
+        # D4:ml (pgw.ml.runtime.MlEntityStage / DetectorPool) or None; its errors propagate = fail closed
+        self.ml = ml
+        # legacy name/amount heuristics; False only with an ML detector (measurement: ML + checksum regex only)
+        self.heuristics = heuristics or ml is None
 
     def detect_text(self, text: str) -> list[Detection]:
         """D0 views + D2 + person cues + D3 (+ D4 NER) on one string; offsets in the ORIGINAL string.
@@ -596,11 +633,20 @@ class Protector:
                 many = getattr(self.ner, "detect_many", None)
                 res = many(ner_views) if many is not None else [self.ner.detect(v) for v in dict.fromkeys(ner_views)]
                 ner_res = dict(zip(ner_views if many is not None else dict.fromkeys(ner_views), res))
+        ml_res: dict[str, list[Detection]] = {}
+        if self.ml is not None and _abl.get().D4:
+            ml_views = list(dict.fromkeys(v for n, v, _ in views if n in _MODEL_VIEWS))
+            if ml_views:   # one batched call; any failure propagates (fail closed)
+                ml_res = dict(zip(ml_views, self.ml.detect_many(ml_views), strict=True))
         for name, view, omap in views:
-            dets = recognizers.detect_d2(view) + detect_person_cues(view)
+            dets = recognizers.detect_d2(view)
+            if self.heuristics:
+                dets += detect_person_cues(view)
+            else:
+                dets = [d for d in dets if not d.source.startswith(_HEURISTIC_D2)]
             if name in ("base", "numwords", "digit_swap") and backstop:
                 dets += idshape.detect(view)     # number-shaped identifier backstop (lowest score: loses overlaps)
-            if name == "base" and _abl.get().CUES:
+            if name == "base" and _abl.get().CUES and self.heuristics:
                 dets += _names.lowercase_cues(view)      # "hi tejas", "ask devraj", "s/o ramprasad yadav"
             if self.roster is not None and _abl.get().D3:
                 dets += self.roster.detect(view)
@@ -613,6 +659,10 @@ class Protector:
                                  and view[d.start:d.end] != titled[d.start:d.end]]
             if name in ("base", "casefold_titled", "despaced") and view in ner_res:
                 dets += [d for d in ner_res[view] if _name_shaped(view[d.start:d.end])]
+            if name in _MODEL_VIEWS and view in ml_res:
+                dets += ml_res[view]
+            if self.ml is not None:
+                dets = [_banded(d) for d in dets]
             for d in dets:
                 if d.type is EntityType.PERSON and not d.source.startswith(_STRONG_SOURCES) \
                         and only_digit_words(view[d.start:d.end]):
@@ -680,7 +730,7 @@ class Protector:
             per_seg[i] = _one_line(seg.text, per_seg[i])     # contract and ledger matches too
             spans, per_seg[i] = legal_titles(seg.text, per_seg[i])
             titles.append(spans)
-            if _abl.get().CUES:     # a column of names in a pasted table: its other cells are names too
+            if _abl.get().CUES and self.heuristics:   # a column of names in a pasted table: its other cells too
                 per_seg[i] += _names.table_columns(seg.text, _resolve(per_seg[i]))
 
         if not _abl.get().D5:   # ablation: no propagation step at all (still resolve overlaps)
@@ -710,7 +760,7 @@ class Protector:
         initials = _initials(s for t, s in known if t is EntityType.PERSON)
         if initials:
             per_seg = [_extend_initials(seg.text, dets, initials) for seg, dets in zip(segs, per_seg, strict=True)]
-        return self._grow_names(segs, per_seg, titles) if _abl.get().CUES else per_seg
+        return self._grow_names(segs, per_seg, titles) if _abl.get().CUES and self.heuristics else per_seg
 
     def _grow_names(self, segs: list[Segment], per_seg: list[list[Detection]],
                     titles: list[list[tuple[int, int]]]) -> list[list[Detection]]:

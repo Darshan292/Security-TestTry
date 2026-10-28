@@ -5,11 +5,11 @@
 # config_serial, have it reviewed by a code owner, re-seal and sign (OPERATIONS.md). In development the profile is
 # advisory (warnings).
 kind: pgw-deployment-profile
-version: 2
+version: 3
 # Monotonic rollback serial (pgw/gateway/rollback.py). Raise it in EVERY signed configuration change, including a
 # deliberate rollback (old content, new higher serial). Production refuses a serial below PGW_MIN_CONFIG_SERIAL or
 # below the high-water mark recorded in PGW_STATE_DIR.
-config_serial: 1
+config_serial: 2
 settings:
   # Sealed configuration files (paths relative to the sealed tree; the roster is optional).
   registry_path: registry/apps.yaml
@@ -35,3 +35,12 @@ settings:
   max_messages: 200
   protect_timeout_s: 10.0
   max_concurrent_protect: 8
+  # ML layer (docs/ML_ARCHITECTURE.md). Off until a trained model artefact is evaluated (docs/ML_EVALUATION.md) and
+  # its sha256 manifest digest (python -m pgw.ml.artifact <dir>) is pinned here in a reviewed, re-signed change:
+  #   ml_detector: {path: /models/pii-v1, sha256: <64 hex>, backend: token,
+  #                 labels: {PER: PERSON, EMAIL: EMAIL}, min_score_by_type: {DEFAULT: 0.5},
+  #                 workers: 2, queue_max: 8, timeout_s: 5.0, intra_op_threads: 2, inter_op_threads: 1, batch_size: 8}
+  #   content_gate_model: {path: /models/gate-v1, sha256: <64 hex>, labels: [health, disciplinary], workers: 1, ...}
+  ml_detector: null
+  content_gate_model: null
+  legacy_heuristics: true                  # false (needs ml_detector): measure "ML + checksum regex only"
