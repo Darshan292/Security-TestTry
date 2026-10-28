@@ -29,7 +29,7 @@ from starlette.routing import Route
 from ..detect import idshape
 from ..detect.edm import RestoreLedger, RosterIndex
 from ..detect.recognizers import detect_d2
-from ..egress import check as egress_check
+from ..egress import blank_own, check as egress_check
 from ..pipeline import ConversationIdRequired, Keys, Protector, UnsupportedContent
 from ..policy import PolicyPack, UnknownPurpose
 from ..stream import Restorer, compact_id
@@ -851,13 +851,13 @@ def create_app(settings: Settings) -> Starlette:
         wire = upstream.wire_bytes(up_body)
         body_hash = hashlib.sha256(wire).hexdigest()
         check_id = "egress_clean"
+        # the gateway's own text in the payload (placeholder note, contract guidance, model name) is not user data
+        own = (PLACEHOLDER_NOTE, model, *((contract.guidance,) if contract and contract.guidance else ()))
         try:
-            egress_check(wire, prot.sensitive_values + withheld)
+            egress_check(blank_own(wire, own), prot.sensitive_values + withheld)
             rep.check("egress_clean", "pass")
             check_id = "declared_absent"
-            subjects.check_outbound(wire, declared if subj else [],
-                                    (PLACEHOLDER_NOTE, model, *((contract.guidance,) if contract and contract.guidance
-                                                                else ()), *held))
+            subjects.check_outbound(wire, declared if subj else [], (*own, *held))
             if subj:
                 rep.check("declared_absent", "pass")
         except EgressViolation:

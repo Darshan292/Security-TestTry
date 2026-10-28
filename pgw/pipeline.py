@@ -89,13 +89,16 @@ def hkdf(master: bytes, tenant: str, purpose: str) -> bytes:
 
 # --- weak PERSON cues (Phase 1 has no NER) ---------------------------------------
 
-_CAP = r"[A-Z][a-z'’\-]+(?:\s+[A-Z]\.)?"
-_HONORIFIC = re.compile(rf"\b(?:Mr|Mrs|Ms|Miss|Dr|Shri|Smt|Sri|Prof)\.?\s+((?:{_CAP})(?:\s+{_CAP}){{0,2}})")
-_GREETING = re.compile(rf"\b(?:Dear|Hi|Hello|Hey)\s+((?:{_CAP})(?:\s+{_CAP}){{0,2}})")
-_SIGNOFF = re.compile(rf"(?:Regards|Thanks|Thank you|Best|Sincerely|Cheers),?\s*\n\s*((?:{_CAP})(?:\s+{_CAP}){{0,2}})")
+# A name never crosses a line break: the words inside a cue name are joined by spaces or tabs only, so a capitalised
+# word that starts the next line ("Mother is unwell") is never swallowed. The cue itself may sit on the line before
+# (a sign-off). pgw.pipeline._resolve enforces the same rule for every PERSON span, whatever produced it.
+_CAP = r"[A-Z][a-z'’\-]+(?:[ \t]+[A-Z]\.)?"
+_HONORIFIC = re.compile(rf"\b(?:Mr|Mrs|Ms|Miss|Dr|Shri|Smt|Sri|Prof)\.?[ \t]+((?:{_CAP})(?:[ \t]+{_CAP}){{0,2}})")
+_GREETING = re.compile(rf"\b(?:Dear|Hi|Hello|Hey)[ \t]+((?:{_CAP})(?:[ \t]+{_CAP}){{0,2}})")
+_SIGNOFF = re.compile(rf"(?:Regards|Thanks|Thank you|Best|Sincerely|Cheers),?[ \t]*\n\s*((?:{_CAP})(?:[ \t]+{_CAP}){{0,2}})")
 # Preposition + >= 2 capitalised tokens ("email to Rahul Sharma"). Over-masks some org names;
 # that costs utility, a miss costs a leak. Precision is measured in E-DET.
-_PREP = re.compile(rf"\b(?:to|for|from|with|cc|about|regarding|by|and|between|of)\s+((?:{_CAP})(?:\s+{_CAP}){{1,2}})")
+_PREP = re.compile(rf"\b(?:to|for|from|with|cc|about|regarding|by|and|between|of)[ \t]+((?:{_CAP})(?:[ \t]+{_CAP}){{1,2}})")
 _NOT_NAMES = {"team", "all", "everyone", "sir", "madam", "there", "folks", "hr", "manager", "guys",
               "support", "admin", "the", "this", "that", "please", "thanks", "regards",
               # forms of address in Indian chat ("hi bhai", "thanks yaar")
@@ -119,6 +122,15 @@ def _name_shaped(span: str) -> bool:
     return len(toks) >= 2 and all(_CAPS_TOKEN.match(t) for t in toks)
 
 
+_DIGIT_GROUP = re.compile(r"\d+")
+
+
+def _card_grouped(text: str, s: int, e: int) -> bool:
+    """A card number written with separators is grouped like one (every group at least three digits, as the base
+    view's card rule requires); the digits_joined view may only remove the separators of such a group."""
+    return all(len(g) >= 3 for g in _DIGIT_GROUP.findall(text, s, e))
+
+
 _PREV_WORD = re.compile(r"([^\W\d_][\w'’\-]*)[ \t]+$")
 _SENT_START = re.compile(r"(?:^|[.!?:;\n\"“(\[]|^\W*)\s*$")
 
@@ -139,16 +151,11 @@ _CUE_TOKEN = re.compile(r"\S+")
 
 def _cue_name(text: str, start: int, end: int, prep: bool) -> tuple[int, int] | None:
     """The name inside a cue match: trailing role, document, time and function words and verb forms are not part of
-    it ("Leena Fernandes Head" -> "Leena Fernandes"; lexicon.ends_name); a sign-off name does not run on to a third
-    line. A preposition cue made only of English words, one of them such a word ("for Payroll Operations"), is no
+    it ("Leena Fernandes Head" -> "Leena Fernandes"; lexicon.ends_name); a name never runs on to the next line. A
+    preposition cue made only of English words, one of them such a word ("for Payroll Operations"), is no
     name; English words that are also surnames ("with Rose Thomas") are kept."""
-    toks = [m.span() for m in _CUE_TOKEN.finditer(text, start, end)]
-    lines = 0
-    for i in range(1, len(toks)):
-        lines += "\n" in text[toks[i - 1][1]:toks[i][0]]
-        if lines > 1:
-            toks = toks[:i]
-            break
+    nl = text.find("\n", start, end)
+    toks = [m.span() for m in _CUE_TOKEN.finditer(text, start, end if nl == -1 else nl)]
     while len(toks) > 1 and ends_name(text[toks[-1][0]:toks[-1][1]]):
         toks.pop()
     words = [text[a:b].rstrip(".") for a, b in toks]
@@ -191,6 +198,30 @@ _TCAP = r"[A-Z][\w'’\-]*"
 _HEAD_FIRST = re.compile(rf"[ \t]+on[ \t]+{_TCAP}(?:(?:[ \t]+(?:of|and|for|the|&))*[ \t]+{_TCAP})*")
 # Detections nothing can contradict: the roster, a contract declaration, the conversation's restore ledger.
 _STRONG_SOURCES = ("D3:", "C:", "D3b:")
+
+
+def _one_line(text: str, dets: list[Detection]) -> list[Detection]:
+    """A PERSON span never crosses a line break. A span that does is cut at each break: a weak detection (cue, NER)
+    keeps its first non-blank line only, so the capitalised first word of the next line ("Mother is unwell") is not
+    swallowed; a strong one (roster, contract, conversation ledger) keeps every line piece, so nothing it protects is
+    released. A name genuinely continued on the next line (a signature) is found by _names.signature_lines, which
+    reads that line on its own terms."""
+    out: list[Detection] = []
+    for d in dets:
+        if d.type is not EntityType.PERSON or "\n" not in text[d.start:d.end]:
+            out.append(d)
+            continue
+        strong = d.source.startswith(_STRONG_SOURCES)
+        pos = d.start
+        for piece in text[d.start:d.end].split("\n"):
+            a = pos + len(piece) - len(piece.lstrip())
+            b = pos + len(piece.rstrip())
+            pos += len(piece) + 1
+            if b > a:
+                out.append(Detection(a, b, d.type, d.score, d.source))
+                if not strong:
+                    break
+    return out
 
 
 _MAX_TITLE_TOKENS = 30
@@ -589,9 +620,11 @@ class Protector:
                 s, e = to_original(omap, d.start, d.end)
                 if name == "numwords":
                     e = word_end(text, e)        # a digit maps to the start of the word that spells it
+                elif name == "digits_joined" and d.type is EntityType.CARD and not _card_grouped(text, s, e):
+                    continue                     # a Luhn hit glued from short digit groups is not a card
                 if e > s:
                     out.append(Detection(s, e, d.type, d.score, f"{d.source}@{name}" if name != "base" else d.source))
-        return out
+        return _one_line(text, out)
 
     def protect(self, messages: list[dict], ctx: Context,
                 declared: list[tuple] | None = None) -> Protected:
@@ -644,6 +677,7 @@ class Protector:
         # Legal-instrument titles are not people (weak hits in them dropped; propagation does not enter them).
         titles: list[list[tuple[int, int]]] = []
         for i, seg in enumerate(segs):
+            per_seg[i] = _one_line(seg.text, per_seg[i])     # contract and ledger matches too
             spans, per_seg[i] = legal_titles(seg.text, per_seg[i])
             titles.append(spans)
             if _abl.get().CUES:     # a column of names in a pasted table: its other cells are names too

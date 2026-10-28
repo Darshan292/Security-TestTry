@@ -118,6 +118,11 @@ _DIGIT_SEP = "\\-./\u2010\u2011\u2012\u2013\u2014\u2212_"
 _DIGIT_CHAIN = re.compile(rf"(?<![0-9])[0-9]+(?:(?: ?[{_DIGIT_SEP}] ?| )[0-9]+)+")
 _DIGITS = re.compile(r"[0-9]+")
 _JOIN_MIN, _JOIN_MAX = 9, 19
+# A decimal amount with a two-digit fraction ("41250.00", "0.50") is one atomic token: joining never crosses into, out
+# of or through it. Without this the salary columns of a payroll line ("41250.00 16500.00 52318.00") were glued into
+# one 19-digit number that happened to pass Luhn and was read as a card. "98.76.54" (more dotted groups) and
+# "98200.12345" (a longer tail) are not amounts and still join.
+_AMOUNT = re.compile(r"(?<![0-9.])(?:0|[1-9][0-9]*)\.[0-9]{2}(?![0-9]|\.[0-9])")
 
 _BR_OPEN, _BR_CLOSE = r"[\[({<]", r"[\])}>]"
 _AT = rf"(?:[ ]*{_BR_OPEN}[ ]*at[ ]*{_BR_CLOSE}[ ]*|[ ]+at[ ]+|[ ]*@[ ]*)"
@@ -198,29 +203,56 @@ def _despace(s: str, omap: list[int]):
     return _apply(s, omap, edits)
 
 
+def _atomic_runs(s: str, start: int, end: int) -> list[list[tuple[int, int]]]:
+    """The digit groups of the chain s[start:end], split wherever joining would cross a decimal amount (_AMOUNT)."""
+    groups = [g.span() for g in _DIGITS.finditer(s, start, end)]
+    if "." not in s[start:end]:
+        return [groups]
+    amounts = [a.span() for a in _AMOUNT.finditer(s, start, end)]
+    if not amounts:
+        return [groups]
+    runs: list[list[tuple[int, int]]] = [[]]
+    k = 0
+    for g in groups:
+        while k < len(amounts) and amounts[k][1] <= g[0]:
+            k += 1
+        if k < len(amounts) and amounts[k][0] <= g[0]:
+            if runs[-1]:
+                runs.append([])              # an amount group stands alone: break before it and after it
+            runs[-1].append(g)
+            runs.append([])
+        else:
+            runs[-1].append(g)
+    return [r for r in runs if r]
+
+
 def _join_digits(s: str, omap: list[int]):
     edits: list[tuple[int, int, str]] = []
     for m in _DIGIT_CHAIN.finditer(s):
-        groups = [g.span() for g in _DIGITS.finditer(s, m.start(), m.end())]
-        n, i = len(groups), 0
-        while i < n:
-            tot, j = 0, i
-            while j < n and tot + groups[j][1] - groups[j][0] <= _JOIN_MAX:
-                tot += groups[j][1] - groups[j][0]
-                j += 1
-            seps = {s[groups[k][1]:groups[k + 1][0]] for k in range(i, j - 1)}
-            # All-hyphen chains are ordinary structured codes (GL 7360-1933-03, INV-2024-000123); the base
-            # view already recognises every legitimate hyphenated phone/Aadhaar/card format. Joining them
-            # produced phone false positives on R1 dev negatives (166). Mixed/odd separators still join.
-            if j - i >= 2 and tot >= _JOIN_MIN and seps != {"-"}:
-                for k in range(i, j - 1):
-                    edits.append((groups[k][1], groups[k + 1][0], ""))
-                i = j
-            else:
-                i += 1
+        for groups in _atomic_runs(s, m.start(), m.end()):
+            _join_run(s, groups, edits)
     if not edits:
         return None
     return _apply(s, omap, edits)
+
+
+def _join_run(s: str, groups: list[tuple[int, int]], edits: list[tuple[int, int, str]]) -> None:
+    n, i = len(groups), 0
+    while i < n:
+        tot, j = 0, i
+        while j < n and tot + groups[j][1] - groups[j][0] <= _JOIN_MAX:
+            tot += groups[j][1] - groups[j][0]
+            j += 1
+        seps = {s[groups[k][1]:groups[k + 1][0]] for k in range(i, j - 1)}
+        # All-hyphen chains are ordinary structured codes (GL 7360-1933-03, INV-2024-000123); the base
+        # view already recognises every legitimate hyphenated phone/Aadhaar/card format. Joining them
+        # produced phone false positives on R1 dev negatives (166). Mixed/odd separators still join.
+        if j - i >= 2 and tot >= _JOIN_MIN and seps != {"-"}:
+            for k in range(i, j - 1):
+                edits.append((groups[k][1], groups[k + 1][0], ""))
+            i = j
+        else:
+            i += 1
 
 
 def _deobf_email(s: str, omap: list[int]):

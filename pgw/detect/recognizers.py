@@ -40,17 +40,26 @@ _NZ = r"(?![A-Za-z0-9])"       # not inside a longer alnum token (right)
 Cand = tuple[int, int, T, float, str]
 
 
+_COL_GAP = re.compile(r" {2,}")     # a fixed-width column gap
+
+
 @functools.lru_cache(maxsize=8)
 def _header_spans(text: str) -> tuple:
-    """Spans of lines that are the header row of a CSV/TSV table (cells are field names, never values)."""
+    """Spans of lines that are the header row of a table (cells are field names, never values): CSV/TSV, pipe and
+    semicolon tables, and fixed-width exports whose columns are separated by runs of two or more spaces."""
     spans = []
     pos = 0
     for ln in text.split("\n"):
         end = pos + len(ln)
         if len(ln) < 600:
             d = "\t" if ln.count("\t") >= 2 else ("|" if ln.count("|") >= 2 else ("," if ln.count(",") >= 3 else (";" if ln.count(";") >= 3 else None)))
-            if d:
+            if d is None and ln.count("  ") >= 2:
+                cells = [c.strip() for c in _COL_GAP.split(ln.strip())]
+            elif d:
                 cells = [c.strip().strip('"') for c in ln.split(d)]
+            else:
+                cells = None
+            if cells:
                 if len(cells) >= 3 and sum(bool(_HDR_ALPHA.fullmatch(c)) for c in cells) >= 0.8 * len(cells) \
                         and sum(_classify_key(c) is not None for c in cells if _HDR_ALPHA.fullmatch(c)) >= 2:
                     spans.append((pos, end))
@@ -914,6 +923,11 @@ def _statutory_amount(text: str, s: int, e: int) -> bool:
     return bool(_STATUTE.search(masked))
 
 
+def _statutory_near(text: str, s: int, e: int, triggers: list[int]) -> bool:
+    i = bisect.bisect_left(triggers, s - 200)      # the statutory rules all need a trigger word in reach
+    return i < len(triggers) and triggers[i] < e + 200 and _statutory_amount(text, s, e)
+
+
 _MARKED_CHECKS = 512    # context checks per string for currency-marked amounts; beyond that an amount is kept (fail
                         # closed, bounded time: a flood of "12,345/-" would otherwise cost ~0.2 ms per amount)
 
@@ -922,6 +936,8 @@ def _compensation(text: str) -> list[Cand]:
     out: list[Cand] = _bank_file_amounts(text)
     triggers: list[int] | None = None
     checks = 0
+    accepted: list[int] = []        # starts of currency-marked amounts taken as compensation
+    pending: list[re.Match] = []    # currency-marked amounts left out only for want of a pay word nearby
     for m in _COMP_MARKED.finditer(text):
         pre, unit, sfx = m.group("pre"), m.group("unit"), m.group("sfx")
         if not pre and not unit and not sfx:
@@ -950,18 +966,31 @@ def _compensation(text: str) -> list[Cand]:
                 cs, ce = _clause(text, m.start(), m.end())
                 if not (pre and len(m.group("num").split(".")[0].replace(",", "")) >= 4
                         and _OWN_PAY.search(text, cs, ce) and _MONEY_VERB.search(text, cs, ce)):
+                    if pre and len(pending) < _MARKED_CHECKS:
+                        pending.append(m)
                     continue
         if triggers is None:
             triggers = [t.start() for t in _STATUTORY_TRIGGER.finditer(text)]
-        i = bisect.bisect_left(triggers, m.start() - 200)      # the statutory rules all need a trigger word in reach
-        if i < len(triggers) and triggers[i] < m.end() + 200 and _statutory_amount(text, m.start(), m.end()):
+        if _statutory_near(text, m.start(), m.end(), triggers):
             continue
+        if pre:
+            accepted.append(m.start())
         if sfx and not pre and not unit:
             # only a currency after the number: the span is the number ("[alias]/-", "[alias] rupees"), scored like a
             # pay-keyword amount
             out.append((m.start(), m.start("sfx"), T.COMPENSATION, 0.8, "D2:compensation"))
             continue
         out.append((m.start(), m.end(), T.COMPENSATION, 0.9, "D2:compensation"))
+    # One decision per clause: currency-marked amounts written side by side ("Rs 200 per month and Rs 20 per year")
+    # are the same kind of money. When one of them is compensation, a sibling left out only because no pay word was
+    # near it is compensation too (business money, counts and statutory constants were already ruled out above).
+    # Otherwise one amount was aliased and its neighbour sent raw, in the same sentence.
+    if pending and accepted:
+        for m in pending:
+            cs, ce = _clause(text, m.start(), m.end())
+            k = bisect.bisect_left(accepted, cs)
+            if k < len(accepted) and accepted[k] < ce and not _statutory_near(text, m.start(), m.end(), triggers or []):
+                out.append((m.start(), m.end(), T.COMPENSATION, 0.9, "D2:compensation"))
     for kw in _COMP_KW.finditer(text):
         if _in_header_cell(text, kw.start(), kw.end()) or _in_header_line(text, kw.start()):
             continue  # CSV/TSV header cell
@@ -1830,6 +1859,16 @@ def _legend(text: str) -> dict:
     return leg
 
 
+_GAP_DELIM = "  "                        # fixed-width export: columns separated by runs of two or more spaces
+_GAP_CELL = re.compile(r"\S+(?: \S+)*")
+
+
+def _row_cells(text: str, s: int, e: int, delim: str) -> list[tuple[int, int]]:
+    if delim == _GAP_DELIM:
+        return [m.span() for m in _GAP_CELL.finditer(text, s, e)]
+    return _split_cells(text, s, e, delim)
+
+
 def _table_delim(line: str) -> str | None:
     best, cnt = None, 1
     for d in ("\t", "|", ",", ";"):
@@ -1840,7 +1879,7 @@ def _table_delim(line: str) -> str | None:
 
 
 def _scan_csv(text: str, out: list, neg: list | None = None) -> None:
-    if not any(d in text for d in (",", "\t", "|", ";")):
+    if not any(d in text for d in (",", "\t", "|", ";", _GAP_DELIM)):
         return
     legend = None
     lines: list[tuple[int, int]] = []
@@ -1854,6 +1893,8 @@ def _scan_csv(text: str, out: list, neg: list | None = None) -> None:
         s, e = lines[i]
         line = text[s:e]
         delim = _table_delim(line)
+        if delim is None and _GAP_DELIM in line and _in_header_line(text, s):
+            delim = _GAP_DELIM       # a fixed-width header row (_header_spans): its rows are split the same way
         if delim is None:
             i += 1
             continue
@@ -1862,7 +1903,7 @@ def _scan_csv(text: str, out: list, neg: list | None = None) -> None:
                 and any(not is_english(w) for w in re.findall(r"[A-Z][a-z]{2,}", line)):
             i += 1
             continue    # a row inside a table holding a name ("Tushar Wagle,Pune,Manager") is data, not a header
-        cells = _split_cells(text, s, e, delim)
+        cells = _row_cells(text, s, e, delim)
         if delim == "|" and cells and not text[cells[0][0]:cells[0][1]].strip():
             cells = cells[1:]                                   # "| a | b |" tables
         if delim == "|" and cells and not text[cells[-1][0]:cells[-1][1]].strip():
@@ -1893,7 +1934,7 @@ def _scan_csv(text: str, out: list, neg: list | None = None) -> None:
             if _in_header_line(text, rs):
                 j += 1
                 continue                              # a repeated header row is not data
-            rcells = _split_cells(text, rs, re_, delim)
+            rcells = _row_cells(text, rs, re_, delim)
             if delim == "|" and len(rcells) == n + 2 and not text[rcells[0][0]:rcells[0][1]].strip():
                 rcells = rcells[1:-1]
             if len(rcells) == n:
