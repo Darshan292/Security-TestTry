@@ -878,10 +878,19 @@ def create_app(settings: Settings) -> Starlette:
                 _tr("route", route="RECORDS", reason="field contract: computed results and aliases only")
                 rep.begin("compute")
                 try:
-                    rr = await bounded(_records.run, plan, messages, timeout=plan.spec.timeout_s)
+                    rr = await bounded(_records.run, plan, messages, (app.tenant, app.app_id, purpose, conv or ""),
+                                       timeout=plan.spec.timeout_s)
                 except _Reject:
                     rep.end("compute", "failed")
                     raise
+                except _records.disclosure.DisclosureRefused as e:
+                    # small-group disclosure control (differencing): nothing is sent; the report says why (counts)
+                    rep.end("compute", "failed")
+                    if rep.enabled:
+                        rep.records = e.report
+                    ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                                "disclosure_control", contract)
+                    raise _Reject(422, "disclosure_control_refused", str(e)) from None
                 except local_compute.PayloadError as e:
                     rep.end("compute", "failed")
                     ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,

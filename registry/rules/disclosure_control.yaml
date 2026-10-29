@@ -1,0 +1,33 @@
+# Small-group disclosure control for every RECORDS contract (pgw/product/disclosure.py, docs/HRMS_CONTRACTS.md
+# "Small groups", SECURITY_BOUNDARY.md §12). Sealed and signed like every rules file: a modified, unsealed or missing
+# file stops startup. A change needs review, a version bump and a re-seal (OPERATIONS.md).
+kind: pgw-disclosure-control
+config: disclosure_control
+version: 1
+# k: no count of 1..k-1 people defined by quasi-identifiers leaves, and every listed alias's leaving attributes are
+# shared by at least k people. Below 3 only with `min_group_size_override: {justification: "..."}` (reviewed).
+# A contract may raise it (records.min_group_size), never lower it.
+min_group_size: 5
+# Listings: coarsen (hierarchies below and the built-in ones: month -> year -> 5-year range, PIN 560xxx -> 56xxxx,
+# then drop the column; rows that still fail show "attributes withheld") | withhold (no coarsening) | alias_only
+# (no attributes next to aliases at all).
+listing: coarsen
+# Per-conversation log of roster filter predicates (never values): refuse a query whose result differs from an
+# earlier one by 1..k-1 records. In memory per gateway process; partial protection (SECURITY_BOUNDARY.md §12).
+differencing:
+  enabled: true
+  max_queries_per_scope: 64
+  max_scopes: 10000
+  ttl_s: 86400
+# Quasi-identifiers: by default every KEEP and GENERALIZE field of a schema (every field whose value can leave).
+# A schema block may only ADD names. Hierarchies: roll-ups of a KEEP enumeration, finest first (STARTER mapping:
+# replace with your organisation's reference table and re-seal).
+schemas:
+  ad_user:
+    quasi_identifiers: []
+    hierarchies:
+      department:
+        - {Finance: Corporate functions, Legal: Corporate functions, Human Resources: Corporate functions,
+           Administration: Corporate functions, Engineering: Engineering and operations,
+           Operations: Engineering and operations, Manufacturing: Engineering and operations,
+           Sales: Customer-facing, Marketing: Customer-facing, Support: Customer-facing}

@@ -418,8 +418,9 @@ def test_contractor_budget_rules():
     assert by["W5"] == "NO_BUDGET" and by["W6"] == "MISSING:po_budget"
     assert out["flag_counts"].value == {"OVER_BUDGET": 1, "NEAR_BUDGET": 1, "RATE_ABOVE_APPROVED": 1, "NO_BUDGET": 1,
                                         "MISSING:po_budget": 1}
-    assert dict(out["group_utilisation"].value) == {"Finance": "utilisation 50% to under 80%",
-                                                    "Legal": "utilisation 50% to under 80%"}
+    # two contractors per cost centre (< k = 5): neither band may leave; merged, still < k: suppressed
+    # (disclosure control; bands of groups of >= k people: test_contractor_cost_centre_bands_need_k_people)
+    assert dict(out["group_utilisation"].value) == {"other cost centres": "suppressed"}
 
 
 def test_roster_question_filters_and_groups():

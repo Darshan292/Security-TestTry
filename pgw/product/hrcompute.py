@@ -45,6 +45,7 @@ class Row:
 class Out:
     kind: str
     value: object
+    meta: dict = field(default_factory=dict)   # disclosure control inputs (pgw.product.disclosure); never rendered
 
 
 class ParamError(ValueError):
@@ -496,6 +497,11 @@ def band_of(x: Decimal, edges: tuple, labels: tuple) -> str:
     return labels[idx] if x >= edges[0] else labels[0]
 
 
+def _person(ctx, row):
+    fn = getattr(ctx, "person_key", None)
+    return fn(row) if fn is not None else ("#row", row.index)
+
+
 def contractor_budget(rows: list, params: dict, r: BudgetRules, ctx) -> dict:
     f = r.f
     counts: dict = {}
@@ -523,9 +529,10 @@ def contractor_budget(rows: list, params: dict, r: BudgetRules, ctx) -> dict:
                 tot_budget += b
                 gv = v.get(f["group"])
                 if gv is not None:
-                    g = groups.setdefault(gv, [Decimal(0), Decimal(0)])
+                    g = groups.setdefault(gv, [Decimal(0), Decimal(0), set()])
                     g[0] += s
                     g[1] += b
+                    g[2].add(_person(ctx, row))
         if _need(row, (f["rate"], f["approved"]), codes):
             rate, appr = _num(v[f["rate"]]), _num(v[f["approved"]])
             if rate < 0 or appr <= 0:
@@ -538,8 +545,28 @@ def contractor_budget(rows: list, params: dict, r: BudgetRules, ctx) -> dict:
             codes = sorted(set(codes))
             _tally(counts, codes)
             flagged.append((row, "; ".join([", ".join(codes), *tokens])))
-    group_rows = [(k, "utilisation " + band_of(s * 100 / b, r.util_edges, r.util_labels))
-                  for k, (s, b) in sorted(groups.items()) if b > 0]
+    # Small-group control (pgw.product.disclosure): a cost centre with fewer than k people is merged into "other
+    # cost centres", which is itself shown only with at least k people; otherwise its band is suppressed.
+    k = getattr(ctx, "k", 1)
+    group_rows, small = [], []
+    for key, (s, b, people) in sorted(groups.items()):
+        if b <= 0:
+            continue
+        if len(people) >= k:
+            group_rows.append((key, "utilisation " + band_of(s * 100 / b, r.util_edges, r.util_labels)))
+        else:
+            small.append((s, b, people))
+    if small:
+        ms = sum((x[0] for x in small), Decimal(0))
+        mb = sum((x[1] for x in small), Decimal(0))
+        mp = set().union(*(x[2] for x in small))
+        ok = len(mp) >= k and mb > 0
+        group_rows.append(("other cost centres", "utilisation " + band_of(ms * 100 / mb, r.util_edges, r.util_labels)
+                           if ok else "suppressed"))
+        st = getattr(ctx, "stats", None)
+        if st is not None:
+            st["groups_merged"] = st.get("groups_merged", 0) + len(small)
+            st["groups_suppressed"] = st.get("groups_suppressed", 0) + (0 if ok else 1)
     return {"rows_checked": Out("count", len(rows)), "rows_flagged": Out("count", len(flagged)),
             "flag_counts": Out("codes", counts), "flagged": Out("list", flagged),
             "group_utilisation": Out("groups", group_rows), "total_spend": Out("amount", tot_spend),
@@ -560,46 +587,59 @@ def parse_roster_rules(body: dict) -> dict:
 OPS = ("eq", "ne", "in", "gte", "lte")
 
 
+def roster_match(row: Row, flt) -> int:
+    """1: the row matches every clause; -1: a filtered field has no value (counted as missing); 0: no match.
+    Every row is exactly one of the three (the roster's count table relies on that partition)."""
+    for name, op, val, order in flt:
+        x = row.values.get(name)
+        if x is None:
+            return -1
+        if op == "eq":
+            ok = x == val
+        elif op == "ne":
+            ok = x != val
+        elif op == "in":
+            ok = x in val
+        else:
+            kx, kv = order(x), order(val)
+            ok = kx is not None and (kx >= kv if op == "gte" else kx <= kv)
+        if not ok:
+            return 0
+    return 1
+
+
 def roster_question(rows: list, params: dict, rules: dict, ctx) -> dict:
     """params (validated by pgw.product.records against the contract): filter [(name, op, value)], group_by,
-    list. Only KEEP and GENERALIZE fields can be filtered or grouped on, and only with sealed values."""
+    list. Only KEEP and GENERALIZE fields can be filtered or grouped on, and only with sealed values.
+    Listed rows carry no attributes here: the renderer adds the contract's `show` fields after disclosure control."""
     flt = params["filter"]
     matched = []
     missing = 0
     for row in rows:
-        ok = True
-        for name, op, val, order in flt:
-            x = row.values.get(name)
-            if x is None:
-                ok = False
-                missing += 1
-                break
-            if op == "eq":
-                ok = x == val
-            elif op == "ne":
-                ok = x != val
-            elif op == "in":
-                ok = x in val
-            else:
-                kx, kv = order(x), order(val)
-                ok = kx is not None and (kx >= kv if op == "gte" else kx <= kv)
-            if not ok:
-                break
-        if ok:
+        m = roster_match(row, flt)
+        if m == 1:
             matched.append(row)
+        elif m == -1:
+            missing += 1
     gb = params.get("group_by")
-    groups = []
+    groups, sizes = [], []
     if gb:
         gc: dict = {}
         for row in matched:
             k = row.values.get(gb)
             gc[k] = gc.get(k, 0) + 1
-        groups = [(k if k is not None else "(not recorded)", f"{n}") for k, n in
-                  sorted(gc.items(), key=lambda kv: (kv[0] is None, str(kv[0])))]
-    listed = [(row, ctx.show_text(row)) for row in matched] if params.get("list") else []
-    return {"total_rows": Out("count", len(rows)), "matched_count": Out("count", len(matched)),
+        ordered = sorted(gc.items(), key=lambda kv: (kv[0] is None, str(kv[0])))
+        groups = [(k if k is not None else "(not recorded)", f"{n}") for k, n in ordered]
+        sizes = ordered
+    listed = [(row, "") for row in matched] if params.get("list") else []
+    filtered = bool(flt)
+    return {"total_rows": Out("count", len(rows)),
+            "matched_count": Out("count", len(matched),
+                                 {"filtered": filtered, "rest": len(rows) - len(matched) - missing,
+                                  "matched": frozenset(r.index for r in matched)}),
             "rows_missing_filter_field": Out("count", missing), "filter_text": Out("label", params["filter_text"]),
-            "matched": Out("list", listed), "group_counts": Out("groups", groups)}
+            "matched": Out("list", listed, {"population": matched}),
+            "group_counts": Out("groups", groups, {"sizes": sizes, "field": gb})}
 
 
 @dataclass(frozen=True)
