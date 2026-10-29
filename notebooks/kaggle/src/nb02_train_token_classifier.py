@@ -34,6 +34,15 @@ from ml.train import licences  # noqa: E402
 
 LICENCE = licences.check_model(BASE_MODEL, licences.hub_licence, allow_table_fallback=ALLOW_OFFLINE_LICENCE_TABLE)
 
+# %% Optional Faker en_IN names/addresses (PGW_FAKER_SHARE=0.3; default off, Aadhaar/PAN/etc. stay with the repo generators)
+FAKER_SHARE = float(os.environ.get("PGW_FAKER_SHARE", "0"))
+if FAKER_SHARE > 0:
+    pip_install("faker")
+    from ml.train import values as _values  # noqa: E402
+
+    _values.enable_faker(FAKER_SHARE)
+    print("Faker en_IN source enabled, share", FAKER_SHARE)
+
 # %% Build the data: fill templates + programmatic genres, split BY TEMPLATE
 import collections  # noqa: E402
 import math  # noqa: E402

@@ -25,6 +25,7 @@ NOTEBOOKS = {
     "01_generate_templates": ("nb01_generate_templates.py", "PGW 01 Generate templates", [PKG_DATASET]),
     "02_train_token_classifier": ("nb02_train_token_classifier.py", "PGW 02 Train token classifier", [PKG_DATASET, TPL_DATASET]),
     "03_train_content_gate": ("nb03_train_content_gate.py", "PGW 03 Train content gate", [PKG_DATASET, TPL_DATASET]),
+    "04_export_detectors": ("nb04_export_detectors.py", "PGW 04 Export open detectors", [PKG_DATASET]),
 }
 
 

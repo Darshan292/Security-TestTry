@@ -57,3 +57,9 @@ version (LGPL-2.1 §6). If it is ever modified or vendored, its LGPL obligations
 notice) apply to that copy. Copyright (C) Arthur de Jong and others; source: https://arthurdejong.org/python-stdnum/.
 phonenumbers: Copyright (C) 2009-2024 The Libphonenumber Authors and David Drysdale (Python port), Apache-2.0.
 detect-secrets: Copyright (c) 2018 Yelp, Inc., Apache-2.0.
+
+## Evaluation extras (requirements/eval.in, eval.txt), installed packages, not vendored, never imported by pgw/
+
+nervaluate (MIT), presidio-analyzer (MIT; wheel classifier), Faker (MIT), phonenumbers (Apache-2.0), tldextract
+(BSD-3-Clause) as read from the wheel METADATA. python-stdnum (LGPL-2.1+) is also used by the eval tests as an independent cross-check of generated identifiers; in pgw/ it is imported only by the optional validator plugin above, and never by `ml/train`. Third-party detector
+models examined by notebook 04 are not included; each exported bundle carries its model card licence.

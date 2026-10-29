@@ -36,6 +36,15 @@ ROOT = Path(__file__).resolve().parent
 HELD_OUT = re.compile(r"(?:^|/)(?:test\d*|ner_test\d*|dev3val|sealed[^/]*)(?:\.jsonl(?:\.gz)?|\.tar\.enc)?$")
 
 
+def is_held_out(path: str | Path, gate: dict | None = None) -> bool:
+    """True for anything a dev run must never read: the regex releases' held-out corpora, sealed archives, tester sets,
+    release_sets of the gate config and any path naming `heldout`/`held_out`. Decided from the PATH ONLY (no file I/O)."""
+    p = Path(path)
+    low = p.as_posix().lower()
+    sets = {str(Path(x).resolve()) for x in ((gate or {}).get("release_sets") or []) if x}
+    return bool(HELD_OUT.search(low) or "heldout" in low or "held_out" in low or "tester" in low or str(p.resolve()) in sets)
+
+
 def sha256_file(p: Path) -> str:
     h = hashlib.sha256()
     with open(p, "rb") as fh:
@@ -86,14 +95,26 @@ def judge(result: dict, gate: dict) -> dict:
     return {"verdict": verdict, "checks": checks, "thresholds_not_set": undecided}
 
 
-def evaluate(backend: Backend, examples) -> dict:
+def evaluate(backend: Backend, examples, nervaluate: bool = False) -> dict:
     sc = Scorer()
+    nv = None
+    if nervaluate:
+        from .nerval import Collector
+        nv = Collector()
     for ex in examples:
         t0 = time.perf_counter()
         pred, protected = backend.run(ex.text)
         ms = (time.perf_counter() - t0) * 1000
         sc.add(ex.text, ex.spans, pred, ex.genre, protected, ex.benign, ms)
-    return sc.result()
+        if nv is not None:
+            nv.add(ex.spans, pred)
+    res = sc.result()
+    if nv is not None:
+        res["nervaluate"] = nv.result()
+    notes = getattr(backend, "notes", None)
+    if callable(notes):
+        res["backend_notes"] = notes()
+    return res
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -108,6 +129,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate", type=Path, default=ROOT / "release_gate.yaml")
     ap.add_argument("--label-names", help="comma-separated BIO label names for integer ner_tags")
     ap.add_argument("--type-map", help="comma-separated MODEL=GATEWAY type renames for BIO data, e.g. PER=PERSON")
+    ap.add_argument("--presidio-min-score", type=float, default=0.4,
+                    help="presidio/union backends: drop Presidio results scoring below this (default 0.4)")
+    ap.add_argument("--nervaluate", action="store_true",
+                    help="also report nervaluate's strict/exact/partial/type schemes (optional dependency)")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--out", type=Path, help="write the JSON result here")
     a = ap.parse_args(argv)
@@ -115,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     data = Path(a.data)
     gate = load_gate(a.gate if a.gate and a.gate.exists() else None)
     release_sets = {str(Path(p).resolve()) for p in (gate.get("release_sets") or []) if p}
-    if a.role == "dev" and (HELD_OUT.search(data.as_posix()) or str(data.resolve()) in release_sets):
+    if a.role == "dev" and (is_held_out(data, gate) or str(data.resolve()) in release_sets):
         print("refused: this dataset is held out / a release-gate set; it is never used for model selection "
               "(use --role release)", file=sys.stderr)
         return 2
@@ -127,8 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     examples, stats = load(data, a.format, **kw)
     if a.limit and a.role == "dev":
         examples = examples[:a.limit]
-    backend = Backend(a.backend, load_model_config(a.model) if a.model else None, a.roster, a.ner)
-    result = evaluate(backend, examples)
+    backend = Backend(a.backend, load_model_config(a.model) if a.model else None, a.roster, a.ner, a.presidio_min_score)
+    result = evaluate(backend, examples, a.nervaluate)
     result["dataset"] = {"name": data.name, "format": a.format, "sha256": sha256_file(data), **stats}
     result["backend"] = {"name": a.backend, "model_sha256": getattr(backend, "model_sha256", None), "ner": a.ner,
                          "roster": bool(a.roster)}

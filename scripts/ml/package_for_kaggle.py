@@ -3,6 +3,8 @@
 
 Output directory (default dist/kaggle_ml_train/):
     ml_train.zip             deterministic zip of ml/__init__.py and ml/train/*.py   (unzips to ml/train/...)
+    pgw_ml_runtime.zip       deterministic zip of the gateway's ML runtime slot (pgw/__init__.py, pgw/types.py, pgw/ml/*.py),
+                             so notebook 04 can load its exported bundles with the production classes
     ml/train/*.py            the same files unpacked (Kaggle may auto-extract zips; the notebooks accept either layout)
     dataset-metadata.json    for `kaggle datasets create -p <dir>`
     SHA256SUMS               hashes of the files above
@@ -44,6 +46,24 @@ def collect(root: Path = ROOT) -> list[tuple[str, Path]]:
     return files
 
 
+def collect_runtime(root: Path = ROOT) -> list[tuple[str, Path]]:
+    files = [("pgw/__init__.py", root / "pgw" / "__init__.py"), ("pgw/types.py", root / "pgw" / "types.py")]
+    files += [(p.relative_to(root).as_posix(), p) for p in sorted((root / "pgw" / "ml").glob("*.py"))]
+    for rel, p in files:
+        if not p.exists():
+            raise SystemExit(f"missing {rel}")
+    return files
+
+
+def _zip(path: Path, files: list[tuple[str, Path]]) -> None:
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel, p in files:
+            info = zipfile.ZipInfo(rel, EPOCH)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            z.writestr(info, p.read_bytes())
+
+
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
     h.update(path.read_bytes())
@@ -58,23 +78,19 @@ def build(out: Path, owner: str, slug: str, root: Path = ROOT) -> dict:
         shutil.rmtree(out)
     out.mkdir(parents=True)
     zpath = out / "ml_train.zip"
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-        for rel, p in files:
-            info = zipfile.ZipInfo(rel, EPOCH)
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o644 << 16
-            z.writestr(info, p.read_bytes())
+    _zip(zpath, files)
+    _zip(out / "pgw_ml_runtime.zip", collect_runtime(root))
     for rel, p in files:
         dest = out / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(p, dest)
     meta = {"title": "PGW ML train package", "id": f"{owner}/{slug}", "licenses": [{"name": "other"}],
             "subtitle": "Synthetic-data training code for the privacy gateway ML detectors (no data inside)",
-            "description": "Pure-Python package ml/train (value generators, template slot filling, BIO alignment). Contains no data."}
+            "description": "Pure-Python package ml/train (value generators, template slot filling, BIO alignment) and the gateway ML runtime classes (pgw_ml_runtime.zip). Contains no data."}
     (out / "dataset-metadata.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     sums = sorted(p for p in out.rglob("*") if p.is_file() and p.name != "SHA256SUMS")
     (out / "SHA256SUMS").write_text("".join(f"{sha256(p)}  {p.relative_to(out).as_posix()}\n" for p in sums), encoding="utf-8")
-    return {"out": str(out), "files": len(files), "zip_sha256": sha256(zpath), "dataset": meta["id"]}
+    return {"out": str(out), "files": len(files), "zip_sha256": sha256(zpath), "runtime_zip_sha256": sha256(out / "pgw_ml_runtime.zip"), "dataset": meta["id"]}
 
 
 def main(argv=None) -> int:

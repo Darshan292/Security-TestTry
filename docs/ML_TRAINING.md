@@ -139,3 +139,55 @@ recall-versus-threshold sweep (entity if P(not O) >= tau; lower tau = more recal
   the contract declares them business identifiers); the synthetic negatives use short forms only. Decide that policy in the contract, not in the model.
 * Open licences are checked at run time against the Hub model card (`ml/train/licences.py`); re-check them when changing a base model, and never use
   ai4privacy datasets, piiranha, Llama, Gemma or Qwen2.5-3B.
+
+## Notebook 04: export and measure open detectors (nothing is adopted)
+
+`notebooks/kaggle/04_export_detectors` (built from `notebooks/kaggle/src/nb04_export_detectors.py`; rebuild with
+`python scripts/ml/build_notebooks.py --owner <you>`) tries each candidate open detector and records, per candidate, one of
+`exported`, `unsupported` (with the reason), `licence_refused` or `error`; a failure never stops the next candidate and is
+never reported as success. Candidates (`ml/train/detectors.py`): OpenAI Privacy Filter (`openai/privacy-filter`), ai4bharat
+IndicNER (`ai4bharat/IndicNER`), a GLiNER PII model with an Apache-2.0 card (`urchade/gliner_multi_pii-v1`, never the CC-BY-NC
+`gliner_multi` v0), and a GLiNER2 PII model only if you pass `PGW_GLINER2_REPO` (it is recorded as unsupported unless its
+exported graph has the six GLiNER v1 inputs the runtime slot feeds). Per candidate: (1) licence read from the Hub model card
+and asserted against `ml/train/licences.py` (`ALLOWED_DETECTORS` holds the *expected* licences as a cross-check; the card is
+the authority; the expected values for privacy-filter could not be verified offline when this was written); (2) export to
+ONNX in the gateway format (`labels.json` pgw-ml-labels/1, token- or span-classification); (3) int8 dynamic quantisation;
+(4) fp32-vs-int8 agreement and dev recall on synthetic text generated in the notebook from `ml/train`; int8 is shipped only
+if it loses at most 1 point of recall, else the fp32 graph; (5) CPU latency per document; (6) bundle with `sha256sums`,
+`metrics.json`, `train_meta.json` (the reviewed label map) and `MODEL_CARD.md`. Both fp32 and int8 are loaded and run through
+the gateway's own `OnnxTokenClassifier` / `OnnxSpanModel`, shipped to Kaggle in `pgw_ml_runtime.zip` (made by
+`scripts/ml/package_for_kaggle.py` next to `ml_train.zip`; attach the dataset, re-version it after pulling this change).
+Label mapping is a reviewed table per model (`ml/train/detectors.py`); labels the table does not know map to IGNORE and are
+listed in the card.
+
+What you run on Kaggle: `python scripts/ml/package_for_kaggle.py --owner <you>` and create/version the `pgw-ml-train` dataset,
+`kaggle kernels push -p notebooks/kaggle/04_export_detectors`, run it (Internet on), download the `detector_bundles` output.
+It uses no repository evaluation data and no tester set; none may ever be uploaded.
+
+### Benchmarking imported bundles locally
+
+```bash
+python scripts/ml/import_artifacts.py detector_bundles/indicner          # verifies; kind external_detector is detected
+python scripts/ml/bench_detectors.py --bundle indicner=detector_bundles/indicner --bundle gliner=detector_bundles/gliner_multi_pii_v1 \
+    --ml-train-docs 600 --out /tmp/bench.json
+```
+`bench_detectors.py` runs each bundle through the gateway runtime slot (`eval.ml.backends` `ml_only`) on the dev corpora
+(`eval/data/dev.jsonl`, `eval/data2/dev2.jsonl`, `eval/data3/dev3build.jsonl`) and prints per-type recall/precision beside the
+current stack. It refuses held-out paths from the file name alone, before opening anything (test*, ner_test*, dev3val, sealed
+archives, tester sets, anything named heldout, the gate's `release_sets`).
+
+### Held-out scoring is a separate step
+
+Scoring a candidate on held-out data (the existing one-shot held-out runner, the release gate) is a separate, logged,
+human-triggered step on this machine only. Held-out data is never uploaded to Kaggle or Colab, never passed to
+`bench_detectors.py` or `compare_dev_backends.py`, and nothing seen there is fed back into the export, mapping or thresholds.
+A model that was only benchmarked on dev is not evidence for adoption.
+
+### Faker en_IN as an extra name/address source (flag, off by default)
+
+`ml.train.values.enable_faker(share)` (or `PGW_FAKER_SHARE` in notebook 02, which installs `faker`) draws that share of persons from
+Faker's en_IN name lists and of address blocks from its addresses (seeded from the document RNG; with the flag off, every
+existing seed reproduces the old output). Faker is **not** used for any identifier: its `aadhaar_id` is Luhn-valid, not
+Verhoeff (about 9% of 2000 samples are valid Aadhaars; 12% start with 0 or 1; `tests/ml_train/test_faker_source.py`). Its PAN
+and GSTIN are structurally sound (python-stdnum: 99.9% of PANs valid; 97.4% of GSTINs, the rest state code 38 which stdnum's table
+lacks; the GSTIN check character matches the repo's `_gstin_char`), yet the repo's generators stay in use for all numbers.

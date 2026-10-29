@@ -7,6 +7,7 @@ names are invented. Hard negatives (values that look like PII but are not) live 
 from __future__ import annotations
 
 import random
+import re
 import string
 from dataclasses import dataclass
 
@@ -140,7 +141,65 @@ class Person:
         return " ".join(p for p in (self.first, self.middle, self.last) if p)
 
 
+# ------------------------------------------------------------------------------- optional Faker (en_IN) source
+# Extra diversity for person names and address lines, behind a flag and OFF by default: with it off, `person()` consumes
+# exactly the same random numbers as before, so every existing seed reproduces its old output. Faker (MIT) is not
+# used for any identifier: its en_IN `aadhaar_id` is Luhn-valid (not Verhoeff: ~9% of its numbers are valid Aadhaars,
+# and it emits leading 0/1), so Aadhaar, PAN, GSTIN and every other number stay with this module's generators
+# (tests/ml_train/test_faker_source.py documents the measurements).
+FAKER_SHARE = 0.0
+_FAKER = None
+_NAME_OK = re.compile(r"[A-Za-z][A-Za-z'-]{1,24}")
+
+
+def enable_faker(share: float = 0.3, locale: str = "en_IN") -> None:
+    """Draw about `share` of all persons (and address blocks) from Faker. Raises ImportError if faker is missing."""
+    global FAKER_SHARE, _FAKER
+    if not 0.0 <= share <= 1.0:
+        raise ValueError("share must be in [0, 1]")
+    if share > 0 and (_FAKER is None or _FAKER.locales != [locale]):
+        from faker import Faker
+        _FAKER = Faker(locale)
+    FAKER_SHARE = float(share)
+
+
+def disable_faker() -> None:
+    global FAKER_SHARE
+    FAKER_SHARE = 0.0
+
+
+def _faker(rng: random.Random):
+    """The shared Faker instance, re-seeded from `rng` so the result depends only on rng's state."""
+    _FAKER.seed_instance(rng.getrandbits(64))
+    return _FAKER
+
+
+def faker_person(rng: random.Random) -> Person | None:
+    """A Person from Faker's en_IN name lists (ASCII only), or None if it produced nothing usable."""
+    fk = _faker(rng)
+    male = rng.random() < 0.5
+    for _ in range(6):
+        first = fk.first_name_male() if male else fk.first_name_female()
+        last = fk.last_name()
+        if _NAME_OK.fullmatch(first) and _NAME_OK.fullmatch(last) and first.lower() != last.lower():
+            return Person(first, last, "", _M if male else _F, "faker_en_in")
+    return None
+
+
+def faker_address(rng: random.Random) -> tuple[str, str]:
+    """Two address lines (street/house, city and PIN) in the style of `address_block`. They are unlabelled context: an
+    address is not a gateway entity type, and Faker's street names reuse surnames, which doubles as a hard negative for
+    PERSON (a surname-looking word in a place name must not be masked as a person)."""
+    fk = _faker(rng)
+    line1 = f"{rng.choice(('Flat', 'H.No.', 'Door No.'))} {rng.randint(1, 99)}/{rng.randint(1, 40)}, {fk.street_name()},"
+    return line1, f"{fk.city()} - {fk.postcode()}"
+
+
 def person(rng: random.Random, region: str | None = None) -> Person:
+    if FAKER_SHARE > 0.0 and region is None and rng.random() < FAKER_SHARE:
+        fp = faker_person(rng)
+        if fp is not None:
+            return fp
     region = region or rng.choice(REGIONS)
     first, gender = rng.choice(_FIRST[region])
     last = rng.choice(_SURNAMES[region])

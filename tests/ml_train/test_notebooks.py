@@ -11,8 +11,9 @@ spec.loader.exec_module(bn)
 NBS = sorted((ROOT / "notebooks" / "kaggle").glob("*/*.ipynb"))
 
 
-def test_three_notebooks_exist_and_are_current():
-    assert [p.stem for p in NBS] == ["01_generate_templates", "02_train_token_classifier", "03_train_content_gate"]
+def test_notebooks_exist_and_are_current():
+    assert [p.stem for p in NBS] == ["01_generate_templates", "02_train_token_classifier", "03_train_content_gate",
+                                     "04_export_detectors"]
     assert bn.main(["--check"]) == 0
 
 
@@ -50,3 +51,16 @@ def test_training_notebooks_enforce_gates():
         assert "assert drop <= 0.01" in src and "quantize_dynamic" in src and "per_channel=True" in src and "sha256sums" in src
     nb2 = (ROOT / "notebooks" / "kaggle" / "02_train_token_classifier" / "02_train_token_classifier.ipynb").read_text()
     assert "split_templates" in nb2 and "EarlyStoppingCallback" in nb2 and "recall_sweep" in nb2 and "seqeval" in nb2
+
+
+def test_export_notebook_records_failures_and_checks_licences():
+    from ml.train import detectors, licences
+    src = (ROOT / "notebooks" / "kaggle" / "04_export_detectors" / "04_export_detectors.ipynb").read_text()
+    for must in ("licences.check_model", "ALLOWED_DETECTORS", "Unsupported", "unsupported", "licence_refused", "quantize_dynamic",
+                 "sha256sums", "span_agreement", "OnnxSpanModel", "OnnxTokenClassifier", "detectors.CANDIDATES"):
+        assert must in src, must
+    repos = {c["repo"] for c in detectors.CANDIDATES.values() if c["repo"]}
+    assert repos == {"openai/privacy-filter", "ai4bharat/IndicNER", "urchade/gliner_multi_pii-v1"}
+    assert repos <= set(licences.ALLOWED_DETECTORS)        # every candidate has an expected licence in the allowlist table
+    assert all(v in licences.ALLOWED_LICENCES for v in licences.ALLOWED_DETECTORS.values())
+    assert "urchade/gliner_multi\"" not in " ".join(licences.ALLOWED_DETECTORS)       # the CC-BY-NC v0 is not a candidate

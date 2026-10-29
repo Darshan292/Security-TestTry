@@ -335,8 +335,12 @@ def address_block(rng: random.Random, lang: str = "en"):
     e = Emp(rng, "X")
     b = DocBuilder()
     emit(b, "Employee: {N}\nContact: {PH}\nAddress:\n", {"N": (e.name("full"), "PERSON"), "PH": (e.phone, "PHONE")})
-    b.lit(f"{rng.choice(('Flat', 'H.No.', 'Door No.'))} {rng.randint(1, 99)}/{rng.randint(1, 40)}, {rng.choice(('Sri Sai Apartments', 'Green Meadows', 'Shanti Nivas', 'Ganga Heights'))},\n")
-    b.lit(V.neg_namedplace(rng) + ",\n" + V.neg_place(rng) + " - " + str(rng.randint(110001, 855117)) + "\n")
+    if V.FAKER_SHARE > 0.0 and rng.random() < V.FAKER_SHARE:       # optional Faker en_IN address (flag; default off)
+        l1, l2 = V.faker_address(rng)
+        b.lit(l1 + "\n" + l2 + "\n")
+    else:
+        b.lit(f"{rng.choice(('Flat', 'H.No.', 'Door No.'))} {rng.randint(1, 99)}/{rng.randint(1, 40)}, {rng.choice(('Sri Sai Apartments', 'Green Meadows', 'Shanti Nivas', 'Ganga Heights'))},\n")
+        b.lit(V.neg_namedplace(rng) + ",\n" + V.neg_place(rng) + " - " + str(rng.randint(110001, 855117)) + "\n")
     if rng.random() < 0.5:
         emit(b, "C/o {P}\n", {"P": (V.name_surface(rng, V.person(rng), "full"), "PERSON")})
     return b.text, b.spans
