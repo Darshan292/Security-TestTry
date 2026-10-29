@@ -19,7 +19,7 @@ jobs:
       - name: Install locked dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --require-hashes -r requirements/runtime.txt -r requirements/dev.txt
+          pip install --require-hashes -r requirements/runtime.txt -r requirements/plugins.txt -r requirements/dev.txt
       # Scanners are CI tooling, not shipped dependencies; they are not hash-locked here (pin/lock them if desired).
       - name: Install scanners
         run: pip install bandit pip-audit
@@ -41,7 +41,7 @@ jobs:
         run: bandit -r pgw -ll
       - name: pip-audit (locked requirements)
         run: |
-          for f in runtime dev ner; do
+          for f in runtime plugins dev ner; do
             pip-audit --require-hashes --disable-pip -r requirements/$f.txt
           done
 

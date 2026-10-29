@@ -515,3 +515,15 @@ KEEP would leave; review schemas like code; unknown fields are safe). That small
 (no small-cell suppression). That the starter statutory values are current (they are sealed config with sources
 cited; verify them). The payload is parsed on the gateway host: the caller's JSON body and the attestation digest are
 computed on the event loop (bounded by `max_bytes`).
+
+## 13. Plugins: outside libraries side by side, never replacing
+
+[docs/PLUGINS.md](docs/PLUGINS.md). Mature open-source components (python-stdnum, phonenumbers, detect-secrets) sit
+behind two plugin slots (validator, recognizer). **Enforced:** modes come only from the signed deployment profile
+(`plugins:`); an unknown plugin or mode stops startup; every plugin is off by default; a shadow plugin cannot change
+what leaves or the report (it only adds counts to operator metrics, never values) and its errors are ignored and
+counted; a union-mode recognizer can only ADD masking (no character the built-in masks is released) and its failure
+fails the request closed (503); the egress check covers union-mode values like any detection; adapters do no network
+or file I/O. **Not offered:** an `enforce` mode for validators. Which values count as an Aadhaar, a PAN or a card stays
+the built-in's decision until humans compare both on held-out data and change it in a reviewed, signed profile.
+**Not enforced:** that a plugin finds anything (measured by scripts/compare_validators.py and held-out runs).

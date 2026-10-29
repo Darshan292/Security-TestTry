@@ -121,7 +121,7 @@ On LOCAL_COMPUTE, entries name fields of the JSON payload instead of offsets. Th
 | `type` | `PERSON`, `EMAIL`, `PHONE`, `EMPLOYEE_ID`, `COMPENSATION`, `DATE_OF_BIRTH`, `AADHAAR`, `PAN`, `BANK_ACCOUNT`, `IFSC`, `CARD`, `UPI_ID`, `SECRET`, `IDENTIFIER`, `AADHAAR_LIKE`, `DERIVED` |
 | `class` | `C0`, `C1`, `C2`, `C3`, `REF`, `D` |
 | `action` | `alias` (scoped placeholder, restorable), `remove` (type marker, never restored), `generalize` (coarsened value), `withhold` (LOCAL_COMPUTE: never leaves in any form), `allow` (detected but crosses unchanged: a C0 type such as IFSC, or a RAW output) |
-| `source` | `declared` (a declared subject or contract field covered the span), `detected` (a detector, the roster, or this conversation's memory), `computed` (a LOCAL_COMPUTE output) |
+| `source` | `declared` (a declared subject or contract field covered the span), `detected` (a detector, the roster, this conversation's memory, or a union-mode plugin, docs/PLUGINS.md), `computed` (a LOCAL_COMPUTE output). Shadow-mode plugins never appear in the report: their disagreement counts are operator metrics |
 
 PRIVATE_LOCAL has no `detected` entries, because nothing is replaced on the in-house route.
 

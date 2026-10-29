@@ -33,3 +33,27 @@ NumPy (BSD 3-Clause), `onnx` (Apache License 2.0; tests only). No model weights 
 each model artefact carries its own licence in its MODEL_CARD.md and must be commercial-friendly
 (docs/ML_ARCHITECTURE.md). The `llama-server` container image (llama.cpp, MIT License) is referenced by pinned
 digest in deploy/docker-compose.yml, not redistributed.
+
+## Plugins extra (requirements/plugins.txt), installed packages, not vendored
+
+Optional; every plugin is off unless the signed deployment profile turns it on (docs/PLUGINS.md). Licences were read
+from each wheel's METADATA (2026-10-28), not assumed:
+
+| Distribution | Version | Licence (METADATA) | Role |
+|---|---|---|---|
+| python-stdnum | 2.2 | LGPL-2.1-or-later (`License: LGPL`, classifier "GNU Lesser General Public License v2 or later (LGPLv2+)") | validator adapter |
+| phonenumbers | 9.0.42 | Apache-2.0 (`License-Expression: Apache-2.0`) | validator adapter |
+| detect-secrets | 1.5.0 | Apache-2.0 (classifier "Apache Software License"; `License: UNKNOWN` field) | recognizer adapter |
+| requests | 2.34.2 | Apache-2.0 | dependency of detect-secrets; imported by it at module import, never called by pgw |
+| urllib3 | 2.8.0 | MIT | dependency of requests |
+| charset-normalizer | 3.5.2 | MIT | dependency of requests |
+| idna | 3.20 | BSD-3-Clause | dependency of requests (already in runtime.txt) |
+| certifi | 2026.7.22 | MPL-2.0 | dependency of requests (already in runtime.txt via httpx; file-level copyleft, unmodified) |
+| PyYAML | 6.0.3 | MIT | dependency of detect-secrets (already in runtime.txt) |
+
+**python-stdnum is LGPL-2.1-or-later.** It is used as an unmodified library, installed from PyPI as a separate package
+and imported at run time; none of its code is copied into this repository, and users can replace it with any other
+version (LGPL-2.1 §6). If it is ever modified or vendored, its LGPL obligations (source of the modified library,
+notice) apply to that copy. Copyright (C) Arthur de Jong and others; source: https://arthurdejong.org/python-stdnum/.
+phonenumbers: Copyright (C) 2009-2024 The Libphonenumber Authors and David Drysdale (Python port), Apache-2.0.
+detect-secrets: Copyright (c) 2018 Yelp, Inc., Apache-2.0.
