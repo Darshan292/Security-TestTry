@@ -516,3 +516,43 @@ def successfactors(n: int, seed: int = 29) -> Synth:
         })
     sy.data = {"d": {"results": res, "__next": sy.canary("d.__next", rng)}}
     return sy
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Active Directory populations with controlled quasi-identifier combinations (disclosure-control tests)
+# ---------------------------------------------------------------------------------------------------------------
+
+def ad_population(people: list, seed: int = 31) -> Synth:
+    """AD users whose quasi-identifiers are given: each entry a dict with `dept`, `enabled` (True/False/None =
+    attribute absent), `created` (datetime), `pin` (6-digit string) and optional `logon` (datetime). Names, usernames
+    and ids are generated (synthetic) and recorded as secrets like every other generator."""
+    rng = random.Random(seed)
+    sy = Synth("ad_user", "json", None)
+    out = []
+    for i, p in enumerate(people):
+        nm = f"{FIRST[i % len(FIRST)]} {LAST[(i * 7 + i // len(FIRST)) % len(LAST)]} {LAST[i % 13]}"
+        user = f"u{rng.randrange(10**5, 10**6)}{i}"
+        sy.people.append((nm, user))
+        logon = p.get("logon") or dt.datetime(2026, 3, 2, 10, 15)
+        rec = {"sAMAccountName": sy.s("str", user), "displayName": sy.s("str", nm),
+               "employeeID": sy.s("str", f"E{70000 + i}"), "department": p["dept"],
+               "userAccountControl": 512 if p.get("enabled", True) is not False else 514,
+               "whenCreated": p["created"].strftime("%Y%m%d%H%M%S.0Z"),
+               "lastLogonTimestamp": int((logon - dt.datetime(1601, 1, 1)).total_seconds() * 10**7),
+               "postalCode": sy.s("str", p["pin"])}
+        if p.get("enabled", True) is not None:
+            rec["Enabled"] = bool(p.get("enabled", True))
+        sy.secrets.append(("date", p["created"].date()))
+        out.append(rec)
+    sy.data = out
+    return sy
+
+
+def unique_combo_population(n: int, seed: int = 37) -> list:
+    """People most of whom have a unique (department, created month, PIN) combination: the population a listing of
+    aliases with attributes would single out without disclosure control."""
+    rng = random.Random(seed)
+    pins = ["560034", "560095", "400072", "400093", "700091", "500081", "380015", "110017"]
+    return [{"dept": DEPTS[rng.randrange(len(DEPTS))], "enabled": rng.random() > 0.15,
+             "created": dt.datetime(2008 + rng.randrange(18), 1 + rng.randrange(12), 1 + rng.randrange(27), 9, 0),
+             "pin": rng.choice(pins)} for _ in range(n)]

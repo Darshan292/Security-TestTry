@@ -36,7 +36,8 @@ import ahocorasick
 
 from ..egress import _EMITTED_ALIAS
 from ..types import EgressViolation
-from . import amounts, hrcompute, recparse
+from ..types import EntityType as _T
+from . import amounts, disclosure, hrcompute, recparse
 from .contracts import Contract, ContractError, DataClass
 from .fieldschema import (FieldSchema, SchemaError, ValueInvalid, generalize, generalized_pattern, header_key,
                           load_rules, load_schema, parse_datetime, parse_amount, parse_edges, parse_value,
@@ -54,6 +55,7 @@ SENTINEL_BASE = 0xF0000            # Supplementary Private Use Area-A: no detect
 _SENTINEL_RE = re.compile("[\U000F0000-\U000FFFFD]")
 _ID_CLEAN = re.compile(r"[\x00-\x1f\x7f  -\U000F0000-\U0010FFFF]+")
 ENVELOPE_KEYS = {"source", "format", "data", "params", "delimiter"}
+T_IDENTIFIER = _T.IDENTIFIER
 
 
 # =============================================================================================================
@@ -74,6 +76,7 @@ class RecordSpec:
     max_prompt_chars: int
     timeout_s: float
     bands: dict = field(default_factory=dict, compare=False, hash=False)   # output name -> (edges, labels)
+    min_group_size: int | None = None   # may only raise the sealed disclosure_control k (pgw.product.disclosure)
 
 
 def _int(raw, where, lo, hi) -> int:
@@ -95,7 +98,7 @@ def parse_spec(raw, outputs_raw) -> RecordSpec:
     if not isinstance(raw, dict):
         raise ContractError("RECORDS contracts need a records block")
     allowed = {"sources", "select", "label", "show", "compute", "rules", "max_rows", "max_bytes", "max_listed",
-               "max_prompt_chars", "timeout_s"}
+               "max_prompt_chars", "timeout_s", "min_group_size"}
     if set(raw) - allowed:
         raise ContractError(f"records: unknown keys {sorted(set(raw) - allowed)}")
     compute = raw.get("compute")
@@ -125,7 +128,10 @@ def parse_spec(raw, outputs_raw) -> RecordSpec:
         max_bytes=_int(raw.get("max_bytes", 20_000_000), "max_bytes", 1024, MAX_BYTES_CEILING),
         max_listed=_int(raw.get("max_listed", 200), "max_listed", 0, MAX_LISTED_CEILING),
         max_prompt_chars=_int(raw.get("max_prompt_chars", 30_000), "max_prompt_chars", 500, MAX_PROMPT_CHARS_CEILING),
-        timeout_s=float(timeout), bands=bands)
+        timeout_s=float(timeout), bands=bands,
+        min_group_size=None if raw.get("min_group_size") is None else _int(raw["min_group_size"], "min_group_size",
+                                                                           disclosure.ABSOLUTE_MIN_K,
+                                                                           disclosure.MAX_K))
 
 
 # =============================================================================================================
@@ -146,6 +152,11 @@ class Plan:
     #                               "PRESENCE")
     kinds: dict                   # output name -> kind (the computation's catalog)
     literals: tuple               # the template's literal text (the gateway's own words)
+    control: disclosure.Control | None = None   # small-group disclosure control (sealed disclosure_control.yaml)
+
+    @property
+    def k(self) -> int:
+        return self.control.k if self.control is not None else 1
 
 
 def schema_files(registry_dir: Path) -> list[str]:
@@ -240,8 +251,29 @@ def bind(purpose: str, contract: Contract, registry_dir: Path, read) -> Plan:
         raise ContractError("RECORDS contracts classify fields by schema; content_gate does not apply")
     if contract.classes[DataClass.C1] not in ("ALIAS", "REDACT"):
         raise ContractError("RECORDS contracts alias (or redact) identities: C1 must be ALIAS or REDACT")
+    # small-group disclosure control: mandatory sealed config; a contract may raise k, never lower it
+    cp = disclosure.config_path(registry_dir)
+    if not cp.is_file():
+        raise ContractError(f"purpose {purpose!r}: the disclosure control config {cp.name} is missing (RECORDS "
+                            "contracts never run without small-group control)")
+    try:
+        cfg = disclosure.load_config(cp, read(cp))
+        controls = {sid: disclosure.schema_control(cfg, s) for sid, s in schemas.items()}
+    except SchemaError as e:
+        raise ContractError(str(e)) from None
+    for sid in cfg.schemas:
+        if not (Path(registry_dir) / "schemas" / f"{sid}.yaml").is_file():
+            raise ContractError(f"{cp.name}: schemas.{sid} names no schema in registry/schemas")
+    k = cfg.k
+    if spec.min_group_size is not None:
+        if spec.min_group_size < cfg.k:
+            raise ContractError(f"records.min_group_size: may only raise the sealed min_group_size ({cfg.k})")
+        k = spec.min_group_size
+    control = disclosure.Control(cfg, k, cfg.listing, controls,
+                                 disclosure.QueryLog(cfg.max_scopes, cfg.max_queries, cfg.ttl_s)
+                                 if cfg.differencing else None)
     return Plan(purpose, contract, spec, schemas, comp, rules, rules_ref, starter_rules, view, dict(comp.catalog),
-                literals)
+                literals, control)
 
 
 # =============================================================================================================
@@ -711,19 +743,117 @@ class _Ctx:
 
     def __init__(self, plan: Plan):
         self.plan = plan
+        self.k = plan.k
+        self.stats: dict = {}
+        self._people = tuple(n for n in plan.spec.label
+                             if all(s.spec(n) is not None and s.spec(n).entity is not T_IDENTIFIER
+                                    for s in plan.schemas.values()))
 
     def identity_key(self, row) -> tuple:
         key = tuple(str(row.values.get(n)) for n in self.plan.spec.label if row.values.get(n) is not None)
         return key or ("#row", row.index)
 
-    def show_text(self, row) -> str:
-        parts = [f"{n}: {row.values[n]}" for n in self.plan.spec.show if row.values.get(n) is not None]
-        return "; ".join(parts)
+    def person_key(self, row) -> tuple:
+        """A person (not a work order or other reference): the label fields that name people."""
+        key = tuple(str(row.values.get(n)) for n in self._people if row.values.get(n) is not None)
+        return key or self.identity_key(row)
+
+
+@dataclass
+class _Disclosure:
+    """What disclosure control decided for one response (pgw.product.disclosure): markers that replace printed
+    values, per-row attribute text of listings, and counts for the transparency report (never values)."""
+    markers: dict = field(default_factory=dict)       # output name -> marker text
+    group_marks: dict = field(default_factory=dict)   # groups output -> {position: marker}
+    list_withheld: dict = field(default_factory=dict)  # list output -> text replacing the whole list
+    show: dict = field(default_factory=dict)          # list output -> {id(row): attribute text}
+    prewithhold: dict = field(default_factory=dict)   # group_by field -> values whose count was suppressed
+    stats: dict = field(default_factory=lambda: dict.fromkeys(
+        ("cells_suppressed", "cells_suppressed_complementary", "totals_suppressed", "groups_merged",
+         "groups_suppressed", "rows_coarsened", "rows_attributes_withheld", "lists_withheld", "queries_refused",
+         "queries_compared"), 0))
+
+
+def _leaves(plan: Plan, name: str) -> bool:
+    o = plan.contract.outputs.get(name)
+    return o is not None and o.egress != "INTERNAL"
+
+
+def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Disclosure, k: int, scope) -> None:
+    """Count table of a roster query: total = matched + missing + did-not-match; matched = sum of the groups."""
+    t = disclosure.Table(k)
+    mc = outs["matched_count"]
+    filtered = mc.meta.get("filtered", True)
+    t.add(disclosure.Cell("total_rows", int(outs["total_rows"].value), False, 0, shown=_leaves(plan, "total_rows"),
+                          total=True))
+    t.add(disclosure.Cell("matched_count", int(mc.value), filtered, 3, shown=_leaves(plan, "matched_count") or (
+        bool(params.get("list")) and _leaves(plan, "matched")), total=True, reveals_small=True))
+    t.add(disclosure.Cell("rows_missing_filter_field", int(outs["rows_missing_filter_field"].value), True, 1,
+                          shown=_leaves(plan, "rows_missing_filter_field")))
+    t.add(disclosure.Cell("#rest", int(mc.meta.get("rest", 0)), filtered, 9, shown=False))
+    t.eq("total_rows", ["matched_count", "rows_missing_filter_field", "#rest"])
+    gc = outs["group_counts"]
+    sizes = gc.meta.get("sizes") or []
+    gnames = [f"#group{i}" for i in range(len(sizes))]
+    if sizes:
+        for gn, (_key, n) in zip(gnames, sizes, strict=True):
+            t.add(disclosure.Cell(gn, int(n), True, 2, shown=_leaves(plan, "group_counts")))
+        t.eq("matched_count", gnames)
+    st = t.protect()
+    dc.stats["cells_suppressed"] += st["primary"]
+    dc.stats["cells_suppressed_complementary"] += st["complementary"]
+    dc.stats["totals_suppressed"] += st["totals"]
+    for n in ("total_rows", "matched_count", "rows_missing_filter_field"):
+        m = t.marker(n)
+        if m is not None:
+            dc.markers[n] = m
+    suppressed_vals = set()
+    for i, gn in enumerate(gnames):
+        m = t.marker(gn)
+        if m is not None:
+            dc.group_marks.setdefault("group_counts", {})[i] = m
+            suppressed_vals.add(sizes[i][0])
+    if t.cells["matched_count"].suppressed and params.get("list"):
+        # a listing would print the matched count it withholds
+        c = t.cells["matched_count"]
+        dc.list_withheld["matched"] = (f"none listed: fewer than {k} records match" if c.primary
+                                      else "none listed (withheld by disclosure control)")
+        dc.stats["lists_withheld"] += 1
+    if scope is not None and plan.control is not None and plan.control.log is not None:
+        try:
+            dc.stats["queries_compared"] = plan.control.log.check_and_record(
+                scope, params["filter"], rows, mc.meta.get("matched", frozenset()),
+                t.cells["total_rows"].shown and not t.cells["total_rows"].suppressed, k, hrcompute.roster_match)
+        except disclosure.DisclosureRefused:
+            dc.stats["queries_refused"] += 1
+            raise
+    dc.prewithhold = {params["group_by"]: suppressed_vals} if params.get("group_by") and suppressed_vals else {}
+
+
+def _list_control(plan: Plan, schema: FieldSchema, outs: dict, rows: list, dc: _Disclosure, k: int, ctx) -> None:
+    """Attributes next to listed aliases: k-anonymous over the population the listing is drawn from."""
+    show = list(plan.spec.show)
+    if not show or plan.control is None:
+        return
+    ctrl = plan.control.schemas.get(schema.id)
+    pre = dc.prewithhold
+    for name, out in outs.items():
+        if out.kind != "list" or not _leaves(plan, name) or name in dc.list_withheld or not out.value:
+            continue
+        pop = out.meta.get("population", rows)
+        levels = {f: disclosure.levels_for(schema.spec(f), ctrl, coupled=f in pre) for f in show}
+        listed = [r for r, _tok in out.value]
+        text, st = disclosure.anonymize_listing(pop, listed, show, levels, k, plan.control.listing, ctx.person_key,
+                                                pre)
+        dc.show[name] = text
+        dc.stats["rows_coarsened"] += st["rows_coarsened"]
+        dc.stats["rows_attributes_withheld"] += st["rows_attributes_withheld"]
 
 
 class _Renderer:
-    def __init__(self, plan: Plan, schema: FieldSchema):
+    def __init__(self, plan: Plan, schema: FieldSchema, dc: _Disclosure | None = None):
         self.plan, self.schema = plan, schema
+        self.dc = dc or _Disclosure()
         self.raw: dict = {}          # sentinel -> token
         self._by_token: dict = {}
         self.declared: dict = {}     # (entity, value) -> None (ordered set)
@@ -756,6 +886,9 @@ class _Renderer:
 
     def render(self, name: str, out: hrcompute.Out, budget: list) -> str:
         k, v = out.kind, out.value
+        mark = self.dc.markers.get(name)
+        if mark is not None:
+            return self.sent(mark)
         if k == "count":
             return self.sent(str(int(v)))
         if k == "label":
@@ -768,14 +901,19 @@ class _Renderer:
         if k == "groups":
             if not v:
                 return self.sent("none")
-            return "\n".join(f"- {self.sent(str(key))}: {self.sent(tok)}" for key, tok in v)
+            marks = self.dc.group_marks.get(name, {})
+            return "\n".join(f"- {self.sent(str(key))}: {self.sent(marks.get(i, tok))}" for i, (key, tok) in enumerate(v))
         if k == "list":
+            if name in self.dc.list_withheld:
+                return self.sent(self.dc.list_withheld[name])
             lines = []
+            show = self.dc.show.get(name, {})
             for row, tok in v:
                 if self.listed >= self.plan.spec.max_listed or budget[0] <= 0:
                     self.not_listed += 1
                     continue
-                line = f"- {self.ident(row)}" + (f": {self.sent(tok)}" if tok else "")
+                full = "; ".join(x for x in (tok, show.get(id(row))) if x)
+                line = f"- {self.ident(row)}" + (f": {self.sent(full)}" if full else "")
                 budget[0] -= len(line) + 1
                 lines.append(line)
                 self.listed += 1
@@ -848,14 +986,28 @@ def parse_envelope(messages: list, plan: Plan) -> dict:
     return env
 
 
-def run(plan: Plan, messages: list) -> RecordResult:
+def run(plan: Plan, messages: list, scope=None) -> RecordResult:
+    """scope: the differencing-log key (tenant, app, purpose, conversation id or ''); None = no query log."""
     env = parse_envelope(messages, plan)
     schema = plan.schemas[env["source"]]
     params = parse_params(plan, env.get("params"), schema)
     rows, stats, withheld, prefix = extract(plan, schema, env["format"], env["data"], env.get("delimiter", ","))
-    outs = plan.computation.fn(rows, params, plan.rules, _Ctx(plan))
+    ctx = _Ctx(plan)
+    outs = plan.computation.fn(rows, params, plan.rules, ctx)
     contract = plan.contract
-    r = _Renderer(plan, schema)
+    dc = _Disclosure()
+    dc.stats["groups_merged"] = ctx.stats.get("groups_merged", 0)
+    dc.stats["groups_suppressed"] = ctx.stats.get("groups_suppressed", 0)
+    if plan.control is not None:
+        try:
+            if plan.spec.compute == "roster_question":
+                _roster_control(plan, outs, params, rows, dc, plan.k, scope)
+            _list_control(plan, schema, outs, rows, dc, plan.k, ctx)
+        except disclosure.DisclosureRefused as e:
+            e.report = _report(plan, schema, env["format"], rows, stats, outs, [], _Renderer(plan, schema, dc),
+                               prefix)
+            raise
+    r = _Renderer(plan, schema, dc)
     fields_ = {}
     budget = [plan.spec.max_prompt_chars - len(contract.prompt_template)]
     left = []
@@ -899,5 +1051,16 @@ def _report(plan, schema, fmt, rows, stats, outs, left, r, prefix) -> dict:
                          "egress": contract.outputs[n].egress if n in contract.outputs else "INTERNAL"}
                         for n in outs],
             "left": {"outputs": left, "aliased_identities": len(r.declared), "listed_rows": r.listed,
-                     "not_listed": r.not_listed}}
+                     "not_listed": r.not_listed},
+            "disclosure": _disclosure_report(plan, schema, r.dc)}
+
+
+def _disclosure_report(plan, schema, dc) -> dict:
+    """Counts only: how many cells, groups, rows and queries disclosure control changed; never a value."""
+    if plan.control is None:
+        return {"enforced": False}
+    ctrl = plan.control.schemas.get(schema.id)
+    return {"enforced": True, "config": plan.control.cfg.ref, "min_group_size": plan.k,
+            "listing": plan.control.listing, "differencing": plan.control.log is not None,
+            "quasi_identifiers": list(ctrl.qis) if ctrl is not None else [], **dc.stats}
 

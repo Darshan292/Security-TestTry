@@ -18,9 +18,11 @@ identities) ──▶ withheld-value check ──▶ detectors over the final te
 
 Code: `pgw/product/fieldschema.py` (schemas, types), `pgw/product/records.py` (contract block, extraction,
 rendering, egress check), `pgw/product/hrcompute.py` (computations), `pgw/product/recparse.py` (safe parsers).
-Config: `registry/schemas/*.yaml`, `registry/rules/*.yaml`, `contracts/{payroll_register_check,
-timecard_exceptions,contractor_budget,roster_question}.yaml`. Tests: `tests/test_hrms_records.py` with the seeded
-synthetic generators in `tests/hrms_synth.py`.
+Small-group disclosure control: `pgw/product/disclosure.py`.
+Config: `registry/schemas/*.yaml`, `registry/rules/*.yaml` (including `disclosure_control.yaml`),
+`contracts/{payroll_register_check, timecard_exceptions,contractor_budget,roster_question}.yaml`. Tests:
+`tests/test_hrms_records.py` and `tests/test_disclosure_control.py`, with the seeded synthetic generators in
+`tests/hrms_synth.py`.
 
 ## Dispositions
 
@@ -117,6 +119,8 @@ records:
   max_listed: 200                     # rows listed in the prompt (the rest counted)
   max_prompt_chars: 30000             # output bound
   timeout_s: 30                       # compute deadline (ceiling 120)
+  min_group_size: 10                  # optional: raises the sealed disclosure-control k for this purpose (never
+                                      # lowers it; see "Small groups")
 outputs:                              # per computed output; anything unlisted is INTERNAL
   exceptions: {derived_from: C2, egress: RAW, justification: "..."}
   total_gross: {derived_from: C2, egress: INTERNAL}
@@ -148,6 +152,59 @@ it in `hrcompute.COMPUTATIONS` with its output catalog. Rows give typed values (
 missing/invalid; emit `MISSING:`/`INVALID:` codes, never skip silently). Add hand-computed fixtures with the edge
 cases (ceilings, slab boundaries, zero, negative, missing) to `tests/test_hrms_records.py`.
 
+## Small groups (disclosure control)
+
+Computed results, aliases and KEEP/GENERALIZE values can still single a person out. A count of 1 in a cross-tab
+tells the provider that person's attribute. An alias listed with a rare combination of attributes can be linked to a
+public profile: "[PERSON_7], the only Staff Engineer in cost centre 4410 hired in 2019, band B4". Every RECORDS
+response therefore passes `pgw/product/disclosure.py` before it is rendered. The configuration is the sealed
+`registry/rules/disclosure_control.yaml`. A missing, modified or unsealed file stops startup.
+
+```yaml
+kind: pgw-disclosure-control
+config: disclosure_control
+version: 1
+min_group_size: 5          # k. Below 3 only with min_group_size_override: {justification: "..."} (20+ chars);
+                           # never below 2. A contract's records.min_group_size may raise it, never lower it.
+listing: coarsen           # coarsen | withhold | alias_only
+differencing: {enabled: true, max_queries_per_scope: 64, max_scopes: 10000, ttl_s: 86400}
+schemas:
+  ad_user:
+    quasi_identifiers: []  # ADDED to the default: every KEEP and GENERALIZE field (every field whose value can leave)
+    hierarchies:           # roll-ups of a KEEP enumeration, finest first (department -> function, title -> family)
+      department: [{Finance: Corporate functions, Legal: Corporate functions, Sales: Customer-facing, ...}]
+```
+
+The gateway enforces these rules on what leaves:
+
+| Output | Rule |
+|---|---|
+| Count tables (`roster_question`: total = matched + missing + did-not-match; matched = sum of the `group_by` counts) | Every cell defined by a quasi-identifier predicate with 0 < n < k is suppressed. The matched count prints `fewer than k`; any other cell prints `suppressed`. Then complementary suppression: the cheapest other cell of the same sum is suppressed (the record total first, then the smallest group). This repeats until an exact audit finds that no suppressed cell, and no small did-not-match cell, is determined by the printed numbers. Zeros are printed. The audit propagates intervals over the tree of sums, which is exact for these tables: every integer inside a bound is feasible. |
+| A roster filter matching 1..k-1 records | Prints `Matching: fewer than k` and `none listed`; every group count is suppressed. If the matched count is suppressed for any other reason, the listing is withdrawn too, because the listing would print the count. |
+| Grouped bands (`contractor_budget` per cost centre) | A cost centre with fewer than k people (distinct workers, not work orders) is merged into `other cost centres`. That merged line is printed only if it has at least k people; otherwise it shows `suppressed`. |
+| Listings with attributes (`show` fields, in any computation) | Each listed alias's printed attribute combination must be shared by at least k people of the population the listing is drawn from: the matched records for a roster query, the whole input for an exception list. First comes full-domain coarsening, one level per field for the whole listing, starting with the field that has the most distinct values: month -> year -> 5-year range, PIN `560xxx` -> `56xxxx`, sealed enumeration roll-ups, and finally dropping the column. Coarsening continues while more than k rows fail. Rows that still fail print `attributes withheld (fewer than k share them)`. The withheld rows must themselves be indistinguishable among at least k people; if they are not, more classes are withheld. A `group_by` value whose count was suppressed is withheld in the listing of the same response, and that field is not coarsened, so the listing cannot re-print a suppressed count. With `withhold`, coarsening is skipped. With `alias_only`, attributes are never printed next to aliases. |
+| Exception lists (payroll, timecard, contractor) | A row describes the listed person by design. It carries the alias and codes or bands only, with no quasi-identifier, unless the contract selects `show` fields; then the listing rule above applies. Code counts over the whole export are not conditioned on any quasi-identifier and are already contained in the per-person list, so they are printed. |
+| Repeated queries (differencing) | The gateway keeps a per-conversation log of roster filter predicates: field, operator and sealed filter value, never a record value or a result. The log is keyed by tenant, app, purpose and `X-PGW-Conversation-Id`; requests without an id share one scope per app and purpose. It lives in memory and is bounded: least-recently-used scopes are dropped, the oldest predicates are dropped, and idle scopes expire after the TTL. A query is refused (422 `disclosure_control_refused`, nothing sent) when its result set on the current input differs by 1..k-1 records from an earlier query's result set. Once the record total was printed in the conversation, the same check also runs against that set's complement. |
+
+**Why deterministic thresholds and not differential privacy.** These outputs are counts and lists that a person reads
+and acts on. An exception list must name the right employees, and "how many accounts are disabled" must be either
+the true number or a visible suppression. Calibrated noise (OpenDP) would make the numbers wrong without saying which
+ones. Optimal anonymisation (ARX) addresses a different task: publishing a whole microdata table. For counts that a
+person reads, the standard tool is a k-threshold with complementary suppression, as statistical offices use it
+(e.g. tau-ARGUS). It needs no new dependency and can be audited exactly. Differential privacy remains a future
+option for statistics that are released rather than acted on. It is not built.
+
+**What it does not do.** The protection is partial; SECURITY_BOUNDARY.md §12 lists what remains:
+- Inference from the provider's background knowledge.
+- Attribute disclosure when all k people of a group share the same value. Example: "all 6 people matching
+  `department = Legal` are disabled". l-diversity is not enforced.
+- Differencing across conversations, across gateway processes or restarts, or across two different exports (no
+  input is stored).
+- Differencing through `group_by` cells of overlapping filters (only matched sets are compared).
+- Reasoning about the suppression algorithm itself.
+- The record total is the size of the export the caller chose, not a quasi-identifier cell. It is printed even
+  below k unless complementary suppression needs it.
+
 ## Requests
 
 ```json
@@ -174,8 +231,9 @@ Counts are per chunk; aggregating them is the caller's job.
   code.
 - Free text **inside** a selected field (a comment column) is never selectable as anything but REMOVE/NEVER; there
   is no "summarise these comments" purpose here (use the free-text path, with its limits).
-- Small counts can still single people out (a roster filter matching one person in a department; a cost centre
-  with one contractor). There is no small-cell suppression yet.
+- Small groups are controlled by a deterministic k-threshold (see "Small groups"). The protection is partial: it
+  does not cover background knowledge, homogeneous groups (l-diversity), or differencing across conversations,
+  processes or exports.
 - The TDS checks are sanity flags, not a tax computation (regime, declarations, perquisites, arrears unknown).
   ESIC contribution-period continuation is flagged for review, not resolved. PT schedules are starters.
 - Excel workbooks are not parsed (export CSV). XML is supported only via the standard library's expat with every

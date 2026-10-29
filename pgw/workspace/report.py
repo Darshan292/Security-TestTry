@@ -225,6 +225,9 @@ ERRORS: dict[str, tuple[str, str, bool | None]] = {
                                   "This task needs to know who the text is about. Add the required person under "
                                   "“People in this request” and run it again.", False),
     "declared_subjects_not_supported": ("Stopped", "This task does not take a list of people.", False),
+    "disclosure_control_refused": ("Stopped: would single people out",
+                                   "This question differs from an earlier one in this conversation by only a few "
+                                   "people; answering both would reveal those people. Nothing was sent.", False),
     "input_not_source_sanitized": ("Stopped: source not verified",
                                    "This task only accepts input signed by an approved source system.", False),
     "invalid_contract_payload": ("Stopped: form not accepted",
