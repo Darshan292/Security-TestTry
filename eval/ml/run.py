@@ -86,14 +86,26 @@ def judge(result: dict, gate: dict) -> dict:
     return {"verdict": verdict, "checks": checks, "thresholds_not_set": undecided}
 
 
-def evaluate(backend: Backend, examples) -> dict:
+def evaluate(backend: Backend, examples, nervaluate: bool = False) -> dict:
     sc = Scorer()
+    nv = None
+    if nervaluate:
+        from .nerval import Collector
+        nv = Collector()
     for ex in examples:
         t0 = time.perf_counter()
         pred, protected = backend.run(ex.text)
         ms = (time.perf_counter() - t0) * 1000
         sc.add(ex.text, ex.spans, pred, ex.genre, protected, ex.benign, ms)
-    return sc.result()
+        if nv is not None:
+            nv.add(ex.spans, pred)
+    res = sc.result()
+    if nv is not None:
+        res["nervaluate"] = nv.result()
+    notes = getattr(backend, "notes", None)
+    if callable(notes):
+        res["backend_notes"] = notes()
+    return res
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -108,6 +120,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate", type=Path, default=ROOT / "release_gate.yaml")
     ap.add_argument("--label-names", help="comma-separated BIO label names for integer ner_tags")
     ap.add_argument("--type-map", help="comma-separated MODEL=GATEWAY type renames for BIO data, e.g. PER=PERSON")
+    ap.add_argument("--presidio-min-score", type=float, default=0.4,
+                    help="presidio/union backends: drop Presidio results scoring below this (default 0.4)")
+    ap.add_argument("--nervaluate", action="store_true",
+                    help="also report nervaluate's strict/exact/partial/type schemes (optional dependency)")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--out", type=Path, help="write the JSON result here")
     a = ap.parse_args(argv)
@@ -127,8 +143,8 @@ def main(argv: list[str] | None = None) -> int:
     examples, stats = load(data, a.format, **kw)
     if a.limit and a.role == "dev":
         examples = examples[:a.limit]
-    backend = Backend(a.backend, load_model_config(a.model) if a.model else None, a.roster, a.ner)
-    result = evaluate(backend, examples)
+    backend = Backend(a.backend, load_model_config(a.model) if a.model else None, a.roster, a.ner, a.presidio_min_score)
+    result = evaluate(backend, examples, a.nervaluate)
     result["dataset"] = {"name": data.name, "format": a.format, "sha256": sha256_file(data), **stats}
     result["backend"] = {"name": a.backend, "model_sha256": getattr(backend, "model_sha256", None), "ner": a.ner,
                          "roster": bool(a.roster)}

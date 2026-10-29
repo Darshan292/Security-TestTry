@@ -1,0 +1,11 @@
+# Optional EVALUATION extras (eval/ml, ml/train; never imported by pgw/). Install on top of runtime.txt + ner.txt:
+#   pip install --require-hashes -r runtime.txt -r ner.txt -r eval.txt
+# Licences (wheel METADATA, checked 2026-10): nervaluate MIT, presidio-analyzer MIT (classifier; no License field),
+# faker MIT, python-stdnum LGPL-2.1+ (test-time cross-check only, never shipped or imported by pgw/ or ml/train),
+# phonenumbers Apache-2.0, tldextract BSD-3-Clause. See THIRD_PARTY_NOTICES.md.
+-c runtime.txt
+-c ner.txt
+nervaluate>=1.2
+presidio-analyzer>=2.2.362
+faker>=40
+python-stdnum>=2.0
