@@ -1,0 +1,10 @@
+# Optional plugins extra (pgw/plugins: validator and recogniser adapters, docs/PLUGINS.md). Install on top of
+# runtime.txt. Every plugin is off unless the signed deployment profile turns it on (shadow / union).
+# Licences, read from each wheel's METADATA (THIRD_PARTY_NOTICES.md): python-stdnum LGPL-2.1-or-later (used as an
+# unmodified installed library), phonenumbers Apache-2.0, detect-secrets Apache-2.0; transitive: requests Apache-2.0
+# (never called by pgw), urllib3 MIT, charset-normalizer MIT, idna BSD-3-Clause, certifi MPL-2.0 (already in
+# runtime.txt via httpx), PyYAML MIT (already in runtime.txt).
+-c runtime.txt
+python-stdnum==2.2
+phonenumbers==9.0.42
+detect-secrets==1.5.0

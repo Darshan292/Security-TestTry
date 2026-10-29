@@ -440,7 +440,13 @@ def create_app(settings: Settings) -> Starlette:
     roster = (load_roster(settings.roster_path, keys.derive("*", "edm"), read(settings.roster_path))
               if settings.roster_path else None)
     ledger = RestoreLedger(keys.derive("*", "ledger"), settings.ledger_db_path, keys=keys)
-    protector = Protector(policy, keys, roster, ledger)
+    # Plugin slots (docs/PLUGINS.md): outside validators/recognizers, modes from the signed profile only. An unknown
+    # plugin or mode, or a configured plugin whose library is missing, stops startup (PluginConfigError).
+    from .. import plugins as _plugins
+    plugin_set = _plugins.build(settings.plugins)
+    if plugin_set is not None:
+        log.warning("event='plugins_enabled' modes=%r", sorted(plugin_set.modes.items()))
+    protector = Protector(policy, keys, roster, ledger, plugins=plugin_set)
     # Contracted purposes (Path A and the free-text field of Path B) also get the local NER. A model that does
     # not load stops startup (NerUnavailable); a model that fails at request time fails that request closed.
     contract_protector = protector
@@ -478,11 +484,11 @@ def create_app(settings: Settings) -> Starlette:
             ner = NerDetector(settings.ner_model)
             ner.warm()
         contract_protector = Protector(policy, keys, roster, ledger, ner=ner, ml=ml_detector,
-                                       heuristics=settings.legacy_heuristics)
+                                       heuristics=settings.legacy_heuristics, plugins=plugin_set)
     elif contracts and ml_detector is not None:   # the ML detector replaces spaCy (signed profile decision)
         _log(logging.WARNING, event="ner_replaced_by_ml_detector")
         contract_protector = Protector(policy, keys, roster, ledger, ml=ml_detector,
-                                       heuristics=settings.legacy_heuristics)
+                                       heuristics=settings.legacy_heuristics, plugins=plugin_set)
     elif contracts:   # production reaches this only with a signed ner_off_justification in the profile
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
     upstream = build_upstream(settings)
@@ -1373,5 +1379,8 @@ def create_app(settings: Settings) -> Starlette:
                 if close is not None:
                     close()
 
-    return Starlette(routes=[Route("/v1/chat/completions", chat, methods=["POST"]),
+    app_ = Starlette(routes=[Route("/v1/chat/completions", chat, methods=["POST"]),
                              Route("/healthz", health, methods=["GET"])], lifespan=lifespan)
+    # Plugin shadow/union counters (operator metrics, never in pgw_report): app.state.pgw_plugin_metrics.snapshot()
+    app_.state.pgw_plugin_metrics = plugin_set.metrics if plugin_set is not None else None
+    return app_

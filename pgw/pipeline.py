@@ -611,7 +611,7 @@ def _banded(d: Detection) -> Detection:
 
 class Protector:
     def __init__(self, policy: PolicyPack, keys: Keys, roster: RosterIndex | None = None,
-                 ledger: RestoreLedger | None = None, ner=None, ml=None, heuristics: bool = True):
+                 ledger: RestoreLedger | None = None, ner=None, ml=None, heuristics: bool = True, plugins=None):
         self.policy = policy
         self.keys = keys
         self.roster = roster
@@ -621,6 +621,9 @@ class Protector:
         self.ml = ml
         # legacy name/amount heuristics; False only with an ML detector (measurement: ML + checksum regex only)
         self.heuristics = heuristics or ml is None
+        # pgw.plugins.PluginSet or None (docs/PLUGINS.md): shadow plugins are compared and counted only; union-mode
+        # recognizers add spans that never release a character the built-in masks; their errors propagate = fail closed
+        self.plugins = plugins
 
     def detect_text(self, text: str) -> list[Detection]:
         """D0 views + D2 + person cues + D3 (+ D4 NER) on one string; offsets in the ORIGINAL string.
@@ -682,6 +685,8 @@ class Protector:
                     continue                     # a Luhn hit glued from short digit groups is not a card
                 if e > s:
                     out.append(Detection(s, e, d.type, d.score, f"{d.source}@{name}" if name != "base" else d.source))
+        if self.plugins is not None:   # on the original text only, after (and compared with) the built-in detection
+            out += self.plugins.apply(text, out)
         return _one_line(text, out)
 
     def protect(self, messages: list[dict], ctx: Context,

@@ -5,11 +5,11 @@
 # config_serial, have it reviewed by a code owner, re-seal and sign (OPERATIONS.md). In development the profile is
 # advisory (warnings).
 kind: pgw-deployment-profile
-version: 3
+version: 4
 # Monotonic rollback serial (pgw/gateway/rollback.py). Raise it in EVERY signed configuration change, including a
 # deliberate rollback (old content, new higher serial). Production refuses a serial below PGW_MIN_CONFIG_SERIAL or
 # below the high-water mark recorded in PGW_STATE_DIR.
-config_serial: 2
+config_serial: 3
 settings:
   # Sealed configuration files (paths relative to the sealed tree; the roster is optional).
   registry_path: registry/apps.yaml
@@ -44,3 +44,10 @@ settings:
   ml_detector: null
   content_gate_model: null
   legacy_heuristics: true                  # false (needs ml_detector): measure "ML + checksum regex only"
+  # Plugin slots (docs/PLUGINS.md): outside libraries side by side with the built-in detection. "off" | "shadow"
+  # (compared and counted in operator metrics, never acted on) | "union" (recognizers only: spans added to masking).
+  # Validators have no enforce mode. Quote the mode: YAML reads a bare off as false. Needs requirements/plugins.txt.
+  plugins:
+    stdnum: "off"                          # validator: python-stdnum (Aadhaar, VID, PAN, GSTIN, EPIC, IBAN, Luhn)
+    phonenumbers: "off"                    # validator: phonenumbers (libphonenumber), region IN
+    detect_secrets: "off"                  # recognizer: detect-secrets regex plugins, in-process, SECRET spans

@@ -68,6 +68,8 @@ def different(field: str, tmp: Path):
         return v, None
     if kind == "mlgate":
         return {"path": str(tmp / "models" / "gate"), "sha256": "0" * 64, "labels": ["health"]}, None
+    if kind == "plugins":
+        return {"detect_secrets": "union"}, None
     raise AssertionError(f"no test value for kind {kind}")
 
 

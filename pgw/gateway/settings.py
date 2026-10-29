@@ -20,6 +20,10 @@ Rules (`apply_deployment_profile`, called by `create_app` before anything else i
 - ML models (`ml_detector`, `content_gate_model`; pgw.ml.config, docs/ML_ARCHITECTURE.md) are pinned by the sha256
   manifest digest of their directory; a model that does not match its pin stops startup. `legacy_heuristics: false`
   (name and amount heuristics off, for measuring "ML + checksum regex only") needs an `ml_detector`.
+- Plugins (`plugins`; pgw.plugins, docs/PLUGINS.md): outside validators and recognizers run side by side with the
+  built-in detection, each `off` (default), `shadow` (compared and counted, never acted on) or, for recognizers,
+  `union` (spans added to masking). An unknown plugin or a mode its slot does not offer stops startup; validators have
+  no `enforce` mode.
 - development: the profile is optional; when present, differences are logged as warnings and the Settings win.
 - rollback (re-audit N5): the profile carries a monotonic integer `config_serial`. Production refuses a serial below
   the pinned minimum (`min_config_serial`) or below the high-water mark recorded in `state_dir`
@@ -39,6 +43,7 @@ Classification of every Settings field (`FIELD_CLASS`; a test fails if a field i
 | max_body_bytes, max_content_chars, max_messages, protect_timeout_s, max_concurrent_protect | profile | PGW_MAX_*, PGW_PROTECT_TIMEOUT_S | How much is inspected and how much detection work a caller can force |
 | ml_detector, content_gate_model | profile | (not read from env) | Which ML models inspect content (pinned by sha256) and how many workers/threads/seconds they get: swapping or unsetting one changes what is detected or which requests stay in-house |
 | legacy_heuristics | profile | (not read from env) | Turns the legacy name/amount heuristics off when an ML detector is configured: changes what is detected |
+| plugins | profile | (not read from env) | Which outside validators/recognizers run and in which mode (off/shadow/union): union changes what is masked, and even shadow runs third-party code on content |
 | private_upstream_url, private_allowlist | profile | PGW_PRIVATE_UPSTREAM_URL, (code only) | Where C4/unattested content goes; the allowlist is what keeps it in-boundary |
 | legacy_uncontracted, dev_allow_real_provider, trace | code | never read from env | Security-relevant development switches; production refuses them in code (`check_startup_mode`, `create_app`) |
 | upstream, private_upstream | code | never read from env | Injected objects (tests/demos). Only code already running in the process can set them, and such code is outside any configuration control |
@@ -191,6 +196,8 @@ class Settings:
     # Legacy name/amount heuristics (person cues, name growth, amount/compensation heuristics). False only together
     # with an ml_detector: measures "ML + checksum regex only" against today's stack.
     legacy_heuristics: bool = True
+    # Plugin modes {name: off|shadow|union} (pgw.plugins.parse_plugins; docs/PLUGINS.md). None = every plugin off.
+    plugins: dict | None = None
     # Resource limits (fail closed with 413/503; nothing is sent).
     max_body_bytes: int = 262_144
     max_content_chars: int = 50_000        # all strings in `messages`, summed
@@ -279,7 +286,7 @@ FIELD_CLASS: dict[str, str] = {
     "tenant_keys_file": OPERATIONAL, "provider_region": PROFILE, "provider_zero_retention": PROFILE,
     "egress_allowlist": PROFILE, "anthropic_base_url": PROFILE, "upstream_timeout_s": PROFILE,
     "ner_model": PROFILE, "ner_workers": PROFILE, "ner_queue_max": PROFILE, "ner_timeout_s": PROFILE,
-    "ml_detector": PROFILE, "content_gate_model": PROFILE, "legacy_heuristics": PROFILE,
+    "ml_detector": PROFILE, "content_gate_model": PROFILE, "legacy_heuristics": PROFILE, "plugins": PROFILE,
     "max_body_bytes": PROFILE, "max_content_chars": PROFILE, "max_messages": PROFILE,
     "protect_timeout_s": PROFILE, "max_concurrent_protect": PROFILE,
     "integrity_manifest": OPERATIONAL, "trusted_config_pubkey": OPERATIONAL, "policy_signing_key": OPERATIONAL,
@@ -293,7 +300,7 @@ PROFILE_KIND: dict[str, str] = {
     "upstream_kind": "str", "upstream_url": "str", "anthropic_base_url": "str", "egress_allowlist": "hosts",
     "provider_region": "str?", "provider_zero_retention": "bool", "upstream_timeout_s": "float",
     "ner_model": "str?", "ner_workers": "int0", "ner_queue_max": "int0", "ner_timeout_s": "float",
-    "ml_detector": "mldetector?", "content_gate_model": "mlgate?", "legacy_heuristics": "bool",
+    "ml_detector": "mldetector?", "content_gate_model": "mlgate?", "legacy_heuristics": "bool", "plugins": "plugins?",
     "max_body_bytes": "int", "max_content_chars": "int", "max_messages": "int", "protect_timeout_s": "float",
     "max_concurrent_protect": "int", "private_upstream_url": "str?", "private_allowlist": "hosts",
 }
@@ -304,7 +311,7 @@ PROFILE_ENV: dict[str, str] = {
     "provider_zero_retention": "PGW_PROVIDER_ZERO_RETENTION_ATTESTED", "upstream_timeout_s": "PGW_UPSTREAM_TIMEOUT_S",
     "ner_model": "PGW_NER_MODEL", "ner_workers": "PGW_NER_WORKERS", "ner_queue_max": "PGW_NER_QUEUE_MAX",
     "ner_timeout_s": "PGW_NER_TIMEOUT_S", "max_body_bytes": "PGW_MAX_BODY_BYTES",
-    "ml_detector": "", "content_gate_model": "", "legacy_heuristics": "",
+    "ml_detector": "", "content_gate_model": "", "legacy_heuristics": "", "plugins": "",
     "max_content_chars": "PGW_MAX_CONTENT_CHARS", "max_messages": "PGW_MAX_MESSAGES",
     "protect_timeout_s": "PGW_PROTECT_TIMEOUT_S", "max_concurrent_protect": "PGW_MAX_CONCURRENT_PROTECT",
     "private_upstream_url": "PGW_PRIVATE_UPSTREAM_URL", "private_allowlist": "",
@@ -368,6 +375,12 @@ def _check(name: str, kind: str, v):
             return (parse_detector if k == "mldetector" else parse_gate)(v).as_mapping()
         except MlConfigError as e:
             raise ProfileError(f"deployment profile: {name!r}: {e}") from None
+    if k == "plugins":
+        from ..plugins import PluginConfigError, parse_plugins
+        try:
+            return parse_plugins(v)
+        except PluginConfigError as e:
+            raise ProfileError(f"deployment profile: {name!r}: {e}") from None
     raise bad   # pragma: no cover - every kind is handled above
 
 
@@ -412,7 +425,7 @@ def profile_serial(data: bytes | None) -> int | None:
 
 
 def _norm(kind: str, v, base: Path | None, from_profile: bool):
-    if v is None:
+    if v is None and kind != "plugins?":
         return None
     k = kind.rstrip("?")
     if k == "path":
@@ -429,6 +442,12 @@ def _norm(kind: str, v, base: Path | None, from_profile: bool):
         p = Path(cfg.path)
         p = (base / p) if from_profile and base is not None and not p.is_absolute() else p
         return cfg.with_path(str(p.resolve())).as_mapping()
+    if k == "plugins":   # None, {} and every plugin "off" are the same configuration
+        from ..plugins import PluginConfigError, parse_plugins
+        try:
+            return tuple(sorted((n, m) for n, m in parse_plugins(v).items() if m != "off"))
+        except PluginConfigError:
+            return ("invalid", repr(v))
     if k == "float":
         return float(v)
     if k == "str":

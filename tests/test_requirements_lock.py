@@ -6,11 +6,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ML_EXTRA = {"onnxruntime", "tokenizers", "numpy"}   # optional ML extra (pgw/ml): requirements/ml.txt
+PLUGINS_EXTRA = {"stdnum", "phonenumbers", "detect_secrets"}   # optional plugin adapters: requirements/plugins.txt
 OPTIONAL_EXTRAS = {"spacy",            # optional NER extra: requirements/ner.txt
-                   *ML_EXTRA,
+                   *ML_EXTRA, *PLUGINS_EXTRA,
                    "llama_cpp"}         # optional local-LLM backend for pgw.private_llm (not locked; not shipped)
 # import name -> PyPI distribution name, where they differ
-DIST = {"yaml": "pyyaml", "ahocorasick": "pyahocorasick"}
+DIST = {"yaml": "pyyaml", "ahocorasick": "pyahocorasick", "stdnum": "python-stdnum", "detect_secrets": "detect-secrets"}
 
 
 def _norm(name: str) -> str:
@@ -73,4 +74,16 @@ def test_ml_extra_is_hashed_and_covers_every_pgw_ml_import():
     for n in shared:
         v = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("ml.txt").replace("_", "-"))
         w = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("runtime.txt").replace("_", "-"))
+        assert v and w and v.group(1) == w.group(1), n
+
+
+def test_plugins_extra_is_hashed_covers_every_adapter_and_matches_runtime_pins():
+    locked = _locked(ROOT / "requirements" / "plugins.txt")
+    assert locked and not [n for n, h in locked.items() if not h], "unhashed pins in requirements/plugins.txt"
+    assert {_norm(DIST.get(m, m)) for m in PLUGINS_EXTRA} <= set(locked)
+    runtime = _locked(ROOT / "requirements" / "runtime.txt")
+    text = lambda p: (ROOT / "requirements" / p).read_text(encoding="utf-8").replace("_", "-")  # noqa: E731
+    for n in set(locked) & set(runtime):       # compiled with -c runtime.txt: identical pins
+        v = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("plugins.txt"))
+        w = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("runtime.txt"))
         assert v and w and v.group(1) == w.group(1), n
