@@ -209,9 +209,19 @@ aliased identities found in the prompt (`field: "prompt"`, `source: "declared"`)
   "computation": {"name": "payroll_register_check", "rules": "india_payroll_statutory@1", "starter_rules": true},
   "outputs": [ {"name": "exceptions", "kind": "list", "egress": "RAW"},
                {"name": "total_gross", "kind": "amount", "egress": "INTERNAL"}, … ],
-  "left": {"outputs": ["rows_checked", …], "aliased_identities": 74, "listed_rows": 37, "not_listed": 0}
+  "left": {"outputs": ["rows_checked", …], "aliased_identities": 74, "listed_rows": 37, "not_listed": 0},
+  "disclosure": {"enforced": true, "config": "disclosure_control@1", "min_group_size": 5, "listing": "coarsen",
+                 "differencing": true, "quasi_identifiers": ["department", "pin_district", …],
+                 "cells_suppressed": 2, "cells_suppressed_complementary": 1, "totals_suppressed": 0,
+                 "groups_merged": 0, "groups_suppressed": 0, "rows_coarsened": 37, "rows_attributes_withheld": 0,
+                 "lists_withheld": 0, "queries_refused": 0, "queries_compared": 3}
 }
 ```
+
+`disclosure` is an addition: small-group control, described in [HRMS_CONTRACTS.md](HRMS_CONTRACTS.md) "Small
+groups". It holds counts and schema field names only, never a value. When the differencing check refuses a query,
+the response is 422 `disclosure_control_refused` and nothing is sent. The `pgw_report` inside the error carries the
+same section with `queries_refused: 1`.
 
 ## Size
 

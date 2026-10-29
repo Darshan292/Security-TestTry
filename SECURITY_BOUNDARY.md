@@ -503,6 +503,9 @@ verbatim. On the RECORDS route values are classified by field, not by detection.
 | No input value classified other than KEEP is in what leaves, in any surface form; no word of a NEVER value | `RecordResult.check_protected` (prompt with computed tokens held out: Aho-Corasick over withheld strings, numeric comparison over every number, date comparison), then `check_final` (regex + identifier detectors on the final text); violation = 500, nothing sent | `test_nothing_but_computed_results_and_aliases_leaves[*]`, `test_special_category_words_never_leave_even_when_every_row_has_one`, `test_absence_is_counted_without_its_reason` |
 | Unsigned or modified payloads are refused like free text | the contract's `external_input` (REFUSE only) | `test_unsigned_record_payload_is_refused`, `test_tampered_payload_after_signing_is_refused` |
 | Parsing is bounded and safe: size, rows, depth, CSV shape; XML with any DTD/entity is refused (XXE, billion laughs) | `recparse`, contract `max_bytes`/`max_rows`/`timeout_s` | `test_malformed_payloads_are_400_without_values[*]`, `test_xml_external_entities_dtds_and_bombs_are_refused[*]`, `test_row_and_size_bounds`, `test_large_register_within_time_and_output_bounds` |
+| Small groups: no count of 1..k-1 people defined by quasi-identifiers leaves (roster cells; a filter matching 1..k-1 prints "fewer than k" and lists nobody). Complementary suppression continues until no suppressed cell is determined by the printed numbers of the response | `disclosure.Table.protect` (exact interval audit over the response's sums), `records._roster_control`. k comes from the sealed `registry/rules/disclosure_control.yaml`: k < 3 needs a sealed override with a justification, and a missing or modified file stops startup | `tests/test_disclosure_control.py`: `test_a_count_of_one_never_leaves`, `test_complementary_suppression_no_suppressed_cell_is_determined[*]` (an independent brute-force solver over 300 random tables), `test_small_did_not_match_cell_hides_the_total`, `test_tampered_k_stops_startup`, `test_k_below_3_is_refused_even_when_sealed`, `test_missing_disclosure_config_stops_startup` |
+| Listed aliases: every printed combination of `show` attributes is shared by at least k people of the population the listing is drawn from (coarsening along sealed hierarchies, then per-row withholding; withheld rows are indistinguishable among at least k). Cost-centre bands are printed only for groups of at least k people | `disclosure.anonymize_listing`, `records._list_control`, `hrcompute.contractor_budget` | `test_listing_rows_meet_k_after_coarsening[*]`, `test_exception_list_with_selected_quasi_identifiers_meets_k`, `test_contractor_cost_centre_bands_need_k_people` |
+| Differencing within a conversation: a roster query is refused (422, nothing sent) when its result set differs by 1..k-1 records from an earlier query's result set, or from that set's complement once the total was printed | `disclosure.QueryLog` (filter predicates only; in memory, bounded) | `test_differencing_across_two_queries_in_one_conversation_is_refused`, `test_differencing_against_a_previously_printed_total_is_refused`, `test_query_log_stores_filter_specs_only_and_is_bounded` |
 
 **Computed tokens.** Counts, exception codes, sealed band labels, KEEP enumeration values and generalised values are
 the gateway's own validated output. A count can coincide with an input amount (20,000 rows; a Rs 20,000 basic): the
@@ -510,8 +513,28 @@ withheld-value check therefore reads the prompt with these tokens held out, and 
 (an integer count, a code from a fixed vocabulary, a label from sealed config). That is the precise claim: no input
 value appears in what leaves **outside** a validated computed token.
 
-**Not enforced.** That the schema names a vendor field correctly (a misnamed special category under a field mapped
-KEEP would leave; review schemas like code; unknown fields are safe). That small counts cannot single a person out
-(no small-cell suppression). That the starter statutory values are current (they are sealed config with sources
+**Small groups: enforced and not enforced.** Enforced, deterministically, with k from sealed config:
+- small-cell suppression, with complementary suppression within one response;
+- k-anonymous attributes next to listed aliases;
+- refusal of near-duplicate roster queries within one conversation.
+
+Differential privacy was considered and is not built; docs/HRMS_CONTRACTS.md "Small groups" gives the reasons.
+
+**Not enforced** (small groups):
+- Inference from the LLM's background knowledge. A provider that already knows who is in a group of k learns that
+  group's printed attribute.
+- Attribute disclosure when all k people of a group share the same value (homogeneity). l-diversity and t-closeness
+  are not built.
+- Differencing across conversations, since a caller can rotate `X-PGW-Conversation-Id`.
+- Differencing across gateway processes or restarts, since the log is in memory.
+- Differencing across two different exports, since no input is stored.
+- Differencing through `group_by` cells of overlapping filters, since only matched sets are compared.
+- Reasoning about the suppression algorithm itself.
+- The per-person exception codes of payroll, timecard and contractor lists. They are about the aliased person by
+  design and carry no quasi-identifier unless the contract shows one.
+
+**Not enforced** (other). That the schema names a vendor field correctly: a misnamed special category under a field
+mapped KEEP would leave, so review schemas like code (unknown fields are safe). That the starter statutory values are
+current (they are sealed config with sources
 cited; verify them). The payload is parsed on the gateway host: the caller's JSON body and the attestation digest are
 computed on the event loop (bounded by `max_bytes`).
