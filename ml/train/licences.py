@@ -20,20 +20,32 @@ def normalise(lic: str | None) -> str:
     return (lic or "").strip().lower()
 
 
-def check_model(repo_id: str, fetch_licence: Callable[[str], str | None], allow_table_fallback: bool = False) -> str:
+# Third-party DETECTOR candidates evaluated by notebook 04 (not base models for training). The value is what the model
+# card is EXPECTED to say; it is only a fallback/cross-check, the card read at run time is the authority. openai/privacy-filter
+# could not be verified offline when this table was written: the notebook asserts whatever its card says.
+ALLOWED_DETECTORS: dict[str, str] = {
+    "openai/privacy-filter": "apache-2.0",
+    "ai4bharat/IndicNER": "mit",
+    "urchade/gliner_multi_pii-v1": "apache-2.0",
+}
+
+
+def check_model(repo_id: str, fetch_licence: Callable[[str], str | None], allow_table_fallback: bool = False,
+                table: dict[str, str] | None = None) -> str:
     """Return the verified licence. `fetch_licence(repo_id)` reads the Hub model card (huggingface_hub). If it fails and
     allow_table_fallback is set, the pinned table is used with a printed warning; otherwise the error propagates."""
     low = repo_id.lower()
     for bad in BLOCKED_SUBSTRINGS:
         assert bad not in low, f"{repo_id} is blocked ({bad}): non-commercial/restrictive or disallowed data"
-    assert repo_id in ALLOWED_MODELS, f"{repo_id} is not in the approved model list {sorted(ALLOWED_MODELS)}"
+    table = ALLOWED_MODELS if table is None else table
+    assert repo_id in table, f"{repo_id} is not in the approved model list {sorted(table)}"
     try:
         lic = normalise(fetch_licence(repo_id))
         source = "model card"
     except Exception as e:  # noqa: BLE001 (network/hub failure: decided by the caller's flag, never silent)
         if not allow_table_fallback:
             raise
-        lic, source = ALLOWED_MODELS[repo_id], f"pinned table (hub lookup failed: {type(e).__name__})"
+        lic, source = table[repo_id], f"pinned table (hub lookup failed: {type(e).__name__})"
     print(f"{repo_id}: licence = {lic!r} (from {source})")
     assert lic in ALLOWED_LICENCES, f"{repo_id} licence {lic!r} not in allowlist {sorted(ALLOWED_LICENCES)}"
     return lic

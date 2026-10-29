@@ -75,7 +75,11 @@ def test_contamination_reads_templates_and_gz(tmp_path):
 def test_package_contains_only_python_and_is_deterministic(tmp_path):
     a = pk.build(tmp_path / "a", "someone", "pgw-ml-train")
     b = pk.build(tmp_path / "b", "someone", "pgw-ml-train")
-    assert a["zip_sha256"] == b["zip_sha256"]
+    assert a["zip_sha256"] == b["zip_sha256"] and a["runtime_zip_sha256"] == b["runtime_zip_sha256"]
+    with zipfile.ZipFile(tmp_path / "a" / "pgw_ml_runtime.zip") as z:
+        names = set(z.namelist())
+    assert {"pgw/__init__.py", "pgw/types.py", "pgw/ml/artifact.py", "pgw/ml/span_model.py", "pgw/ml/token_classifier.py"} <= names
+    assert not [n for n in names if not n.endswith(".py")]
     with zipfile.ZipFile(tmp_path / "a" / "ml_train.zip") as z:
         names = z.namelist()
     assert "ml/__init__.py" in names and "ml/train/synth.py" in names and "ml/train/values.py" in names
