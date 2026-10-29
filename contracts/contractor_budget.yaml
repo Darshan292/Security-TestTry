@@ -1,7 +1,7 @@
 # Data contract: contractor spend vs budget and bill rate vs approved rate, from a SAP Fieldglass worker export
 # (route RECORDS, docs/HRMS_CONTRACTS.md). Bill rates, budgets and spend never leave: only flags and sealed bands.
 contract: contractor_budget
-version: 1
+version: 2
 task_type: contractor_budget
 route: RECORDS
 data_classes:
@@ -40,7 +40,8 @@ outputs:
 guidance: >-
   You are reviewing contractor budget flags. OVER_BUDGET: spend above the work order budget; NEAR_BUDGET: at or above
   the near-budget threshold; RATE_ABOVE_APPROVED: bill rate above the approved rate (by the band shown); NO_BUDGET,
-  INVALID_RATE, NEGATIVE_AMOUNT, MISSING/INVALID: data problems. Rates and amounts are not available to you.
+  INVALID_RATE, NEGATIVE_AMOUNT, MISSING/INVALID: data problems. Rates and amounts are not available to you. A band shown as "suppressed" or a group named "other
+  cost centres" was merged or withheld by the gateway's small-group rule; never estimate or derive it.
 prompt_template: |
   Contractor budget check computed inside the privacy gateway (bill rates, budgets and spend are not shared with you).
   Work orders checked: {rows_checked}. Flagged: {rows_flagged}. Overall utilisation: {overall_utilisation_pct}.

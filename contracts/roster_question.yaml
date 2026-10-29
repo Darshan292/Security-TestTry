@@ -2,7 +2,7 @@
 # SuccessFactors export (route RECORDS, docs/HRMS_CONTRACTS.md). Filters and groupings only on KEEP and GENERALIZE
 # fields, with values from their sealed enumerations or generalised formats; people are listed only as aliases.
 contract: roster_question
-version: 1
+version: 2
 task_type: roster_question
 route: RECORDS
 data_classes:
@@ -38,7 +38,9 @@ outputs:
   group_counts: {derived_from: C0, egress: RAW}
 guidance: >-
   You are answering a question about a directory export. You receive counts and aliased people only; answer from them
-  and do not guess anything that is not listed.
+  and do not guess anything that is not listed. A count shown as "fewer than k" or "suppressed" was withheld by the gateway's small-group rule (k is the minimum
+  group size); never estimate it, never derive it from other numbers, and say only that the group is too small to report.
+  "attributes withheld" on a listed person means the same.
 prompt_template: |
   Directory question computed inside the privacy gateway.
   Records: {total_rows}. Filter: {filter_text}. Matching: {matched_count} (records without a value for a filtered field: {rows_missing_filter_field}).

@@ -6,8 +6,8 @@
    "version": 5
   },
   "contracts/contractor_budget.yaml": {
-   "sha256": "a83f7dc493e0c83d897f9bb68665653c114cdb622c25c809508852f2d57b85d0",
-   "version": 1
+   "sha256": "58b87ee7e3e5c9007e8299e741dba8d4963ea4e84094d8c5d481da7c9a93b43e",
+   "version": 2
   },
   "contracts/esi_letter.yaml": {
    "sha256": "f3220f80849af44be00d4f10c147e163cb559c89377bd829361f43ff8f26824b",
@@ -26,8 +26,8 @@
    "version": 1
   },
   "contracts/roster_question.yaml": {
-   "sha256": "6f7d09e3bc272d69c464e37891933b009e6a3ab8a6f19788e2637a6ae35bf7a3",
-   "version": 1
+   "sha256": "0d162d0d9d5dda037416cf14ad73bfe92f69bba592b255ffbf426267fb5151d5",
+   "version": 2
   },
   "contracts/salary_comparison.yaml": {
    "sha256": "1580cfd74f235a071064b8cbcd1a4b84e7a1898ccbf4dfbb27e4aac23e4601d2",
