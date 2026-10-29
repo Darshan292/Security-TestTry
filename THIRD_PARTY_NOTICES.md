@@ -33,3 +33,10 @@ NumPy (BSD 3-Clause), `onnx` (Apache License 2.0; tests only). No model weights 
 each model artefact carries its own licence in its MODEL_CARD.md and must be commercial-friendly
 (docs/ML_ARCHITECTURE.md). The `llama-server` container image (llama.cpp, MIT License) is referenced by pinned
 digest in deploy/docker-compose.yml, not redistributed.
+
+## Evaluation extras (requirements/eval.in, eval.txt), installed packages, not vendored, never imported by pgw/
+
+nervaluate (MIT), presidio-analyzer (MIT; wheel classifier), Faker (MIT), phonenumbers (Apache-2.0), tldextract
+(BSD-3-Clause) as read from the wheel METADATA. python-stdnum is LGPL-2.1+ and is used only by tests as an independent
+cross-check of generated identifiers; it is not shipped, vendored or imported by `pgw/` or `ml/train`. Third-party detector
+models examined by notebook 04 are not included; each exported bundle carries its model card licence.

@@ -30,6 +30,10 @@ REQUIRED = {"token_classifier": ("model.onnx", "tokenizer.json", "labels.json", 
                                  "sha256sums"),
             "content_gate": ("model.onnx", "tokenizer.json", "labels.json", "metrics.json", "train_meta.json", "MODEL_CARD.md",
                              "thresholds.json", "sha256sums")}
+# external_detector: a third-party open detector exported by notebook 04 (token- or span-classification); not trained by
+# us, so the "synthetic-only training" checks are replaced by a licence + not-validated-on-real check.
+REQUIRED["external_detector"] = ("model.onnx", "tokenizer.json", "labels.json", "metrics.json", "train_meta.json", "MODEL_CARD.md",
+                                 "sha256sums")
 TASK_FOR_KIND = {"token_classifier": "token-classification", "content_gate": "sequence-classification"}
 ROOT = Path(__file__).resolve().parents[2]
 PLACEHOLDER_PATH = "models/<name>"
@@ -77,7 +81,10 @@ def runtime_check(d: Path, kind: str, problems: list[str]) -> dict:
     except (artifact.ArtifactError, ValueError, OSError) as e:
         problems.append(f"runtime artefact validation failed: {e}")
         return {}
-    if doc["task"] != TASK_FOR_KIND[kind]:
+    if kind == "external_detector":
+        if doc["task"] not in ("token-classification", "span-classification"):
+            problems.append(f"labels.json task {doc['task']!r} is not a detector task")
+    elif doc["task"] != TASK_FOR_KIND[kind]:
         problems.append(f"labels.json task is {doc['task']!r}; a {kind} needs {TASK_FOR_KIND[kind]!r}")
     extra = [p.name for p in d.iterdir() if p.name.endswith((".onnx_data", ".onnx.data")) or (p.suffix == ".onnx" and p.name != "model.onnx")]
     if extra:
@@ -114,6 +121,24 @@ def token_snippet(d: Path, res: dict) -> tuple[dict, list[str]]:
         notes.append("no recall sweep in metrics.json: min_score_by_type uses the global operating tau only")
     snippet = {"ml_detector": {"path": PLACEHOLDER_PATH, "sha256": res["manifest_digest"], "backend": "token", "labels": labels,
                                "min_score_by_type": mins}}
+    return snippet, notes
+
+
+def external_snippet(d: Path, res: dict) -> tuple[dict, list[str]]:
+    """ml_detector entry for an external detector: label map from train_meta.json (reviewed table), DEFAULT score = the
+    labels.json threshold (span) or 0.5 (token). Written for BENCHMARKING; the notes say so."""
+    _artifact, config = _pgw()
+    meta = _load_json(d, "train_meta.json")
+    lm = meta.get("label_map")
+    if not isinstance(lm, dict) or not lm:
+        raise ValueError("train_meta.json has no label_map")
+    backend = meta.get("backend") or ("span" if res["labels_doc"]["task"] == "span-classification" else "token")
+    thr = meta.get("operating_threshold") or 0.5
+    snippet = {"ml_detector": {"path": PLACEHOLDER_PATH, "sha256": res["manifest_digest"], "backend": backend, "labels": lm,
+                               "min_score_by_type": {"DEFAULT": float(thr)}}}
+    notes = ["external third-party detector: for scripts/ml/bench_detectors.py (dev measurement) only; adopting it into a "
+             "profile is a separate, reviewed decision",
+             "labels mapped to IGNORE: " + (", ".join(k for k, v in lm.items() if v == config.IGNORE) or "none")]
     return snippet, notes
 
 
@@ -162,6 +187,9 @@ def verify(d: Path, kind: str | None = None) -> dict:
             problems.append(f"present but not in sha256sums: {f.name}")
     if kind is None:
         kind = "content_gate" if (d / "thresholds.json").exists() else "token_classifier"
+        if kind == "token_classifier" and (d / "train_meta.json").exists() and \
+                json.loads((d / "train_meta.json").read_text(encoding="utf-8")).get("external"):
+            kind = "external_detector"
     for name in REQUIRED[kind]:
         if not (d / name).exists():
             problems.append(f"required file missing: {name}")
@@ -169,15 +197,25 @@ def verify(d: Path, kind: str | None = None) -> dict:
     if (d / "metrics.json").exists():
         metrics = json.loads((d / "metrics.json").read_text(encoding="utf-8"))
         drop = metrics.get("int8_vs_fp32", {}).get("max_recall_drop")
-        if drop is None:
+        if kind == "external_detector":
+            if metrics.get("shipped_precision") == "int8" and drop is not None and drop > MAX_INT8_RECALL_DROP + 1e-9:
+                problems.append(f"int8 recall drop {drop} exceeds {MAX_INT8_RECALL_DROP}")
+            if not str(metrics.get("training_data", "")).startswith("third-party"):
+                problems.append("metrics.json training_data must start with 'third-party' for an external detector")
+            if not metrics.get("licence"):
+                problems.append("metrics.json has no licence")
+        elif drop is None:
             problems.append("metrics.json has no int8_vs_fp32.max_recall_drop")
         elif drop > MAX_INT8_RECALL_DROP + 1e-9:
             problems.append(f"int8 recall drop {drop} exceeds {MAX_INT8_RECALL_DROP}")
-        if metrics.get("training_data") != "synthetic-only":
+        if kind != "external_detector" and metrics.get("training_data") != "synthetic-only":
             problems.append("metrics.json training_data must be 'synthetic-only'")
     if (d / "MODEL_CARD.md").exists():
         card = (d / "MODEL_CARD.md").read_text(encoding="utf-8").lower()
-        if "synthetic" not in card or "not validated on real" not in card:
+        if kind == "external_detector":
+            if "licence" not in card or "not validated on real" not in card:
+                problems.append("MODEL_CARD.md must state the licence and that it is not validated on real data")
+        elif "synthetic" not in card or "not validated on real" not in card:
             problems.append("MODEL_CARD.md must state synthetic-only training and that it is not validated on real data")
     runtime = {}
     if not problems:
@@ -204,7 +242,8 @@ def main(argv=None) -> int:
     print(f"model_sha256 (informational):  {res['model_sha256']}")
     print(f"bundle_sha256 (informational): {res['bundle_sha256']}")
     try:
-        snippet, notes = (token_snippet if res["kind"] == "token_classifier" else gate_snippet)(Path(a.dir), res)
+        snippet, notes = {"token_classifier": token_snippet, "content_gate": gate_snippet,
+                          "external_detector": external_snippet}[res["kind"]](Path(a.dir), res)
     except (ValueError, KeyError, OSError) as e:
         print(f"cannot build the profile snippet: {e}", file=sys.stderr)
         return 1

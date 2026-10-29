@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 from eval.ml.backends import Backend  # noqa: E402
 from eval.ml.datasets import Example, load  # noqa: E402
-from eval.ml.run import HELD_OUT, evaluate, load_gate  # noqa: E402
+from eval.ml.run import evaluate, is_held_out, load_gate  # noqa: E402
 
 CORPORA = ("eval/data/dev.jsonl", "eval/data2/dev2.jsonl", "eval/data3/dev3build.jsonl")
 BACKEND_ROWS = (("current", "current stack"), ("current_ner", "current + spaCy NER"), ("presidio", "Presidio"),
@@ -32,10 +32,7 @@ TYPES = ("PERSON", "EMAIL", "PHONE", "AADHAAR", "PAN", "BANK_ACCOUNT", "IFSC", "
 
 
 def refuse_if_held_out(path: Path) -> None:
-    gate = load_gate(ROOT / "eval" / "ml" / "release_gate.yaml")
-    sets = {str(Path(p).resolve()) for p in (gate.get("release_sets") or []) if p}
-    p = path.as_posix().lower()
-    if HELD_OUT.search(p) or "heldout" in p or "held_out" in p or str(path.resolve()) in sets:
+    if is_held_out(path, load_gate(ROOT / "eval" / "ml" / "release_gate.yaml")):
         raise SystemExit(f"refused: {path} is a held-out / release-gate set (dev comparison only)")
 
 

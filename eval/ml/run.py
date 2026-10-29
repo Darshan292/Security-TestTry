@@ -36,6 +36,15 @@ ROOT = Path(__file__).resolve().parent
 HELD_OUT = re.compile(r"(?:^|/)(?:test\d*|ner_test\d*|dev3val|sealed[^/]*)(?:\.jsonl(?:\.gz)?|\.tar\.enc)?$")
 
 
+def is_held_out(path: str | Path, gate: dict | None = None) -> bool:
+    """True for anything a dev run must never read: the regex releases' held-out corpora, sealed archives, tester sets,
+    release_sets of the gate config and any path naming `heldout`/`held_out`. Decided from the PATH ONLY (no file I/O)."""
+    p = Path(path)
+    low = p.as_posix().lower()
+    sets = {str(Path(x).resolve()) for x in ((gate or {}).get("release_sets") or []) if x}
+    return bool(HELD_OUT.search(low) or "heldout" in low or "held_out" in low or "tester" in low or str(p.resolve()) in sets)
+
+
 def sha256_file(p: Path) -> str:
     h = hashlib.sha256()
     with open(p, "rb") as fh:
@@ -131,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     data = Path(a.data)
     gate = load_gate(a.gate if a.gate and a.gate.exists() else None)
     release_sets = {str(Path(p).resolve()) for p in (gate.get("release_sets") or []) if p}
-    if a.role == "dev" and (HELD_OUT.search(data.as_posix()) or str(data.resolve()) in release_sets):
+    if a.role == "dev" and (is_held_out(data, gate) or str(data.resolve()) in release_sets):
         print("refused: this dataset is held out / a release-gate set; it is never used for model selection "
               "(use --role release)", file=sys.stderr)
         return 2
