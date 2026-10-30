@@ -23,7 +23,7 @@ ancestors of the above.
 - In-house CPU LLM bench: `docs/PRIVATE_LLM_BENCH.md`.
 - Security properties and their limits: `SECURITY_BOUNDARY.md` (§11 structure guard, §12 RECORDS + small groups,
   §13 plugins), `docs/HRMS_CONTRACTS.md`, `docs/PLUGINS.md`, `docs/ML_ARCHITECTURE.md`.
-- Tester rerun runbook: `docs/TESTER_RERUN.md` (if present on the branch).
+- Tester rerun runbook: `docs/TESTER_RERUN.md` (verified 2026-10-30: both bundle digests reproduced from the pinned revisions; production-mode smoke test passed for both configurations).
 
 ## Headline numbers (DEV, synthetic; not release numbers)
 
