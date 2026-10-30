@@ -7,12 +7,14 @@ _INT_TYPES = {"tensor(int64)": "int64", "tensor(int32)": "int32"}
 
 
 # Minimal protobuf wire walker (no `onnx` dependency at runtime) to find external-data tensors. ONNX field numbers:
-# ModelProto.graph=7, .functions=25; GraphProto.node=1, .initializer=5, .sparse_initializer=15; SparseTensorProto.values=1;
-# NodeProto.attribute=5; AttributeProto.t=5, .g=6, .tensors=10, .graphs=11, .sparse_tensor=22; FunctionProto.node=1;
-# TensorProto.external_data=13, .data_location=14 (1 = EXTERNAL).
-_CHILDREN = {"model": {7: "graph", 25: "function"}, "function": {1: "node"},
-             "graph": {1: "node", 5: "tensor", 15: "sparse"}, "sparse": {1: "tensor"},
-             "node": {5: "attr"}, "attr": {5: "tensor", 6: "graph", 10: "tensor", 11: "graph", 22: "sparse"},
+# (verified against onnx/onnx.proto, pinned by tests/test_ml_onnx_walker.py):
+# ModelProto.graph=7, .functions=25; GraphProto.node=1, .initializer=5, .sparse_initializer=15;
+# SparseTensorProto.values=1, .indices=2; NodeProto.attribute=5;
+# AttributeProto.t=5, .g=6, .tensors=10, .graphs=11, .sparse_tensor=22, .sparse_tensors=23;
+# FunctionProto.node=7, .attribute_proto=11 (attribute defaults); TensorProto.external_data=13, .data_location=14 (1 = EXTERNAL).
+_CHILDREN = {"model": {7: "graph", 25: "function"}, "function": {7: "node", 11: "attr"},
+             "graph": {1: "node", 5: "tensor", 15: "sparse"}, "sparse": {1: "tensor", 2: "tensor"},
+             "node": {5: "attr"}, "attr": {5: "tensor", 6: "graph", 10: "tensor", 11: "graph", 22: "sparse", 23: "sparse"},
              "tensor": {}}
 
 
@@ -58,9 +60,10 @@ def _has_external(buf, kind: str) -> bool:
 
 
 def reject_external_data(model_bytes: bytes) -> None:
-    """Refuse a model whose tensors point at external data files. onnxruntime resolves such a path against the process
-    working directory when the model is built from bytes, so a file on disk that the manifest digest does not cover
-    could be loaded: weights must be inline (repack with scripts/ml/repack_onnx.py)."""
+    """Refuse a model whose tensors point at external data files: weights must be inline (repack with
+    scripts/ml/repack_onnx.py), so the manifest digest covers every weight byte. Defence in depth: onnxruntime 1.31.1
+    already refuses to resolve external data for a model built from bytes (pinned by tests/test_ml_ort_external.py),
+    but this check keeps the property independent of the ORT version."""
     try:
         found = _has_external(memoryview(model_bytes), "model")
     except (ValueError, IndexError):

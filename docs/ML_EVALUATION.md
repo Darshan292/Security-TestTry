@@ -309,11 +309,14 @@ steps below. GLiNER also needs the torch wheel for the export (`gliner` + `torch
    tensors from those bytes, accepts only plain file names (no `/`, `..`, symlinks), checks offset/length, refuses above the
    limit, and can compare outputs of the source and the repacked model (`--parity`). fp32 and fp16 cannot be repacked (over 2 GiB):
    only int8 and q4 are candidates. Whether `model_q4` runs on the ORT CPU provider is **untested**.
-4. **Found while doing this: a latent hole, now closed.** ONNX Runtime resolves external-data paths of a model built from bytes
-   against the process working directory (verified with a tiny model). A `model.onnx` with external references would therefore
-   have passed the manifest digest and then loaded a data file the digest does not cover. `pgw.ml.onnx_util.reject_external_data`
-   (a dependency-free protobuf walk, called by `make_session`) now refuses such a model with an `ArtifactError`; tested with the
-   data file placed in the cwd.
+4. **External-data references: corrected finding.** An earlier version of this note called this a latent hole. It is not one
+   with the pinned runtime: onnxruntime 1.31.1, given a model built from bytes whose initializer, `Constant` attribute or
+   function-local node references external data (data file in the cwd), fails at the default optimisation level
+   (`model_path must not be empty`). It does load such a model, and read the cwd file, when optimisation is disabled
+   (`ORT_DISABLE_ALL`). That outcome is a side effect of the optimiser, not a policy, so
+   `pgw.ml.onnx_util.reject_external_data` (a dependency-free protobuf walk, called by `make_session`) stays as defence in depth
+   and keeps the property independent of the ORT version and optimisation level. Behaviour is pinned in
+   `tests/test_ml_onnx_walker.py`; details in ML_ARCHITECTURE.md section 7.
 5. `scripts/ml/build_external_bundle.py`: builds the bench bundle (labels.json incl. Viterbi from `viterbi_calibration.json`,
    card, metrics, train_meta with the reviewed label map, sha256sums), verifies it with `import_artifacts.py` and prints the
    manifest digest. **No bundle was produced (no weights), so there is no digest to report.**

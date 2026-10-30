@@ -184,8 +184,9 @@ def test_reject_external_data_detects_references_and_passes_inline():
 
 
 def test_runtime_refuses_external_data_even_when_the_file_is_in_the_cwd(tmp_path, monkeypatch):
-    """onnxruntime resolves external data of a model built from bytes against the cwd: that file is not in the manifest
-    digest, so the runtime must refuse the model before ORT sees it."""
+    """The data file is covered by the digest, but a same-named file in the cwd is not what was verified: our check
+    refuses the model before ORT sees it (ORT 1.31.1 also fails it at the default optimisation level, but loads it with
+    optimisation disabled: see tests/test_ml_onnx_walker.py)."""
     ext = _external_model(tmp_path / "ext")
     d, _ = F.make_token_model(tmp_path / "bundle")
     (d / "model.onnx").write_bytes((ext / "model.onnx").read_bytes())
