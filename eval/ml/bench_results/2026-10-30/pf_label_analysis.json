@@ -1,0 +1,1049 @@
+{
+ "bundle": "70d89252c39a8a6bc58799cbbd9cf6af8d1a3c6ed4eacd75b73ca0a309d5c9ef",
+ "corpora": {
+  "dev.jsonl": {
+   "address": {
+    "docs_with_pf_address": 24,
+    "docs_with_stack_address": 0,
+    "pf_address_spans": 32,
+    "pf_overlapping_stack": 0,
+    "stack_address_spans": 0,
+    "stack_overlapping_pf": 0
+   },
+   "docs": 500,
+   "examples": {
+    "account_number": [],
+    "private_address": [
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.99887,
+      "text": "Floor 8, Room 270"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.998465,
+      "text": "Floor 7, Room 1247"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.990958,
+      "text": "Gurugram"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999999,
+      "text": "Bengaluru"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999907,
+      "text": "Pune"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.988093,
+      "text": ",Band 4"
+     },
+     {
+      "gold": [
+       "PHONE"
+      ],
+      "score": 0.899658,
+      "text": "97255 59548"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.663871,
+      "text": "Kolkata"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.956137,
+      "text": "Kolkata"
+     },
+     {
+      "gold": [
+       "COMPENSATION"
+      ],
+      "score": 0.7188,
+      "text": "45.5L"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.708358,
+      "text": "Gurugram"
+     },
+     {
+      "gold": [
+       "PERSON"
+      ],
+      "score": 0.820192,
+      "text": ",Pallavi Sheth"
+     }
+    ],
+    "private_date": [
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999884,
+      "text": "1993-11-30"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.997836,
+      "text": "13/02/2025"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999976,
+      "text": "07/03/1973"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999995,
+      "text": "01/03/1972"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999855,
+      "text": "1992-06-14"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999626,
+      "text": "2023-05-23"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999914,
+      "text": "1974-09-03"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999989,
+      "text": "2021-09-28"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999989,
+      "text": "15 Jan 2025"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999994,
+      "text": "10 Apr 2024"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.99999,
+      "text": "1999-06-04"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999902,
+      "text": "1970-08-08"
+     }
+    ],
+    "private_email": [],
+    "private_person": [],
+    "private_phone": [],
+    "private_url": [],
+    "secret": []
+   },
+   "gold_covered_by": {
+    "AADHAAR": {
+     "(none)": 1,
+     "__total__": 59,
+     "account_number": 49,
+     "private_phone": 9
+    },
+    "BANK_ACCOUNT": {
+     "(none)": 9,
+     "__total__": 141,
+     "account_number": 126,
+     "private_phone": 6
+    },
+    "CARD": {
+     "(none)": 9,
+     "__total__": 80,
+     "account_number": 61,
+     "private_phone": 9,
+     "secret": 1
+    },
+    "COMPENSATION": {
+     "(none)": 368,
+     "__total__": 383,
+     "account_number": 8,
+     "private_address": 5,
+     "private_person": 1,
+     "secret": 1
+    },
+    "DATE_OF_BIRTH": {
+     "(none)": 4,
+     "__total__": 166,
+     "private_date": 162
+    },
+    "EMAIL": {
+     "(none)": 4,
+     "__total__": 215,
+     "private_email": 211
+    },
+    "EMPLOYEE_ID": {
+     "(none)": 310,
+     "__total__": 514,
+     "account_number": 197,
+     "private_person": 3,
+     "private_phone": 4
+    },
+    "IFSC": {
+     "(none)": 20,
+     "__total__": 123,
+     "account_number": 103
+    },
+    "PAN": {
+     "(none)": 7,
+     "__total__": 118,
+     "account_number": 110,
+     "private_person": 1
+    },
+    "PERSON": {
+     "(none)": 195,
+     "__total__": 1412,
+     "account_number": 4,
+     "private_address": 1,
+     "private_person": 1212
+    },
+    "PHONE": {
+     "(none)": 2,
+     "__total__": 190,
+     "account_number": 11,
+     "private_address": 1,
+     "private_phone": 176
+    },
+    "SECRET": {
+     "(none)": 4,
+     "__total__": 106,
+     "account_number": 4,
+     "private_email": 3,
+     "private_person": 2,
+     "secret": 93
+    },
+    "UPI_ID": {
+     "__total__": 40,
+     "account_number": 8,
+     "private_email": 29,
+     "private_person": 6,
+     "private_phone": 1
+    }
+   },
+   "hits_overlap_gold": {
+    "account_number": {
+     "(no gold)": 290,
+     "AADHAAR": 49,
+     "BANK_ACCOUNT": 126,
+     "CARD": 61,
+     "COMPENSATION": 8,
+     "EMPLOYEE_ID": 195,
+     "IFSC": 103,
+     "PAN": 110,
+     "PERSON": 4,
+     "PHONE": 11,
+     "SECRET": 4,
+     "UPI_ID": 8,
+     "__total__": 968
+    },
+    "private_address": {
+     "(no gold)": 25,
+     "COMPENSATION": 5,
+     "PERSON": 1,
+     "PHONE": 1,
+     "__total__": 32
+    },
+    "private_date": {
+     "(no gold)": 464,
+     "DATE_OF_BIRTH": 162,
+     "__total__": 626
+    },
+    "private_email": {
+     "(no gold)": 5,
+     "EMAIL": 211,
+     "SECRET": 3,
+     "UPI_ID": 29,
+     "__total__": 246
+    },
+    "private_person": {
+     "(no gold)": 65,
+     "COMPENSATION": 1,
+     "EMPLOYEE_ID": 3,
+     "PAN": 1,
+     "PERSON": 1260,
+     "SECRET": 2,
+     "UPI_ID": 6,
+     "__total__": 1337
+    },
+    "private_phone": {
+     "AADHAAR": 9,
+     "BANK_ACCOUNT": 6,
+     "CARD": 9,
+     "EMPLOYEE_ID": 4,
+     "PHONE": 176,
+     "UPI_ID": 1,
+     "__total__": 205
+    },
+    "private_url": {
+     "(no gold)": 10,
+     "__total__": 10
+    },
+    "secret": {
+     "(no gold)": 23,
+     "CARD": 1,
+     "COMPENSATION": 1,
+     "SECRET": 80,
+     "__total__": 105
+    }
+   }
+  },
+  "dev2.jsonl": {
+   "address": {
+    "docs_with_pf_address": 7,
+    "docs_with_stack_address": 0,
+    "pf_address_spans": 11,
+    "pf_overlapping_stack": 0,
+    "stack_address_spans": 0,
+    "stack_overlapping_pf": 0
+   },
+   "docs": 500,
+   "examples": {
+    "account_number": [],
+    "private_address": [
+     {
+      "gold": [
+       "PERSON"
+      ],
+      "score": 0.998581,
+      "text": "Abirami, Zephyr Cloud Labs"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.991218,
+      "text": "Pune"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.997493,
+      "text": "Sun Pharma"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.812741,
+      "text": "\u20b93,41,07,570"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.656381,
+      "text": "Pune"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.5044,
+      "text": "473"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.914897,
+      "text": "815"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999993,
+      "text": "Gurugram"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.997854,
+      "text": "Pune"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.937082,
+      "text": "Mahindra"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.647117,
+      "text": "Mahindra"
+     }
+    ],
+    "private_date": [
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999998,
+      "text": "18-03-1992"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.802311,
+      "text": "2025-11-30T11:35:50,396Z"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.514754,
+      "text": "07/Jun/2026:06:40:03"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.582434,
+      "text": "03/Mar/2026:05:12:58"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999987,
+      "text": "26-10-1967"
+     },
+     {
+      "gold": [
+       "DATE_OF_BIRTH"
+      ],
+      "score": 0.999974,
+      "text": "14-06-1962"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.824238,
+      "text": "06/Jul/2026:12:02:59"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.658543,
+      "text": "[21/May/2026"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.64401,
+      "text": "13/Mar/2026:16:29:05"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.678644,
+      "text": "2025-05-23T07:34:36Z"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.702771,
+      "text": "2026-04-07T10:35:58Z"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.620866,
+      "text": "01/Sep/2026:01:39:33"
+     }
+    ],
+    "private_email": [],
+    "private_person": [],
+    "private_phone": [],
+    "private_url": [],
+    "secret": []
+   },
+   "gold_covered_by": {
+    "AADHAAR": {
+     "(none)": 1,
+     "__total__": 198,
+     "account_number": 157,
+     "private_phone": 40
+    },
+    "BANK_ACCOUNT": {
+     "(none)": 31,
+     "__total__": 209,
+     "account_number": 178
+    },
+    "CARD": {
+     "__total__": 62,
+     "account_number": 50,
+     "private_phone": 12
+    },
+    "COMPENSATION": {
+     "(none)": 393,
+     "__total__": 422,
+     "account_number": 15,
+     "secret": 14
+    },
+    "DATE_OF_BIRTH": {
+     "(none)": 13,
+     "__total__": 436,
+     "account_number": 1,
+     "private_date": 422
+    },
+    "EMAIL": {
+     "(none)": 4,
+     "__total__": 345,
+     "private_email": 334,
+     "private_url": 7
+    },
+    "EMPLOYEE_ID": {
+     "(none)": 326,
+     "__total__": 623,
+     "account_number": 251,
+     "private_date": 42,
+     "private_person": 1,
+     "private_phone": 3
+    },
+    "IFSC": {
+     "(none)": 31,
+     "__total__": 184,
+     "account_number": 153
+    },
+    "PAN": {
+     "(none)": 5,
+     "__total__": 323,
+     "account_number": 318
+    },
+    "PERSON": {
+     "(none)": 103,
+     "__total__": 757,
+     "account_number": 7,
+     "private_address": 1,
+     "private_person": 641,
+     "private_phone": 1,
+     "private_url": 4
+    },
+    "PHONE": {
+     "(none)": 2,
+     "__total__": 631,
+     "account_number": 265,
+     "private_phone": 364
+    },
+    "SECRET": {
+     "(none)": 24,
+     "__total__": 167,
+     "account_number": 1,
+     "private_person": 1,
+     "private_url": 8,
+     "secret": 133
+    },
+    "UPI_ID": {
+     "(none)": 1,
+     "__total__": 145,
+     "account_number": 9,
+     "private_email": 122,
+     "private_person": 21,
+     "private_phone": 1
+    }
+   },
+   "hits_overlap_gold": {
+    "account_number": {
+     "(no gold)": 347,
+     "AADHAAR": 157,
+     "BANK_ACCOUNT": 178,
+     "CARD": 50,
+     "COMPENSATION": 15,
+     "DATE_OF_BIRTH": 1,
+     "EMPLOYEE_ID": 251,
+     "IFSC": 153,
+     "PAN": 318,
+     "PERSON": 7,
+     "PHONE": 265,
+     "SECRET": 1,
+     "UPI_ID": 9,
+     "__total__": 1742
+    },
+    "private_address": {
+     "(no gold)": 10,
+     "PERSON": 1,
+     "__total__": 11
+    },
+    "private_date": {
+     "(no gold)": 168,
+     "DATE_OF_BIRTH": 422,
+     "EMPLOYEE_ID": 42,
+     "__total__": 632
+    },
+    "private_email": {
+     "EMAIL": 334,
+     "UPI_ID": 122,
+     "__total__": 456
+    },
+    "private_person": {
+     "(no gold)": 19,
+     "EMPLOYEE_ID": 1,
+     "PERSON": 654,
+     "SECRET": 1,
+     "UPI_ID": 21,
+     "__total__": 696
+    },
+    "private_phone": {
+     "(no gold)": 5,
+     "AADHAAR": 40,
+     "CARD": 12,
+     "EMPLOYEE_ID": 3,
+     "PERSON": 1,
+     "PHONE": 364,
+     "UPI_ID": 1,
+     "__total__": 425
+    },
+    "private_url": {
+     "(no gold)": 33,
+     "EMAIL": 7,
+     "PERSON": 4,
+     "SECRET": 8,
+     "__total__": 52
+    },
+    "secret": {
+     "(no gold)": 35,
+     "COMPENSATION": 14,
+     "SECRET": 124,
+     "__total__": 173
+    }
+   }
+  },
+  "dev3build.jsonl": {
+   "address": {
+    "docs_with_pf_address": 43,
+    "docs_with_stack_address": 22,
+    "pf_address_spans": 103,
+    "pf_overlapping_stack": 21,
+    "stack_address_spans": 37,
+    "stack_overlapping_pf": 32
+   },
+   "docs": 500,
+   "examples": {
+    "account_number": [],
+    "private_address": [
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.666712,
+      "text": "MoU 7.37.36"
+     },
+     {
+      "gold": [
+       "EMPLOYEE_ID"
+      ],
+      "score": 0.831896,
+      "text": "KAF 31642)"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.973227,
+      "text": "367/6, Lotus Residency, Shivaji Street, Vasant Kunj, Durgapur 713031"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.930968,
+      "text": "Plot 453, 5apphire Society, Rajaji Lane, Thangal Bazar, Howrah 711086, West Bengal"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.962507,
+      "text": "Flat 176, Sunshine Apartments, Temple Path, Anna Nagar, Dibrugarh 786017, Assam"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.992165,
+      "text": "Dispur Thana (PS-AS-381)"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.977808,
+      "text": "#363, 10th Cross, Gandhi Main Road, Kadavanthra, Guwahati 781083, Assam"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999287,
+      "text": "Door No. 1-14, Ambedkar Lane, Civil Lines, Jorhat 785048, Assam"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.998375,
+      "text": "123"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.974907,
+      "text": "Sai Krupa Enclave"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.960759,
+      "text": "Nehru Street"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.987161,
+      "text": "Laitumkhrah, Durgapur 713001, Wcst Bengal"
+     }
+    ],
+    "private_date": [
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.992912,
+      "text": "01/01/2002"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999999,
+      "text": "13-Dec-2026"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999982,
+      "text": "30-Jul-2027"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999999,
+      "text": "29-Jun-2026"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.990294,
+      "text": "01-05-2027"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999968,
+      "text": "16-Jul-2026"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999985,
+      "text": "20-Jul-2027"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.99998,
+      "text": "26-Apr-2026"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999942,
+      "text": "14-04-2027"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999966,
+      "text": "25-Jan-2026"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.99997,
+      "text": "23-10-2027"
+     },
+     {
+      "gold": [
+       "(no gold)"
+      ],
+      "score": 0.999981,
+      "text": "3-Nov-2026"
+     }
+    ],
+    "private_email": [],
+    "private_person": [],
+    "private_phone": [],
+    "private_url": [],
+    "secret": []
+   },
+   "gold_covered_by": {
+    "AADHAAR": {
+     "(none)": 3,
+     "__total__": 61,
+     "account_number": 43,
+     "private_person": 1,
+     "secret": 14
+    },
+    "BANK_ACCOUNT": {
+     "(none)": 2,
+     "__total__": 186,
+     "account_number": 179,
+     "private_phone": 2,
+     "secret": 3
+    },
+    "CARD": {
+     "__total__": 2,
+     "account_number": 2
+    },
+    "COMPENSATION": {
+     "(none)": 826,
+     "__total__": 968,
+     "account_number": 19,
+     "private_address": 31,
+     "private_date": 4,
+     "secret": 89
+    },
+    "DATE_OF_BIRTH": {
+     "(none)": 187,
+     "__total__": 438,
+     "account_number": 31,
+     "private_address": 16,
+     "private_date": 193,
+     "secret": 11
+    },
+    "EMAIL": {
+     "(none)": 2,
+     "__total__": 224,
+     "private_email": 211,
+     "private_person": 2,
+     "secret": 10
+    },
+    "EMPLOYEE_ID": {
+     "(none)": 288,
+     "__total__": 694,
+     "account_number": 380,
+     "private_address": 7,
+     "private_person": 19
+    },
+    "IFSC": {
+     "(none)": 15,
+     "__total__": 178,
+     "account_number": 159,
+     "private_person": 1,
+     "secret": 3
+    },
+    "OOT": {
+     "(none)": 101,
+     "__total__": 325,
+     "account_number": 204,
+     "secret": 20
+    },
+    "PAN": {
+     "(none)": 23,
+     "__total__": 109,
+     "account_number": 81,
+     "private_person": 1,
+     "secret": 4
+    },
+    "PERSON": {
+     "(none)": 315,
+     "__total__": 1916,
+     "account_number": 16,
+     "private_address": 3,
+     "private_email": 1,
+     "private_person": 1537,
+     "secret": 44
+    },
+    "PHONE": {
+     "(none)": 7,
+     "__total__": 197,
+     "account_number": 24,
+     "private_phone": 154,
+     "secret": 12
+    },
+    "SECRET": {
+     "(none)": 1,
+     "__total__": 19,
+     "account_number": 2,
+     "secret": 16
+    },
+    "UPI_ID": {
+     "__total__": 13,
+     "account_number": 2,
+     "private_email": 11,
+     "private_person": 1
+    }
+   },
+   "hits_overlap_gold": {
+    "account_number": {
+     "(no gold)": 633,
+     "AADHAAR": 43,
+     "BANK_ACCOUNT": 179,
+     "CARD": 2,
+     "COMPENSATION": 14,
+     "DATE_OF_BIRTH": 31,
+     "EMPLOYEE_ID": 380,
+     "IFSC": 159,
+     "OOT": 203,
+     "PAN": 81,
+     "PERSON": 14,
+     "PHONE": 24,
+     "SECRET": 2,
+     "UPI_ID": 2,
+     "__total__": 1737
+    },
+    "private_address": {
+     "(no gold)": 47,
+     "COMPENSATION": 31,
+     "DATE_OF_BIRTH": 16,
+     "EMPLOYEE_ID": 7,
+     "PERSON": 3,
+     "__total__": 103
+    },
+    "private_date": {
+     "(no gold)": 501,
+     "COMPENSATION": 4,
+     "DATE_OF_BIRTH": 193,
+     "__total__": 697
+    },
+    "private_email": {
+     "(no gold)": 1,
+     "EMAIL": 211,
+     "PERSON": 1,
+     "UPI_ID": 11,
+     "__total__": 223
+    },
+    "private_person": {
+     "(no gold)": 182,
+     "AADHAAR": 1,
+     "EMAIL": 2,
+     "EMPLOYEE_ID": 19,
+     "IFSC": 1,
+     "PAN": 1,
+     "PERSON": 1512,
+     "UPI_ID": 1,
+     "__total__": 1718
+    },
+    "private_phone": {
+     "(no gold)": 3,
+     "BANK_ACCOUNT": 2,
+     "PHONE": 154,
+     "__total__": 159
+    },
+    "private_url": {
+     "(no gold)": 67,
+     "__total__": 67
+    },
+    "secret": {
+     "(no gold)": 78,
+     "AADHAAR": 14,
+     "BANK_ACCOUNT": 3,
+     "COMPENSATION": 26,
+     "DATE_OF_BIRTH": 11,
+     "EMAIL": 10,
+     "IFSC": 3,
+     "OOT": 19,
+     "PAN": 4,
+     "PERSON": 36,
+     "PHONE": 12,
+     "SECRET": 16,
+     "__total__": 163
+    }
+   }
+  }
+ },
+ "role": "dev",
+ "threshold": 0.5
+}

@@ -1,0 +1,5829 @@
+{
+ "bundles": {
+  "gliner": "1222c2e7e822bd9d3a569780e804798b3f6434863e9e24819ac26276ad4bd1c3"
+ },
+ "docs": {
+  "dev.jsonl": 1000,
+  "dev2.jsonl": 1000,
+  "dev3build.jsonl": 900,
+  "ml_train_synth_1000_seed7": 1000
+ },
+ "ner": "en_core_web_lg",
+ "note": "dev only, not a release number",
+ "results": {
+  "dev.jsonl": {
+   "current+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.8831,
+       "gold": 2970,
+       "precision": 0.8715,
+       "pred": 3050,
+       "recall": 0.8949
+      },
+      "hris_structured": {
+       "f1": 0.9111,
+       "gold": 3767,
+       "precision": 0.8719,
+       "pred": 4122,
+       "recall": 0.9541
+      },
+      "integration_debug": {
+       "f1": 0.9187,
+       "gold": 798,
+       "precision": 0.8787,
+       "pred": 874,
+       "recall": 0.9624
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1215,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7698,
+       "gold": 122,
+       "precision": 0.7462,
+       "pred": 130,
+       "recall": 0.7951
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 76,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 26,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.8911,
+       "gold": 376,
+       "precision": 0.9517,
+       "pred": 331,
+       "recall": 0.8378
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 176,
+       "precision": 1.0,
+       "pred": 176,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8485,
+       "gold": 813,
+       "precision": 0.7431,
+       "pred": 1082,
+       "recall": 0.9889
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8968,
+       "gold": 340,
+       "precision": 0.8149,
+       "pred": 416,
+       "recall": 0.9971
+      },
+      "EMAIL": {
+       "f1": 0.9477,
+       "gold": 435,
+       "precision": 0.9006,
+       "pred": 483,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.9443,
+       "gold": 1041,
+       "precision": 0.9206,
+       "pred": 1096,
+       "recall": 0.9693
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1049,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9003,
+       "gold": 344,
+       "precision": 0.9698,
+       "pred": 298,
+       "recall": 0.8401
+      },
+      "PAN": {
+       "f1": 0.9851,
+       "gold": 264,
+       "precision": 0.9706,
+       "pred": 272,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8809,
+       "gold": 2901,
+       "precision": 0.8628,
+       "pred": 3025,
+       "recall": 0.8997
+      },
+      "PHONE": {
+       "f1": 0.9229,
+       "gold": 407,
+       "precision": 0.9195,
+       "pred": 410,
+       "recall": 0.9263
+      },
+      "SECRET": {
+       "f1": 0.8794,
+       "gold": 197,
+       "precision": 0.823,
+       "pred": 226,
+       "recall": 0.9442
+      },
+      "UPI_ID": {
+       "f1": 0.838,
+       "gold": 119,
+       "precision": 0.7212,
+       "pred": 165,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.8359,
+      "gold": 7535,
+      "precision": 0.758,
+      "pred": 9261,
+      "recall": 0.9317
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 1290.854,
+     "p50": 3.75,
+     "p95": 37.673
+    },
+    "leak_rate": {
+     "by_genre": {
+      "hr_free_text": {
+       "leaked": 31,
+       "rate": 0.0104,
+       "values": 2970
+      },
+      "hris_structured": {
+       "leaked": 4,
+       "rate": 0.0011,
+       "values": 3767
+      },
+      "integration_debug": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 798
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 122
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 376
+      },
+      "CARD": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 176
+      },
+      "COMPENSATION": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 813
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 340
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 435
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1041
+      },
+      "IFSC": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 344
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 264
+      },
+      "PERSON": {
+       "leaked": 35,
+       "rate": 0.0121,
+       "values": 2901
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 407
+      },
+      "SECRET": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 197
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 119
+      }
+     },
+     "overall": {
+      "leaked": 35,
+      "rate": 0.0046,
+      "values": 7535
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.06002
+    },
+    "overlap": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.9698,
+       "gold": 2970,
+       "precision": 0.9607,
+       "pred": 3050,
+       "recall": 0.9791
+      },
+      "hris_structured": {
+       "f1": 0.9116,
+       "gold": 3767,
+       "precision": 0.8724,
+       "pred": 4122,
+       "recall": 0.9546
+      },
+      "integration_debug": {
+       "f1": 0.945,
+       "gold": 798,
+       "precision": 0.9039,
+       "pred": 874,
+       "recall": 0.99
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1215,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7698,
+       "gold": 122,
+       "precision": 0.7462,
+       "pred": 130,
+       "recall": 0.7951
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 76,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 26,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.8911,
+       "gold": 376,
+       "precision": 0.9517,
+       "pred": 331,
+       "recall": 0.8378
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 176,
+       "precision": 1.0,
+       "pred": 176,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8507,
+       "gold": 813,
+       "precision": 0.7449,
+       "pred": 1082,
+       "recall": 0.9914
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8995,
+       "gold": 340,
+       "precision": 0.8173,
+       "pred": 416,
+       "recall": 1.0
+      },
+      "EMAIL": {
+       "f1": 0.9477,
+       "gold": 435,
+       "precision": 0.9006,
+       "pred": 483,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.9509,
+       "gold": 1041,
+       "precision": 0.927,
+       "pred": 1096,
+       "recall": 0.976
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1049,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9003,
+       "gold": 344,
+       "precision": 0.9698,
+       "pred": 298,
+       "recall": 0.8401
+      },
+      "PAN": {
+       "f1": 0.9851,
+       "gold": 264,
+       "precision": 0.9706,
+       "pred": 272,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.9704,
+       "gold": 2901,
+       "precision": 0.954,
+       "pred": 3025,
+       "recall": 0.9872
+      },
+      "PHONE": {
+       "f1": 0.9229,
+       "gold": 407,
+       "precision": 0.9195,
+       "pred": 410,
+       "recall": 0.9263
+      },
+      "SECRET": {
+       "f1": 0.9267,
+       "gold": 197,
+       "precision": 0.8673,
+       "pred": 226,
+       "recall": 0.9949
+      },
+      "UPI_ID": {
+       "f1": 0.838,
+       "gold": 119,
+       "precision": 0.7212,
+       "pred": 165,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.87,
+      "gold": 7535,
+      "precision": 0.79,
+      "pred": 9261,
+      "recall": 0.968
+     }
+    }
+   },
+   "current+spacy+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.8786,
+       "gold": 2970,
+       "precision": 0.8632,
+       "pred": 3078,
+       "recall": 0.8946
+      },
+      "hris_structured": {
+       "f1": 0.9113,
+       "gold": 3767,
+       "precision": 0.8716,
+       "pred": 4127,
+       "recall": 0.9549
+      },
+      "integration_debug": {
+       "f1": 0.9057,
+       "gold": 798,
+       "precision": 0.8552,
+       "pred": 898,
+       "recall": 0.9624
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1216,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7698,
+       "gold": 122,
+       "precision": 0.7462,
+       "pred": 130,
+       "recall": 0.7951
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 76,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 24,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.8911,
+       "gold": 376,
+       "precision": 0.9517,
+       "pred": 331,
+       "recall": 0.8378
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 176,
+       "precision": 1.0,
+       "pred": 176,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8485,
+       "gold": 813,
+       "precision": 0.7431,
+       "pred": 1082,
+       "recall": 0.9889
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8968,
+       "gold": 340,
+       "precision": 0.8149,
+       "pred": 416,
+       "recall": 0.9971
+      },
+      "EMAIL": {
+       "f1": 0.9477,
+       "gold": 435,
+       "precision": 0.9006,
+       "pred": 483,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.9443,
+       "gold": 1041,
+       "precision": 0.9206,
+       "pred": 1096,
+       "recall": 0.9693
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1049,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9003,
+       "gold": 344,
+       "precision": 0.9698,
+       "pred": 298,
+       "recall": 0.8401
+      },
+      "PAN": {
+       "f1": 0.9851,
+       "gold": 264,
+       "precision": 0.9706,
+       "pred": 272,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8727,
+       "gold": 2901,
+       "precision": 0.8467,
+       "pred": 3085,
+       "recall": 0.9004
+      },
+      "PHONE": {
+       "f1": 0.9229,
+       "gold": 407,
+       "precision": 0.9195,
+       "pred": 410,
+       "recall": 0.9263
+      },
+      "SECRET": {
+       "f1": 0.8794,
+       "gold": 197,
+       "precision": 0.823,
+       "pred": 226,
+       "recall": 0.9442
+      },
+      "UPI_ID": {
+       "f1": 0.838,
+       "gold": 119,
+       "precision": 0.7212,
+       "pred": 165,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.8333,
+      "gold": 7535,
+      "precision": 0.7535,
+      "pred": 9319,
+      "recall": 0.9319
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 4078.417,
+     "p50": 18.945,
+     "p95": 49.419
+    },
+    "leak_rate": {
+     "by_genre": {
+      "hr_free_text": {
+       "leaked": 9,
+       "rate": 0.003,
+       "values": 2970
+      },
+      "hris_structured": {
+       "leaked": 2,
+       "rate": 0.0005,
+       "values": 3767
+      },
+      "integration_debug": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 798
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 122
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 376
+      },
+      "CARD": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 176
+      },
+      "COMPENSATION": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 813
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 1,
+       "rate": 0.0029,
+       "values": 340
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 435
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1041
+      },
+      "IFSC": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 344
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 264
+      },
+      "PERSON": {
+       "leaked": 10,
+       "rate": 0.0034,
+       "values": 2901
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 407
+      },
+      "SECRET": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 197
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 119
+      }
+     },
+     "overall": {
+      "leaked": 11,
+      "rate": 0.0015,
+      "values": 7535
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.06105
+    },
+    "overlap": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.9733,
+       "gold": 2970,
+       "precision": 0.9597,
+       "pred": 3078,
+       "recall": 0.9872
+      },
+      "hris_structured": {
+       "f1": 0.9118,
+       "gold": 3767,
+       "precision": 0.8721,
+       "pred": 4127,
+       "recall": 0.9554
+      },
+      "integration_debug": {
+       "f1": 0.9316,
+       "gold": 798,
+       "precision": 0.8797,
+       "pred": 898,
+       "recall": 0.99
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1216,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7698,
+       "gold": 122,
+       "precision": 0.7462,
+       "pred": 130,
+       "recall": 0.7951
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 76,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 24,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.8911,
+       "gold": 376,
+       "precision": 0.9517,
+       "pred": 331,
+       "recall": 0.8378
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 176,
+       "precision": 1.0,
+       "pred": 176,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8507,
+       "gold": 813,
+       "precision": 0.7449,
+       "pred": 1082,
+       "recall": 0.9914
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8995,
+       "gold": 340,
+       "precision": 0.8173,
+       "pred": 416,
+       "recall": 1.0
+      },
+      "EMAIL": {
+       "f1": 0.9477,
+       "gold": 435,
+       "precision": 0.9006,
+       "pred": 483,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.9509,
+       "gold": 1041,
+       "precision": 0.927,
+       "pred": 1096,
+       "recall": 0.976
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1049,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9003,
+       "gold": 344,
+       "precision": 0.9698,
+       "pred": 298,
+       "recall": 0.8401
+      },
+      "PAN": {
+       "f1": 0.9851,
+       "gold": 264,
+       "precision": 0.9706,
+       "pred": 272,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.9697,
+       "gold": 2901,
+       "precision": 0.9442,
+       "pred": 3085,
+       "recall": 0.9966
+      },
+      "PHONE": {
+       "f1": 0.9229,
+       "gold": 407,
+       "precision": 0.9195,
+       "pred": 410,
+       "recall": 0.9263
+      },
+      "SECRET": {
+       "f1": 0.9267,
+       "gold": 197,
+       "precision": 0.8673,
+       "pred": 226,
+       "recall": 0.9949
+      },
+      "UPI_ID": {
+       "f1": 0.838,
+       "gold": 119,
+       "precision": 0.7212,
+       "pred": 165,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.8702,
+      "gold": 7535,
+      "precision": 0.788,
+      "pred": 9319,
+      "recall": 0.9716
+     }
+    }
+   },
+   "gliner alone": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.7375,
+       "gold": 2970,
+       "precision": 0.8583,
+       "pred": 2237,
+       "recall": 0.6465
+      },
+      "hris_structured": {
+       "f1": 0.7885,
+       "gold": 3767,
+       "precision": 0.8378,
+       "pred": 3348,
+       "recall": 0.7446
+      },
+      "integration_debug": {
+       "f1": 0.7689,
+       "gold": 798,
+       "precision": 0.8924,
+       "pred": 604,
+       "recall": 0.6754
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 164,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.4969,
+       "gold": 122,
+       "precision": 0.4,
+       "pred": 200,
+       "recall": 0.6557
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 26,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.6885,
+       "gold": 376,
+       "precision": 0.8974,
+       "pred": 234,
+       "recall": 0.5585
+      },
+      "CARD": {
+       "f1": 0.7384,
+       "gold": 176,
+       "precision": 1.0,
+       "pred": 103,
+       "recall": 0.5852
+      },
+      "COMPENSATION": {
+       "f1": 0.7223,
+       "gold": 813,
+       "precision": 0.8136,
+       "pred": 649,
+       "recall": 0.6494
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8673,
+       "gold": 340,
+       "precision": 0.8107,
+       "pred": 391,
+       "recall": 0.9324
+      },
+      "EMAIL": {
+       "f1": 0.8441,
+       "gold": 435,
+       "precision": 0.8029,
+       "pred": 482,
+       "recall": 0.8897
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8378,
+       "gold": 1041,
+       "precision": 0.8447,
+       "pred": 1024,
+       "recall": 0.8309
+      },
+      "IFSC": {
+       "f1": 0.7148,
+       "gold": 344,
+       "precision": 0.8739,
+       "pred": 238,
+       "recall": 0.6047
+      },
+      "PAN": {
+       "f1": 0.0,
+       "gold": 264,
+       "precision": 0.0,
+       "pred": 8,
+       "recall": 0.0
+      },
+      "PERSON": {
+       "f1": 0.7867,
+       "gold": 2901,
+       "precision": 0.8724,
+       "pred": 2382,
+       "recall": 0.7163
+      },
+      "PHONE": {
+       "f1": 0.9233,
+       "gold": 407,
+       "precision": 0.9302,
+       "pred": 401,
+       "recall": 0.9165
+      },
+      "SECRET": {
+       "f1": 0.5125,
+       "gold": 197,
+       "precision": 0.6667,
+       "pred": 123,
+       "recall": 0.4162
+      },
+      "UPI_ID": {
+       "f1": 0.3128,
+       "gold": 119,
+       "precision": 0.3587,
+       "pred": 92,
+       "recall": 0.2773
+      }
+     },
+     "overall": {
+      "f1": 0.7581,
+      "gold": 7535,
+      "precision": 0.8286,
+      "pred": 6353,
+      "recall": 0.6986
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 2646.911,
+     "p50": 250.958,
+     "p95": 1016.418
+    },
+    "leak_rate": {
+     "by_genre": {
+      "hr_free_text": {
+       "leaked": 774,
+       "rate": 0.2606,
+       "values": 2970
+      },
+      "hris_structured": {
+       "leaked": 605,
+       "rate": 0.1606,
+       "values": 3767
+      },
+      "integration_debug": {
+       "leaked": 228,
+       "rate": 0.2857,
+       "values": 798
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 33,
+       "rate": 0.2705,
+       "values": 122
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 106,
+       "rate": 0.2819,
+       "values": 376
+      },
+      "CARD": {
+       "leaked": 71,
+       "rate": 0.4034,
+       "values": 176
+      },
+      "COMPENSATION": {
+       "leaked": 276,
+       "rate": 0.3395,
+       "values": 813
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 22,
+       "rate": 0.0647,
+       "values": 340
+      },
+      "EMAIL": {
+       "leaked": 32,
+       "rate": 0.0736,
+       "values": 435
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 145,
+       "rate": 0.1393,
+       "values": 1041
+      },
+      "IFSC": {
+       "leaked": 79,
+       "rate": 0.2297,
+       "values": 344
+      },
+      "PAN": {
+       "leaked": 98,
+       "rate": 0.3712,
+       "values": 264
+      },
+      "PERSON": {
+       "leaked": 605,
+       "rate": 0.2085,
+       "values": 2901
+      },
+      "PHONE": {
+       "leaked": 20,
+       "rate": 0.0491,
+       "values": 407
+      },
+      "SECRET": {
+       "leaked": 94,
+       "rate": 0.4772,
+       "values": 197
+      },
+      "UPI_ID": {
+       "leaked": 26,
+       "rate": 0.2185,
+       "values": 119
+      }
+     },
+     "overall": {
+      "leaked": 1607,
+      "rate": 0.2133,
+      "values": 7535
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.01718
+    },
+    "overlap": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.8304,
+       "gold": 2970,
+       "precision": 0.9665,
+       "pred": 2237,
+       "recall": 0.7279
+      },
+      "hris_structured": {
+       "f1": 0.7896,
+       "gold": 3767,
+       "precision": 0.839,
+       "pred": 3348,
+       "recall": 0.7457
+      },
+      "integration_debug": {
+       "f1": 0.8017,
+       "gold": 798,
+       "precision": 0.9305,
+       "pred": 604,
+       "recall": 0.7043
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 164,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.5404,
+       "gold": 122,
+       "precision": 0.435,
+       "pred": 200,
+       "recall": 0.7131
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 26,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.6885,
+       "gold": 376,
+       "precision": 0.8974,
+       "pred": 234,
+       "recall": 0.5585
+      },
+      "CARD": {
+       "f1": 0.7384,
+       "gold": 176,
+       "precision": 1.0,
+       "pred": 103,
+       "recall": 0.5852
+      },
+      "COMPENSATION": {
+       "f1": 0.725,
+       "gold": 813,
+       "precision": 0.8166,
+       "pred": 649,
+       "recall": 0.6519
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.87,
+       "gold": 340,
+       "precision": 0.8133,
+       "pred": 391,
+       "recall": 0.9353
+      },
+      "EMAIL": {
+       "f1": 0.855,
+       "gold": 435,
+       "precision": 0.8133,
+       "pred": 482,
+       "recall": 0.9011
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8446,
+       "gold": 1041,
+       "precision": 0.8516,
+       "pred": 1024,
+       "recall": 0.8377
+      },
+      "IFSC": {
+       "f1": 0.7182,
+       "gold": 344,
+       "precision": 0.8782,
+       "pred": 238,
+       "recall": 0.6076
+      },
+      "PAN": {
+       "f1": 0.0,
+       "gold": 264,
+       "precision": 0.0,
+       "pred": 8,
+       "recall": 0.0
+      },
+      "PERSON": {
+       "f1": 0.8719,
+       "gold": 2901,
+       "precision": 0.9668,
+       "pred": 2382,
+       "recall": 0.7939
+      },
+      "PHONE": {
+       "f1": 0.9257,
+       "gold": 407,
+       "precision": 0.9327,
+       "pred": 401,
+       "recall": 0.9189
+      },
+      "SECRET": {
+       "f1": 0.6375,
+       "gold": 197,
+       "precision": 0.8293,
+       "pred": 123,
+       "recall": 0.5178
+      },
+      "UPI_ID": {
+       "f1": 0.3128,
+       "gold": 119,
+       "precision": 0.3587,
+       "pred": 92,
+       "recall": 0.2773
+      }
+     },
+     "overall": {
+      "f1": 0.7968,
+      "gold": 7535,
+      "precision": 0.8709,
+      "pred": 6353,
+      "recall": 0.7343
+     }
+    }
+   }
+  },
+  "dev2.jsonl": {
+   "current+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.9609,
+       "gold": 4355,
+       "precision": 0.9404,
+       "pred": 4549,
+       "recall": 0.9823
+      },
+      "hris_structured": {
+       "f1": 0.7905,
+       "gold": 4661,
+       "precision": 0.7713,
+       "pred": 4898,
+       "recall": 0.8106
+      },
+      "integration_debug": {
+       "f1": 0.9033,
+       "gold": 694,
+       "precision": 0.8674,
+       "pred": 754,
+       "recall": 0.9424
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1213,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2298,
+       "gold": 497,
+       "precision": 0.5034,
+       "pred": 147,
+       "recall": 0.1489
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 478,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.886,
+       "gold": 378,
+       "precision": 0.9902,
+       "pred": 306,
+       "recall": 0.8016
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 129,
+       "precision": 1.0,
+       "pred": 129,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8681,
+       "gold": 830,
+       "precision": 0.7676,
+       "pred": 1080,
+       "recall": 0.9988
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.9901,
+       "gold": 1045,
+       "precision": 0.9803,
+       "pred": 1066,
+       "recall": 1.0
+      },
+      "EMAIL": {
+       "f1": 0.9574,
+       "gold": 651,
+       "precision": 0.9182,
+       "pred": 709,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8549,
+       "gold": 1449,
+       "precision": 0.875,
+       "pred": 1384,
+       "recall": 0.8357
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 973,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9136,
+       "gold": 336,
+       "precision": 0.8586,
+       "pred": 382,
+       "recall": 0.9762
+      },
+      "PAN": {
+       "f1": 0.9857,
+       "gold": 723,
+       "precision": 0.9718,
+       "pred": 744,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8633,
+       "gold": 1521,
+       "precision": 0.7701,
+       "pred": 1940,
+       "recall": 0.9822
+      },
+      "PHONE": {
+       "f1": 0.9196,
+       "gold": 1436,
+       "precision": 0.9403,
+       "pred": 1374,
+       "recall": 0.8997
+      },
+      "SECRET": {
+       "f1": 0.9602,
+       "gold": 330,
+       "precision": 0.9341,
+       "pred": 349,
+       "recall": 0.9879
+      },
+      "UPI_ID": {
+       "f1": 0.8277,
+       "gold": 385,
+       "precision": 0.8665,
+       "pred": 352,
+       "recall": 0.7922
+      }
+     },
+     "overall": {
+      "f1": 0.8247,
+      "gold": 9710,
+      "precision": 0.7631,
+      "pred": 11414,
+      "recall": 0.897
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 611.203,
+     "p50": 3.366,
+     "p95": 39.041
+    },
+    "leak_rate": {
+     "by_genre": {
+      "hr_free_text": {
+       "leaked": 30,
+       "rate": 0.0069,
+       "values": 4355
+      },
+      "hris_structured": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 4661
+      },
+      "integration_debug": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 694
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 497
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 378
+      },
+      "CARD": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 129
+      },
+      "COMPENSATION": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 830
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1045
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 651
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 5,
+       "rate": 0.0035,
+       "values": 1449
+      },
+      "IFSC": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 336
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 723
+      },
+      "PERSON": {
+       "leaked": 25,
+       "rate": 0.0164,
+       "values": 1521
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1436
+      },
+      "SECRET": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 330
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 385
+      }
+     },
+     "overall": {
+      "leaked": 30,
+      "rate": 0.0031,
+      "values": 9710
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.0781
+    },
+    "overlap": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.9645,
+       "gold": 4355,
+       "precision": 0.9439,
+       "pred": 4549,
+       "recall": 0.986
+      },
+      "hris_structured": {
+       "f1": 0.8133,
+       "gold": 4661,
+       "precision": 0.7936,
+       "pred": 4898,
+       "recall": 0.8339
+      },
+      "integration_debug": {
+       "f1": 0.9033,
+       "gold": 694,
+       "precision": 0.8674,
+       "pred": 754,
+       "recall": 0.9424
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1213,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2298,
+       "gold": 497,
+       "precision": 0.5034,
+       "pred": 147,
+       "recall": 0.1489
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 478,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.886,
+       "gold": 378,
+       "precision": 0.9902,
+       "pred": 306,
+       "recall": 0.8016
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 129,
+       "precision": 1.0,
+       "pred": 129,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8691,
+       "gold": 830,
+       "precision": 0.7685,
+       "pred": 1080,
+       "recall": 1.0
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.9901,
+       "gold": 1045,
+       "precision": 0.9803,
+       "pred": 1066,
+       "recall": 1.0
+      },
+      "EMAIL": {
+       "f1": 0.9574,
+       "gold": 651,
+       "precision": 0.9182,
+       "pred": 709,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8846,
+       "gold": 1449,
+       "precision": 0.9053,
+       "pred": 1384,
+       "recall": 0.8647
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 973,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9136,
+       "gold": 336,
+       "precision": 0.8586,
+       "pred": 382,
+       "recall": 0.9762
+      },
+      "PAN": {
+       "f1": 0.9857,
+       "gold": 723,
+       "precision": 0.9718,
+       "pred": 744,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8639,
+       "gold": 1521,
+       "precision": 0.7706,
+       "pred": 1940,
+       "recall": 0.9829
+      },
+      "PHONE": {
+       "f1": 0.9744,
+       "gold": 1436,
+       "precision": 0.9964,
+       "pred": 1374,
+       "recall": 0.9533
+      },
+      "SECRET": {
+       "f1": 0.972,
+       "gold": 330,
+       "precision": 0.9456,
+       "pred": 349,
+       "recall": 1.0
+      },
+      "UPI_ID": {
+       "f1": 0.8277,
+       "gold": 385,
+       "precision": 0.8665,
+       "pred": 352,
+       "recall": 0.7922
+      }
+     },
+     "overall": {
+      "f1": 0.8365,
+      "gold": 9710,
+      "precision": 0.774,
+      "pred": 11414,
+      "recall": 0.9099
+     }
+    }
+   },
+   "current+spacy+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.9566,
+       "gold": 4355,
+       "precision": 0.9332,
+       "pred": 4579,
+       "recall": 0.9812
+      },
+      "hris_structured": {
+       "f1": 0.7872,
+       "gold": 4661,
+       "precision": 0.7652,
+       "pred": 4937,
+       "recall": 0.8106
+      },
+      "integration_debug": {
+       "f1": 0.8854,
+       "gold": 694,
+       "precision": 0.8361,
+       "pred": 781,
+       "recall": 0.9409
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1248,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2298,
+       "gold": 497,
+       "precision": 0.5034,
+       "pred": 147,
+       "recall": 0.1489
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 478,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.886,
+       "gold": 378,
+       "precision": 0.9902,
+       "pred": 306,
+       "recall": 0.8016
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 129,
+       "precision": 1.0,
+       "pred": 129,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8681,
+       "gold": 830,
+       "precision": 0.7676,
+       "pred": 1080,
+       "recall": 0.9988
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.9901,
+       "gold": 1045,
+       "precision": 0.9803,
+       "pred": 1066,
+       "recall": 1.0
+      },
+      "EMAIL": {
+       "f1": 0.9574,
+       "gold": 651,
+       "precision": 0.9182,
+       "pred": 709,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8549,
+       "gold": 1449,
+       "precision": 0.875,
+       "pred": 1384,
+       "recall": 0.8357
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 973,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9136,
+       "gold": 336,
+       "precision": 0.8586,
+       "pred": 382,
+       "recall": 0.9762
+      },
+      "PAN": {
+       "f1": 0.9857,
+       "gold": 723,
+       "precision": 0.9718,
+       "pred": 744,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8288,
+       "gold": 1521,
+       "precision": 0.7186,
+       "pred": 2072,
+       "recall": 0.979
+      },
+      "PHONE": {
+       "f1": 0.9196,
+       "gold": 1436,
+       "precision": 0.9403,
+       "pred": 1374,
+       "recall": 0.8997
+      },
+      "SECRET": {
+       "f1": 0.9587,
+       "gold": 330,
+       "precision": 0.9339,
+       "pred": 348,
+       "recall": 0.9848
+      },
+      "UPI_ID": {
+       "f1": 0.8277,
+       "gold": 385,
+       "precision": 0.8665,
+       "pred": 352,
+       "recall": 0.7922
+      }
+     },
+     "overall": {
+      "f1": 0.819,
+      "gold": 9710,
+      "precision": 0.7539,
+      "pred": 11545,
+      "recall": 0.8964
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 104.867,
+     "p50": 17.999,
+     "p95": 44.522
+    },
+    "leak_rate": {
+     "by_genre": {
+      "hr_free_text": {
+       "leaked": 23,
+       "rate": 0.0053,
+       "values": 4355
+      },
+      "hris_structured": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 4661
+      },
+      "integration_debug": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 694
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 497
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 378
+      },
+      "CARD": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 129
+      },
+      "COMPENSATION": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 830
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1045
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 651
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 5,
+       "rate": 0.0035,
+       "values": 1449
+      },
+      "IFSC": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 336
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 723
+      },
+      "PERSON": {
+       "leaked": 18,
+       "rate": 0.0118,
+       "values": 1521
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1436
+      },
+      "SECRET": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 330
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 385
+      }
+     },
+     "overall": {
+      "leaked": 23,
+      "rate": 0.0024,
+      "values": 9710
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.08174
+    },
+    "overlap": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.9628,
+       "gold": 4355,
+       "precision": 0.9393,
+       "pred": 4579,
+       "recall": 0.9876
+      },
+      "hris_structured": {
+       "f1": 0.81,
+       "gold": 4661,
+       "precision": 0.7873,
+       "pred": 4937,
+       "recall": 0.8339
+      },
+      "integration_debug": {
+       "f1": 0.8854,
+       "gold": 694,
+       "precision": 0.8361,
+       "pred": 781,
+       "recall": 0.9409
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1248,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2298,
+       "gold": 497,
+       "precision": 0.5034,
+       "pred": 147,
+       "recall": 0.1489
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 478,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.886,
+       "gold": 378,
+       "precision": 0.9902,
+       "pred": 306,
+       "recall": 0.8016
+      },
+      "CARD": {
+       "f1": 1.0,
+       "gold": 129,
+       "precision": 1.0,
+       "pred": 129,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8691,
+       "gold": 830,
+       "precision": 0.7685,
+       "pred": 1080,
+       "recall": 1.0
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.9901,
+       "gold": 1045,
+       "precision": 0.9803,
+       "pred": 1066,
+       "recall": 1.0
+      },
+      "EMAIL": {
+       "f1": 0.9574,
+       "gold": 651,
+       "precision": 0.9182,
+       "pred": 709,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8846,
+       "gold": 1449,
+       "precision": 0.9053,
+       "pred": 1384,
+       "recall": 0.8647
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 973,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9136,
+       "gold": 336,
+       "precision": 0.8586,
+       "pred": 382,
+       "recall": 0.9762
+      },
+      "PAN": {
+       "f1": 0.9857,
+       "gold": 723,
+       "precision": 0.9718,
+       "pred": 744,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8361,
+       "gold": 1521,
+       "precision": 0.7249,
+       "pred": 2072,
+       "recall": 0.9875
+      },
+      "PHONE": {
+       "f1": 0.9744,
+       "gold": 1436,
+       "precision": 0.9964,
+       "pred": 1374,
+       "recall": 0.9533
+      },
+      "SECRET": {
+       "f1": 0.9705,
+       "gold": 330,
+       "precision": 0.9454,
+       "pred": 348,
+       "recall": 0.997
+      },
+      "UPI_ID": {
+       "f1": 0.8277,
+       "gold": 385,
+       "precision": 0.8665,
+       "pred": 352,
+       "recall": 0.7922
+      }
+     },
+     "overall": {
+      "f1": 0.8319,
+      "gold": 9710,
+      "precision": 0.7658,
+      "pred": 11545,
+      "recall": 0.9105
+     }
+    }
+   },
+   "gliner alone": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.599,
+       "gold": 4355,
+       "precision": 0.913,
+       "pred": 2126,
+       "recall": 0.4457
+      },
+      "hris_structured": {
+       "f1": 0.5657,
+       "gold": 4661,
+       "precision": 0.7285,
+       "pred": 2958,
+       "recall": 0.4623
+      },
+      "integration_debug": {
+       "f1": 0.7706,
+       "gold": 694,
+       "precision": 0.8768,
+       "pred": 544,
+       "recall": 0.6873
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 222,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.278,
+       "gold": 497,
+       "precision": 0.5407,
+       "pred": 172,
+       "recall": 0.1871
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 2,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.5751,
+       "gold": 378,
+       "precision": 0.9627,
+       "pred": 161,
+       "recall": 0.4101
+      },
+      "CARD": {
+       "f1": 0.5902,
+       "gold": 129,
+       "precision": 1.0,
+       "pred": 54,
+       "recall": 0.4186
+      },
+      "COMPENSATION": {
+       "f1": 0.6858,
+       "gold": 830,
+       "precision": 0.7454,
+       "pred": 707,
+       "recall": 0.6349
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.5806,
+       "gold": 1045,
+       "precision": 0.954,
+       "pred": 457,
+       "recall": 0.4172
+      },
+      "EMAIL": {
+       "f1": 0.8286,
+       "gold": 651,
+       "precision": 0.7687,
+       "pred": 761,
+       "recall": 0.8986
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.5064,
+       "gold": 1449,
+       "precision": 0.747,
+       "pred": 743,
+       "recall": 0.383
+      },
+      "IFSC": {
+       "f1": 0.5821,
+       "gold": 336,
+       "precision": 0.6745,
+       "pred": 255,
+       "recall": 0.5119
+      },
+      "PAN": {
+       "f1": 0.0511,
+       "gold": 723,
+       "precision": 0.3333,
+       "pred": 60,
+       "recall": 0.0277
+      },
+      "PERSON": {
+       "f1": 0.8412,
+       "gold": 1521,
+       "precision": 0.815,
+       "pred": 1622,
+       "recall": 0.8692
+      },
+      "PHONE": {
+       "f1": 0.4919,
+       "gold": 1436,
+       "precision": 0.8222,
+       "pred": 613,
+       "recall": 0.351
+      },
+      "SECRET": {
+       "f1": 0.5365,
+       "gold": 330,
+       "precision": 0.7684,
+       "pred": 177,
+       "recall": 0.4121
+      },
+      "UPI_ID": {
+       "f1": 0.0621,
+       "gold": 385,
+       "precision": 0.2121,
+       "pred": 66,
+       "recall": 0.0364
+      }
+     },
+     "overall": {
+      "f1": 0.5878,
+      "gold": 9710,
+      "precision": 0.7817,
+      "pred": 5850,
+      "recall": 0.471
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 2255.885,
+     "p50": 243.385,
+     "p95": 982.696
+    },
+    "leak_rate": {
+     "by_genre": {
+      "hr_free_text": {
+       "leaked": 2318,
+       "rate": 0.5323,
+       "values": 4355
+      },
+      "hris_structured": {
+       "leaked": 1782,
+       "rate": 0.3823,
+       "values": 4661
+      },
+      "integration_debug": {
+       "leaked": 180,
+       "rate": 0.2594,
+       "values": 694
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 342,
+       "rate": 0.6881,
+       "values": 497
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 154,
+       "rate": 0.4074,
+       "values": 378
+      },
+      "CARD": {
+       "leaked": 71,
+       "rate": 0.5504,
+       "values": 129
+      },
+      "COMPENSATION": {
+       "leaked": 303,
+       "rate": 0.3651,
+       "values": 830
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 610,
+       "rate": 0.5837,
+       "values": 1045
+      },
+      "EMAIL": {
+       "leaked": 53,
+       "rate": 0.0814,
+       "values": 651
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 694,
+       "rate": 0.479,
+       "values": 1449
+      },
+      "IFSC": {
+       "leaked": 142,
+       "rate": 0.4226,
+       "values": 336
+      },
+      "PAN": {
+       "leaked": 658,
+       "rate": 0.9101,
+       "values": 723
+      },
+      "PERSON": {
+       "leaked": 192,
+       "rate": 0.1262,
+       "values": 1521
+      },
+      "PHONE": {
+       "leaked": 788,
+       "rate": 0.5487,
+       "values": 1436
+      },
+      "SECRET": {
+       "leaked": 178,
+       "rate": 0.5394,
+       "values": 330
+      },
+      "UPI_ID": {
+       "leaked": 95,
+       "rate": 0.2468,
+       "values": 385
+      }
+     },
+     "overall": {
+      "leaked": 4280,
+      "rate": 0.4408,
+      "values": 9710
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.0223
+    },
+    "overlap": {
+     "by_genre": {
+      "hr_free_text": {
+       "f1": 0.6141,
+       "gold": 4355,
+       "precision": 0.936,
+       "pred": 2126,
+       "recall": 0.4569
+      },
+      "hris_structured": {
+       "f1": 0.5989,
+       "gold": 4661,
+       "precision": 0.7711,
+       "pred": 2958,
+       "recall": 0.4896
+      },
+      "integration_debug": {
+       "f1": 0.7754,
+       "gold": 694,
+       "precision": 0.8824,
+       "pred": 544,
+       "recall": 0.6916
+      },
+      "negatives": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 222,
+       "recall": 1.0
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.278,
+       "gold": 497,
+       "precision": 0.5407,
+       "pred": 172,
+       "recall": 0.1871
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 2,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.5751,
+       "gold": 378,
+       "precision": 0.9627,
+       "pred": 161,
+       "recall": 0.4101
+      },
+      "CARD": {
+       "f1": 0.5902,
+       "gold": 129,
+       "precision": 1.0,
+       "pred": 54,
+       "recall": 0.4186
+      },
+      "COMPENSATION": {
+       "f1": 0.6858,
+       "gold": 830,
+       "precision": 0.7454,
+       "pred": 707,
+       "recall": 0.6349
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.5806,
+       "gold": 1045,
+       "precision": 0.954,
+       "pred": 457,
+       "recall": 0.4172
+      },
+      "EMAIL": {
+       "f1": 0.8428,
+       "gold": 651,
+       "precision": 0.7819,
+       "pred": 761,
+       "recall": 0.914
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.5447,
+       "gold": 1449,
+       "precision": 0.8035,
+       "pred": 743,
+       "recall": 0.412
+      },
+      "IFSC": {
+       "f1": 0.5821,
+       "gold": 336,
+       "precision": 0.6745,
+       "pred": 255,
+       "recall": 0.5119
+      },
+      "PAN": {
+       "f1": 0.0511,
+       "gold": 723,
+       "precision": 0.3333,
+       "pred": 60,
+       "recall": 0.0277
+      },
+      "PERSON": {
+       "f1": 0.8435,
+       "gold": 1521,
+       "precision": 0.8169,
+       "pred": 1622,
+       "recall": 0.8718
+      },
+      "PHONE": {
+       "f1": 0.5954,
+       "gold": 1436,
+       "precision": 0.9951,
+       "pred": 613,
+       "recall": 0.4248
+      },
+      "SECRET": {
+       "f1": 0.5996,
+       "gold": 330,
+       "precision": 0.8588,
+       "pred": 177,
+       "recall": 0.4606
+      },
+      "UPI_ID": {
+       "f1": 0.0665,
+       "gold": 385,
+       "precision": 0.2273,
+       "pred": 66,
+       "recall": 0.039
+      }
+     },
+     "overall": {
+      "f1": 0.6107,
+      "gold": 9710,
+      "precision": 0.8121,
+      "pred": 5850,
+      "recall": 0.4894
+     }
+    }
+   }
+  },
+  "dev3build.jsonl": {
+   "current+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "f1": 0.829,
+       "gold": 802,
+       "precision": 0.7453,
+       "pred": 1005,
+       "recall": 0.9339
+      },
+      "c_exit_clearance_form_pdf": {
+       "f1": 0.6619,
+       "gold": 501,
+       "precision": 0.5486,
+       "pred": 762,
+       "recall": 0.8343
+      },
+      "c_raw_mime_training_sponsorship": {
+       "f1": 0.7413,
+       "gold": 654,
+       "precision": 0.5916,
+       "pred": 1097,
+       "recall": 0.9924
+      },
+      "c_security_guard_police_verification_ocr": {
+       "f1": 0.6287,
+       "gold": 642,
+       "precision": 0.5852,
+       "pred": 745,
+       "recall": 0.6791
+      },
+      "i_grpc_textproto_payout_debug": {
+       "f1": 0.813,
+       "gold": 301,
+       "precision": 0.7086,
+       "pred": 405,
+       "recall": 0.9535
+      },
+      "i_mongosh_benefits_shell": {
+       "f1": 0.6057,
+       "gold": 506,
+       "precision": 0.5412,
+       "pred": 643,
+       "recall": 0.6877
+      },
+      "i_psql_result_grid_ticket": {
+       "f1": 0.6967,
+       "gold": 974,
+       "precision": 0.6587,
+       "pred": 1093,
+       "recall": 0.7392
+      },
+      "i_vba_payroll_macro_module": {
+       "f1": 0.7034,
+       "gold": 405,
+       "precision": 0.6355,
+       "pred": 502,
+       "recall": 0.7877
+      },
+      "s_epfo_employer_upload_txt": {
+       "f1": 0.4948,
+       "gold": 1669,
+       "precision": 0.6418,
+       "pred": 1047,
+       "recall": 0.4026
+      },
+      "s_gratuity_actuarial_census": {
+       "f1": 0.5796,
+       "gold": 1916,
+       "precision": 0.5586,
+       "pred": 2066,
+       "recall": 0.6023
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "f1": 0.4603,
+       "gold": 715,
+       "precision": 0.3447,
+       "pred": 1436,
+       "recall": 0.6923
+      },
+      "s_tally_xml_voucher_export": {
+       "f1": 0.6091,
+       "gold": 460,
+       "precision": 0.5158,
+       "pred": 663,
+       "recall": 0.7435
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2843,
+       "gold": 115,
+       "precision": 0.1967,
+       "pred": 300,
+       "recall": 0.513
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 72,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 79,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.6088,
+       "gold": 349,
+       "precision": 0.7963,
+       "pred": 216,
+       "recall": 0.4928
+      },
+      "CARD": {
+       "f1": 0.6154,
+       "gold": 4,
+       "precision": 0.4444,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.4531,
+       "gold": 1832,
+       "precision": 0.528,
+       "pred": 1377,
+       "recall": 0.3968
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.5782,
+       "gold": 757,
+       "precision": 0.6841,
+       "pred": 554,
+       "recall": 0.5007
+      },
+      "EMAIL": {
+       "f1": 0.9771,
+       "gold": 384,
+       "precision": 0.9552,
+       "pred": 402,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.6151,
+       "gold": 1172,
+       "precision": 0.5603,
+       "pred": 1426,
+       "recall": 0.6817
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1298,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.5569,
+       "gold": 336,
+       "precision": 0.392,
+       "pred": 824,
+       "recall": 0.9613
+      },
+      "OOT": {
+       "f1": 0.0,
+       "gold": 591,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "PAN": {
+       "f1": 0.9017,
+       "gold": 211,
+       "precision": 0.821,
+       "pred": 257,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8601,
+       "gold": 3374,
+       "precision": 0.7992,
+       "pred": 3930,
+       "recall": 0.9309
+      },
+      "PHONE": {
+       "f1": 0.838,
+       "gold": 360,
+       "precision": 0.7698,
+       "pred": 430,
+       "recall": 0.9194
+      },
+      "SECRET": {
+       "f1": 0.3226,
+       "gold": 31,
+       "precision": 0.1935,
+       "pred": 155,
+       "recall": 0.9677
+      },
+      "UPI_ID": {
+       "f1": 0.3537,
+       "gold": 29,
+       "precision": 0.2148,
+       "pred": 135,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.6273,
+      "gold": 9545,
+      "precision": 0.5748,
+      "pred": 11464,
+      "recall": 0.6903
+     }
+    },
+    "examples": 900,
+    "latency_ms": {
+     "max": 4137.384,
+     "p50": 8.266,
+     "p95": 1341.853
+    },
+    "leak_rate": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "leaked": 18,
+       "rate": 0.0224,
+       "values": 802
+      },
+      "c_exit_clearance_form_pdf": {
+       "leaked": 26,
+       "rate": 0.0519,
+       "values": 501
+      },
+      "c_raw_mime_training_sponsorship": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 654
+      },
+      "c_security_guard_police_verification_ocr": {
+       "leaked": 107,
+       "rate": 0.1667,
+       "values": 642
+      },
+      "i_grpc_textproto_payout_debug": {
+       "leaked": 12,
+       "rate": 0.0399,
+       "values": 301
+      },
+      "i_mongosh_benefits_shell": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 506
+      },
+      "i_psql_result_grid_ticket": {
+       "leaked": 32,
+       "rate": 0.0329,
+       "values": 974
+      },
+      "i_vba_payroll_macro_module": {
+       "leaked": 20,
+       "rate": 0.0494,
+       "values": 405
+      },
+      "s_epfo_employer_upload_txt": {
+       "leaked": 663,
+       "rate": 0.3972,
+       "values": 1669
+      },
+      "s_gratuity_actuarial_census": {
+       "leaked": 277,
+       "rate": 0.1446,
+       "values": 1916
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "leaked": 53,
+       "rate": 0.0741,
+       "values": 715
+      },
+      "s_tally_xml_voucher_export": {
+       "leaked": 16,
+       "rate": 0.0348,
+       "values": 460
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 115
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 349
+      },
+      "CARD": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 4
+      },
+      "COMPENSATION": {
+       "leaked": 908,
+       "rate": 0.4956,
+       "values": 1832
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 168,
+       "rate": 0.2219,
+       "values": 757
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 384
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 16,
+       "rate": 0.0137,
+       "values": 1172
+      },
+      "IFSC": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 336
+      },
+      "OOT": {
+       "leaked": 8,
+       "rate": 0.0135,
+       "values": 591
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 211
+      },
+      "PERSON": {
+       "leaked": 123,
+       "rate": 0.0365,
+       "values": 3374
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 360
+      },
+      "SECRET": {
+       "leaked": 1,
+       "rate": 0.0323,
+       "values": 31
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 29
+      }
+     },
+     "overall": {
+      "leaked": 1224,
+      "rate": 0.1282,
+      "values": 9545
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.05321
+    },
+    "overlap": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "f1": 0.8467,
+       "gold": 802,
+       "precision": 0.7612,
+       "pred": 1005,
+       "recall": 0.9539
+      },
+      "c_exit_clearance_form_pdf": {
+       "f1": 0.7363,
+       "gold": 501,
+       "precision": 0.6102,
+       "pred": 762,
+       "recall": 0.9281
+      },
+      "c_raw_mime_training_sponsorship": {
+       "f1": 0.747,
+       "gold": 654,
+       "precision": 0.5962,
+       "pred": 1097,
+       "recall": 1.0
+      },
+      "c_security_guard_police_verification_ocr": {
+       "f1": 0.6627,
+       "gold": 642,
+       "precision": 0.6107,
+       "pred": 745,
+       "recall": 0.7243
+      },
+      "i_grpc_textproto_payout_debug": {
+       "f1": 0.813,
+       "gold": 301,
+       "precision": 0.7086,
+       "pred": 405,
+       "recall": 0.9535
+      },
+      "i_mongosh_benefits_shell": {
+       "f1": 0.6823,
+       "gold": 506,
+       "precision": 0.6096,
+       "pred": 643,
+       "recall": 0.7747
+      },
+      "i_psql_result_grid_ticket": {
+       "f1": 0.6976,
+       "gold": 974,
+       "precision": 0.6597,
+       "pred": 1093,
+       "recall": 0.7402
+      },
+      "i_vba_payroll_macro_module": {
+       "f1": 0.7122,
+       "gold": 405,
+       "precision": 0.6434,
+       "pred": 502,
+       "recall": 0.7975
+      },
+      "s_epfo_employer_upload_txt": {
+       "f1": 0.4978,
+       "gold": 1669,
+       "precision": 0.6457,
+       "pred": 1047,
+       "recall": 0.405
+      },
+      "s_gratuity_actuarial_census": {
+       "f1": 0.6725,
+       "gold": 1916,
+       "precision": 0.6481,
+       "pred": 2066,
+       "recall": 0.6989
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "f1": 0.4603,
+       "gold": 715,
+       "precision": 0.3447,
+       "pred": 1436,
+       "recall": 0.6923
+      },
+      "s_tally_xml_voucher_export": {
+       "f1": 0.675,
+       "gold": 460,
+       "precision": 0.5716,
+       "pred": 663,
+       "recall": 0.8239
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2843,
+       "gold": 115,
+       "precision": 0.1967,
+       "pred": 300,
+       "recall": 0.513
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 72,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 79,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.6088,
+       "gold": 349,
+       "precision": 0.7963,
+       "pred": 216,
+       "recall": 0.4928
+      },
+      "CARD": {
+       "f1": 0.6154,
+       "gold": 4,
+       "precision": 0.4444,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.5672,
+       "gold": 1832,
+       "precision": 0.6609,
+       "pred": 1377,
+       "recall": 0.4967
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.6514,
+       "gold": 757,
+       "precision": 0.7708,
+       "pred": 554,
+       "recall": 0.5641
+      },
+      "EMAIL": {
+       "f1": 0.9771,
+       "gold": 384,
+       "precision": 0.9552,
+       "pred": 402,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.6243,
+       "gold": 1172,
+       "precision": 0.5687,
+       "pred": 1426,
+       "recall": 0.692
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1298,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.5569,
+       "gold": 336,
+       "precision": 0.392,
+       "pred": 824,
+       "recall": 0.9613
+      },
+      "OOT": {
+       "f1": 0.0,
+       "gold": 591,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "PAN": {
+       "f1": 0.9017,
+       "gold": 211,
+       "precision": 0.821,
+       "pred": 257,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.889,
+       "gold": 3374,
+       "precision": 0.8249,
+       "pred": 3930,
+       "recall": 0.9638
+      },
+      "PHONE": {
+       "f1": 0.8835,
+       "gold": 360,
+       "precision": 0.8116,
+       "pred": 430,
+       "recall": 0.9694
+      },
+      "SECRET": {
+       "f1": 0.3226,
+       "gold": 31,
+       "precision": 0.1935,
+       "pred": 155,
+       "recall": 0.9677
+      },
+      "UPI_ID": {
+       "f1": 0.3537,
+       "gold": 29,
+       "precision": 0.2148,
+       "pred": 135,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.6621,
+      "gold": 9545,
+      "precision": 0.6063,
+      "pred": 11464,
+      "recall": 0.7293
+     }
+    }
+   },
+   "current+spacy+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "f1": 0.7251,
+       "gold": 802,
+       "precision": 0.5926,
+       "pred": 1264,
+       "recall": 0.9339
+      },
+      "c_exit_clearance_form_pdf": {
+       "f1": 0.6567,
+       "gold": 501,
+       "precision": 0.5415,
+       "pred": 772,
+       "recall": 0.8343
+      },
+      "c_raw_mime_training_sponsorship": {
+       "f1": 0.734,
+       "gold": 654,
+       "precision": 0.5856,
+       "pred": 1098,
+       "recall": 0.9832
+      },
+      "c_security_guard_police_verification_ocr": {
+       "f1": 0.6064,
+       "gold": 642,
+       "precision": 0.5447,
+       "pred": 806,
+       "recall": 0.6838
+      },
+      "i_grpc_textproto_payout_debug": {
+       "f1": 0.813,
+       "gold": 301,
+       "precision": 0.7086,
+       "pred": 405,
+       "recall": 0.9535
+      },
+      "i_mongosh_benefits_shell": {
+       "f1": 0.5979,
+       "gold": 506,
+       "precision": 0.5289,
+       "pred": 658,
+       "recall": 0.6877
+      },
+      "i_psql_result_grid_ticket": {
+       "f1": 0.6967,
+       "gold": 974,
+       "precision": 0.6587,
+       "pred": 1093,
+       "recall": 0.7392
+      },
+      "i_vba_payroll_macro_module": {
+       "f1": 0.6852,
+       "gold": 405,
+       "precision": 0.6049,
+       "pred": 529,
+       "recall": 0.7901
+      },
+      "s_epfo_employer_upload_txt": {
+       "f1": 0.4948,
+       "gold": 1669,
+       "precision": 0.6418,
+       "pred": 1047,
+       "recall": 0.4026
+      },
+      "s_gratuity_actuarial_census": {
+       "f1": 0.5786,
+       "gold": 1916,
+       "precision": 0.5567,
+       "pred": 2073,
+       "recall": 0.6023
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "f1": 0.4269,
+       "gold": 715,
+       "precision": 0.3086,
+       "pred": 1604,
+       "recall": 0.6923
+      },
+      "s_tally_xml_voucher_export": {
+       "f1": 0.6085,
+       "gold": 460,
+       "precision": 0.5151,
+       "pred": 664,
+       "recall": 0.7435
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2843,
+       "gold": 115,
+       "precision": 0.1967,
+       "pred": 300,
+       "recall": 0.513
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 72,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 72,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.6088,
+       "gold": 349,
+       "precision": 0.7963,
+       "pred": 216,
+       "recall": 0.4928
+      },
+      "CARD": {
+       "f1": 0.6154,
+       "gold": 4,
+       "precision": 0.4444,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.4531,
+       "gold": 1832,
+       "precision": 0.528,
+       "pred": 1377,
+       "recall": 0.3968
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.5782,
+       "gold": 757,
+       "precision": 0.6841,
+       "pred": 554,
+       "recall": 0.5007
+      },
+      "EMAIL": {
+       "f1": 0.9771,
+       "gold": 384,
+       "precision": 0.9552,
+       "pred": 402,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.6151,
+       "gold": 1172,
+       "precision": 0.5603,
+       "pred": 1426,
+       "recall": 0.6817
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1298,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.5569,
+       "gold": 336,
+       "precision": 0.392,
+       "pred": 824,
+       "recall": 0.9613
+      },
+      "OOT": {
+       "f1": 0.0,
+       "gold": 591,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "PAN": {
+       "f1": 0.9017,
+       "gold": 211,
+       "precision": 0.821,
+       "pred": 257,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.7987,
+       "gold": 3374,
+       "precision": 0.6997,
+       "pred": 4486,
+       "recall": 0.9303
+      },
+      "PHONE": {
+       "f1": 0.838,
+       "gold": 360,
+       "precision": 0.7698,
+       "pred": 430,
+       "recall": 0.9194
+      },
+      "SECRET": {
+       "f1": 0.3226,
+       "gold": 31,
+       "precision": 0.1935,
+       "pred": 155,
+       "recall": 0.9677
+      },
+      "UPI_ID": {
+       "f1": 0.3537,
+       "gold": 29,
+       "precision": 0.2148,
+       "pred": 135,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.6111,
+      "gold": 9545,
+      "precision": 0.5483,
+      "pred": 12013,
+      "recall": 0.6901
+     }
+    },
+    "examples": 900,
+    "latency_ms": {
+     "max": 238.46,
+     "p50": 35.769,
+     "p95": 98.271
+    },
+    "leak_rate": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "leaked": 17,
+       "rate": 0.0212,
+       "values": 802
+      },
+      "c_exit_clearance_form_pdf": {
+       "leaked": 21,
+       "rate": 0.0419,
+       "values": 501
+      },
+      "c_raw_mime_training_sponsorship": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 654
+      },
+      "c_security_guard_police_verification_ocr": {
+       "leaked": 103,
+       "rate": 0.1604,
+       "values": 642
+      },
+      "i_grpc_textproto_payout_debug": {
+       "leaked": 12,
+       "rate": 0.0399,
+       "values": 301
+      },
+      "i_mongosh_benefits_shell": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 506
+      },
+      "i_psql_result_grid_ticket": {
+       "leaked": 32,
+       "rate": 0.0329,
+       "values": 974
+      },
+      "i_vba_payroll_macro_module": {
+       "leaked": 19,
+       "rate": 0.0469,
+       "values": 405
+      },
+      "s_epfo_employer_upload_txt": {
+       "leaked": 663,
+       "rate": 0.3972,
+       "values": 1669
+      },
+      "s_gratuity_actuarial_census": {
+       "leaked": 277,
+       "rate": 0.1446,
+       "values": 1916
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "leaked": 53,
+       "rate": 0.0741,
+       "values": 715
+      },
+      "s_tally_xml_voucher_export": {
+       "leaked": 16,
+       "rate": 0.0348,
+       "values": 460
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 115
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 349
+      },
+      "CARD": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 4
+      },
+      "COMPENSATION": {
+       "leaked": 908,
+       "rate": 0.4956,
+       "values": 1832
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 168,
+       "rate": 0.2219,
+       "values": 757
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 384
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 16,
+       "rate": 0.0137,
+       "values": 1172
+      },
+      "IFSC": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 336
+      },
+      "OOT": {
+       "leaked": 8,
+       "rate": 0.0135,
+       "values": 591
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 211
+      },
+      "PERSON": {
+       "leaked": 112,
+       "rate": 0.0332,
+       "values": 3374
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 360
+      },
+      "SECRET": {
+       "leaked": 1,
+       "rate": 0.0323,
+       "values": 31
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 29
+      }
+     },
+     "overall": {
+      "leaked": 1213,
+      "rate": 0.1271,
+      "values": 9545
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.06019
+    },
+    "overlap": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "f1": 0.7415,
+       "gold": 802,
+       "precision": 0.606,
+       "pred": 1264,
+       "recall": 0.9551
+      },
+      "c_exit_clearance_form_pdf": {
+       "f1": 0.7384,
+       "gold": 501,
+       "precision": 0.6088,
+       "pred": 772,
+       "recall": 0.9381
+      },
+      "c_raw_mime_training_sponsorship": {
+       "f1": 0.7466,
+       "gold": 654,
+       "precision": 0.5956,
+       "pred": 1098,
+       "recall": 1.0
+      },
+      "c_security_guard_police_verification_ocr": {
+       "f1": 0.64,
+       "gold": 642,
+       "precision": 0.5695,
+       "pred": 806,
+       "recall": 0.7305
+      },
+      "i_grpc_textproto_payout_debug": {
+       "f1": 0.813,
+       "gold": 301,
+       "precision": 0.7086,
+       "pred": 405,
+       "recall": 0.9535
+      },
+      "i_mongosh_benefits_shell": {
+       "f1": 0.6735,
+       "gold": 506,
+       "precision": 0.5957,
+       "pred": 658,
+       "recall": 0.7747
+      },
+      "i_psql_result_grid_ticket": {
+       "f1": 0.6976,
+       "gold": 974,
+       "precision": 0.6597,
+       "pred": 1093,
+       "recall": 0.7402
+      },
+      "i_vba_payroll_macro_module": {
+       "f1": 0.6938,
+       "gold": 405,
+       "precision": 0.6125,
+       "pred": 529,
+       "recall": 0.8
+      },
+      "s_epfo_employer_upload_txt": {
+       "f1": 0.4978,
+       "gold": 1669,
+       "precision": 0.6457,
+       "pred": 1047,
+       "recall": 0.405
+      },
+      "s_gratuity_actuarial_census": {
+       "f1": 0.6713,
+       "gold": 1916,
+       "precision": 0.6459,
+       "pred": 2073,
+       "recall": 0.6989
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "f1": 0.4269,
+       "gold": 715,
+       "precision": 0.3086,
+       "pred": 1604,
+       "recall": 0.6923
+      },
+      "s_tally_xml_voucher_export": {
+       "f1": 0.6744,
+       "gold": 460,
+       "precision": 0.5708,
+       "pred": 664,
+       "recall": 0.8239
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.2843,
+       "gold": 115,
+       "precision": 0.1967,
+       "pred": 300,
+       "recall": 0.513
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 72,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 72,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.6088,
+       "gold": 349,
+       "precision": 0.7963,
+       "pred": 216,
+       "recall": 0.4928
+      },
+      "CARD": {
+       "f1": 0.6154,
+       "gold": 4,
+       "precision": 0.4444,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.5672,
+       "gold": 1832,
+       "precision": 0.6609,
+       "pred": 1377,
+       "recall": 0.4967
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.6514,
+       "gold": 757,
+       "precision": 0.7708,
+       "pred": 554,
+       "recall": 0.5641
+      },
+      "EMAIL": {
+       "f1": 0.9771,
+       "gold": 384,
+       "precision": 0.9552,
+       "pred": 402,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.6243,
+       "gold": 1172,
+       "precision": 0.5687,
+       "pred": 1426,
+       "recall": 0.692
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 1298,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.5569,
+       "gold": 336,
+       "precision": 0.392,
+       "pred": 824,
+       "recall": 0.9613
+      },
+      "OOT": {
+       "f1": 0.0,
+       "gold": 591,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "PAN": {
+       "f1": 0.9017,
+       "gold": 211,
+       "precision": 0.821,
+       "pred": 257,
+       "recall": 1.0
+      },
+      "PERSON": {
+       "f1": 0.8288,
+       "gold": 3374,
+       "precision": 0.7251,
+       "pred": 4486,
+       "recall": 0.9671
+      },
+      "PHONE": {
+       "f1": 0.8835,
+       "gold": 360,
+       "precision": 0.8116,
+       "pred": 430,
+       "recall": 0.9694
+      },
+      "SECRET": {
+       "f1": 0.3226,
+       "gold": 31,
+       "precision": 0.1935,
+       "pred": 155,
+       "recall": 0.9677
+      },
+      "UPI_ID": {
+       "f1": 0.3537,
+       "gold": 29,
+       "precision": 0.2148,
+       "pred": 135,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.6463,
+      "gold": 9545,
+      "precision": 0.5795,
+      "pred": 12013,
+      "recall": 0.7304
+     }
+    }
+   },
+   "gliner alone": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "f1": 0.8671,
+       "gold": 802,
+       "precision": 0.9338,
+       "pred": 695,
+       "recall": 0.8092
+      },
+      "c_exit_clearance_form_pdf": {
+       "f1": 0.8035,
+       "gold": 501,
+       "precision": 0.7731,
+       "pred": 542,
+       "recall": 0.8363
+      },
+      "c_raw_mime_training_sponsorship": {
+       "f1": 0.7774,
+       "gold": 654,
+       "precision": 0.6874,
+       "pred": 851,
+       "recall": 0.8945
+      },
+      "c_security_guard_police_verification_ocr": {
+       "f1": 0.7028,
+       "gold": 642,
+       "precision": 0.7861,
+       "pred": 519,
+       "recall": 0.6355
+      },
+      "i_grpc_textproto_payout_debug": {
+       "f1": 0.7987,
+       "gold": 301,
+       "precision": 0.781,
+       "pred": 315,
+       "recall": 0.8173
+      },
+      "i_mongosh_benefits_shell": {
+       "f1": 0.6269,
+       "gold": 506,
+       "precision": 0.6313,
+       "pred": 499,
+       "recall": 0.6225
+      },
+      "i_psql_result_grid_ticket": {
+       "f1": 0.5363,
+       "gold": 974,
+       "precision": 0.5987,
+       "pred": 790,
+       "recall": 0.4856
+      },
+      "i_vba_payroll_macro_module": {
+       "f1": 0.5764,
+       "gold": 405,
+       "precision": 0.6236,
+       "pred": 348,
+       "recall": 0.5358
+      },
+      "s_epfo_employer_upload_txt": {
+       "f1": 0.4442,
+       "gold": 1669,
+       "precision": 0.9242,
+       "pred": 528,
+       "recall": 0.2924
+      },
+      "s_gratuity_actuarial_census": {
+       "f1": 0.5141,
+       "gold": 1916,
+       "precision": 0.6257,
+       "pred": 1336,
+       "recall": 0.4363
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "f1": 0.3635,
+       "gold": 715,
+       "precision": 0.3303,
+       "pred": 875,
+       "recall": 0.4042
+      },
+      "s_tally_xml_voucher_export": {
+       "f1": 0.6366,
+       "gold": 460,
+       "precision": 0.6298,
+       "pred": 470,
+       "recall": 0.6435
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.1161,
+       "gold": 115,
+       "precision": 0.0781,
+       "pred": 333,
+       "recall": 0.2261
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 32,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.4715,
+       "gold": 349,
+       "precision": 0.8112,
+       "pred": 143,
+       "recall": 0.3324
+      },
+      "CARD": {
+       "f1": 0.6154,
+       "gold": 4,
+       "precision": 0.4444,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.3078,
+       "gold": 1832,
+       "precision": 0.4551,
+       "pred": 936,
+       "recall": 0.2325
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.4758,
+       "gold": 757,
+       "precision": 0.6667,
+       "pred": 420,
+       "recall": 0.3699
+      },
+      "EMAIL": {
+       "f1": 0.9122,
+       "gold": 384,
+       "precision": 0.9182,
+       "pred": 379,
+       "recall": 0.9062
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.48,
+       "gold": 1172,
+       "precision": 0.5009,
+       "pred": 1078,
+       "recall": 0.4608
+      },
+      "IFSC": {
+       "f1": 0.3408,
+       "gold": 336,
+       "precision": 0.2734,
+       "pred": 556,
+       "recall": 0.4524
+      },
+      "OOT": {
+       "f1": 0.0,
+       "gold": 591,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "PAN": {
+       "f1": 0.0,
+       "gold": 211,
+       "precision": 0.0,
+       "pred": 41,
+       "recall": 0.0
+      },
+      "PERSON": {
+       "f1": 0.9102,
+       "gold": 3374,
+       "precision": 0.9213,
+       "pred": 3293,
+       "recall": 0.8992
+      },
+      "PHONE": {
+       "f1": 0.8142,
+       "gold": 360,
+       "precision": 0.8679,
+       "pred": 318,
+       "recall": 0.7667
+      },
+      "SECRET": {
+       "f1": 0.24,
+       "gold": 31,
+       "precision": 0.1513,
+       "pred": 119,
+       "recall": 0.5806
+      },
+      "UPI_ID": {
+       "f1": 0.0143,
+       "gold": 29,
+       "precision": 0.009,
+       "pred": 111,
+       "recall": 0.0345
+      }
+     },
+     "overall": {
+      "f1": 0.6031,
+      "gold": 9545,
+      "precision": 0.6721,
+      "pred": 7768,
+      "recall": 0.547
+     }
+    },
+    "examples": 900,
+    "latency_ms": {
+     "max": 5946.053,
+     "p50": 726.299,
+     "p95": 2326.019
+    },
+    "leak_rate": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "leaked": 147,
+       "rate": 0.1833,
+       "values": 802
+      },
+      "c_exit_clearance_form_pdf": {
+       "leaked": 80,
+       "rate": 0.1597,
+       "values": 501
+      },
+      "c_raw_mime_training_sponsorship": {
+       "leaked": 56,
+       "rate": 0.0856,
+       "values": 654
+      },
+      "c_security_guard_police_verification_ocr": {
+       "leaked": 185,
+       "rate": 0.2882,
+       "values": 642
+      },
+      "i_grpc_textproto_payout_debug": {
+       "leaked": 48,
+       "rate": 0.1595,
+       "values": 301
+      },
+      "i_mongosh_benefits_shell": {
+       "leaked": 110,
+       "rate": 0.2174,
+       "values": 506
+      },
+      "i_psql_result_grid_ticket": {
+       "leaked": 334,
+       "rate": 0.3429,
+       "values": 974
+      },
+      "i_vba_payroll_macro_module": {
+       "leaked": 147,
+       "rate": 0.363,
+       "values": 405
+      },
+      "s_epfo_employer_upload_txt": {
+       "leaked": 1210,
+       "rate": 0.725,
+       "values": 1669
+      },
+      "s_gratuity_actuarial_census": {
+       "leaked": 763,
+       "rate": 0.3982,
+       "values": 1916
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "leaked": 278,
+       "rate": 0.3888,
+       "values": 715
+      },
+      "s_tally_xml_voucher_export": {
+       "leaked": 106,
+       "rate": 0.2304,
+       "values": 460
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 85,
+       "rate": 0.7391,
+       "values": 115
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 86,
+       "rate": 0.2464,
+       "values": 349
+      },
+      "CARD": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 4
+      },
+      "COMPENSATION": {
+       "leaked": 1266,
+       "rate": 0.691,
+       "values": 1832
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 434,
+       "rate": 0.5733,
+       "values": 757
+      },
+      "EMAIL": {
+       "leaked": 32,
+       "rate": 0.0833,
+       "values": 384
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 553,
+       "rate": 0.4718,
+       "values": 1172
+      },
+      "IFSC": {
+       "leaked": 133,
+       "rate": 0.3958,
+       "values": 336
+      },
+      "OOT": {
+       "leaked": 367,
+       "rate": 0.621,
+       "values": 591
+      },
+      "PAN": {
+       "leaked": 154,
+       "rate": 0.7299,
+       "values": 211
+      },
+      "PERSON": {
+       "leaked": 252,
+       "rate": 0.0747,
+       "values": 3374
+      },
+      "PHONE": {
+       "leaked": 80,
+       "rate": 0.2222,
+       "values": 360
+      },
+      "SECRET": {
+       "leaked": 12,
+       "rate": 0.3871,
+       "values": 31
+      },
+      "UPI_ID": {
+       "leaked": 10,
+       "rate": 0.3448,
+       "values": 29
+      }
+     },
+     "overall": {
+      "leaked": 3464,
+      "rate": 0.3629,
+      "values": 9545
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.02665
+    },
+    "overlap": {
+     "by_genre": {
+      "c_campus_drive_deck_text": {
+       "f1": 0.8751,
+       "gold": 802,
+       "precision": 0.9424,
+       "pred": 695,
+       "recall": 0.8167
+      },
+      "c_exit_clearance_form_pdf": {
+       "f1": 0.8073,
+       "gold": 501,
+       "precision": 0.7768,
+       "pred": 542,
+       "recall": 0.8403
+      },
+      "c_raw_mime_training_sponsorship": {
+       "f1": 0.792,
+       "gold": 654,
+       "precision": 0.7004,
+       "pred": 851,
+       "recall": 0.9113
+      },
+      "c_security_guard_police_verification_ocr": {
+       "f1": 0.7398,
+       "gold": 642,
+       "precision": 0.817,
+       "pred": 519,
+       "recall": 0.676
+      },
+      "i_grpc_textproto_payout_debug": {
+       "f1": 0.7987,
+       "gold": 301,
+       "precision": 0.781,
+       "pred": 315,
+       "recall": 0.8173
+      },
+      "i_mongosh_benefits_shell": {
+       "f1": 0.6269,
+       "gold": 506,
+       "precision": 0.6313,
+       "pred": 499,
+       "recall": 0.6225
+      },
+      "i_psql_result_grid_ticket": {
+       "f1": 0.5578,
+       "gold": 974,
+       "precision": 0.6152,
+       "pred": 790,
+       "recall": 0.5103
+      },
+      "i_vba_payroll_macro_module": {
+       "f1": 0.5896,
+       "gold": 405,
+       "precision": 0.6379,
+       "pred": 348,
+       "recall": 0.5481
+      },
+      "s_epfo_employer_upload_txt": {
+       "f1": 0.447,
+       "gold": 1669,
+       "precision": 0.9299,
+       "pred": 528,
+       "recall": 0.2942
+      },
+      "s_gratuity_actuarial_census": {
+       "f1": 0.6285,
+       "gold": 1916,
+       "precision": 0.765,
+       "pred": 1336,
+       "recall": 0.5334
+      },
+      "s_iso20022_pain001_salary_batch": {
+       "f1": 0.3635,
+       "gold": 715,
+       "precision": 0.3303,
+       "pred": 875,
+       "recall": 0.4042
+      },
+      "s_tally_xml_voucher_export": {
+       "f1": 0.7247,
+       "gold": 460,
+       "precision": 0.717,
+       "pred": 470,
+       "recall": 0.7326
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.1205,
+       "gold": 115,
+       "precision": 0.0811,
+       "pred": 333,
+       "recall": 0.2348
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 32,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.4715,
+       "gold": 349,
+       "precision": 0.8112,
+       "pred": 143,
+       "recall": 0.3324
+      },
+      "CARD": {
+       "f1": 0.6154,
+       "gold": 4,
+       "precision": 0.4444,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.4393,
+       "gold": 1832,
+       "precision": 0.6496,
+       "pred": 936,
+       "recall": 0.3319
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.4826,
+       "gold": 757,
+       "precision": 0.6762,
+       "pred": 420,
+       "recall": 0.3752
+      },
+      "EMAIL": {
+       "f1": 0.9227,
+       "gold": 384,
+       "precision": 0.9288,
+       "pred": 379,
+       "recall": 0.9167
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.4933,
+       "gold": 1172,
+       "precision": 0.5148,
+       "pred": 1078,
+       "recall": 0.4735
+      },
+      "IFSC": {
+       "f1": 0.3408,
+       "gold": 336,
+       "precision": 0.2734,
+       "pred": 556,
+       "recall": 0.4524
+      },
+      "OOT": {
+       "f1": 0.0,
+       "gold": 591,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "PAN": {
+       "f1": 0.0,
+       "gold": 211,
+       "precision": 0.0,
+       "pred": 41,
+       "recall": 0.0
+      },
+      "PERSON": {
+       "f1": 0.9346,
+       "gold": 3374,
+       "precision": 0.9429,
+       "pred": 3293,
+       "recall": 0.9265
+      },
+      "PHONE": {
+       "f1": 0.8142,
+       "gold": 360,
+       "precision": 0.8679,
+       "pred": 318,
+       "recall": 0.7667
+      },
+      "SECRET": {
+       "f1": 0.2533,
+       "gold": 31,
+       "precision": 0.1597,
+       "pred": 119,
+       "recall": 0.6129
+      },
+      "UPI_ID": {
+       "f1": 0.0857,
+       "gold": 29,
+       "precision": 0.0541,
+       "pred": 111,
+       "recall": 0.2069
+      }
+     },
+     "overall": {
+      "f1": 0.6372,
+      "gold": 9545,
+      "precision": 0.7085,
+      "pred": 7768,
+      "recall": 0.5788
+     }
+    }
+   }
+  },
+  "ml_train_synth_1000_seed7": {
+   "current+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "address_block": {
+       "f1": 0.707,
+       "gold": 234,
+       "precision": 0.5635,
+       "pred": 394,
+       "recall": 0.9487
+      },
+      "bank_change_request": {
+       "f1": 0.9856,
+       "gold": 765,
+       "precision": 0.9844,
+       "pred": 767,
+       "recall": 0.9869
+      },
+      "bgv_form": {
+       "f1": 0.9188,
+       "gold": 884,
+       "precision": 0.8807,
+       "pred": 964,
+       "recall": 0.9604
+      },
+      "csv_paste": {
+       "f1": 0.9066,
+       "gold": 2385,
+       "precision": 0.8721,
+       "pred": 2581,
+       "recall": 0.9438
+      },
+      "email_thread": {
+       "f1": 0.9823,
+       "gold": 1111,
+       "precision": 0.9677,
+       "pred": 1145,
+       "recall": 0.9973
+      },
+      "form16_extract": {
+       "f1": 0.5976,
+       "gold": 623,
+       "precision": 0.5888,
+       "pred": 642,
+       "recall": 0.6067
+      },
+      "markdown_table": {
+       "f1": 0.9651,
+       "gold": 1832,
+       "precision": 0.9561,
+       "pred": 1867,
+       "recall": 0.9743
+      },
+      "ocr_noisy_scan": {
+       "f1": 0.8805,
+       "gold": 546,
+       "precision": 0.8838,
+       "pred": 542,
+       "recall": 0.8773
+      },
+      "payroll_fixed_width": {
+       "f1": 0.8308,
+       "gold": 3536,
+       "precision": 0.8732,
+       "pred": 3209,
+       "recall": 0.7924
+      },
+      "salary_slip": {
+       "f1": 0.8218,
+       "gold": 1275,
+       "precision": 0.8925,
+       "pred": 1088,
+       "recall": 0.7616
+      },
+      "tsv_paste": {
+       "f1": 0.8519,
+       "gold": 1775,
+       "precision": 0.863,
+       "pred": 1730,
+       "recall": 0.8411
+      },
+      "whatsapp_chat": {
+       "f1": 0.9222,
+       "gold": 1630,
+       "precision": 0.8968,
+       "pred": 1725,
+       "recall": 0.9491
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7412,
+       "gold": 234,
+       "precision": 0.7189,
+       "pred": 249,
+       "recall": 0.765
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 109,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 238,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.9039,
+       "gold": 1143,
+       "precision": 0.9379,
+       "pred": 1063,
+       "recall": 0.8723
+      },
+      "CARD": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 2,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8033,
+       "gold": 3432,
+       "precision": 0.8893,
+       "pred": 2827,
+       "recall": 0.7325
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8362,
+       "gold": 393,
+       "precision": 0.7323,
+       "pred": 523,
+       "recall": 0.9746
+      },
+      "EMAIL": {
+       "f1": 0.9812,
+       "gold": 939,
+       "precision": 0.9631,
+       "pred": 975,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8398,
+       "gold": 2293,
+       "precision": 0.8661,
+       "pred": 2158,
+       "recall": 0.8151
+      },
+      "IDENTIFIER": {
+       "f1": 0.6778,
+       "gold": 162,
+       "precision": 0.5127,
+       "pred": 316,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9211,
+       "gold": 1101,
+       "precision": 0.8853,
+       "pred": 1194,
+       "recall": 0.96
+      },
+      "PAN": {
+       "f1": 0.9677,
+       "gold": 1318,
+       "precision": 0.938,
+       "pred": 1404,
+       "recall": 0.9992
+      },
+      "PERSON": {
+       "f1": 0.935,
+       "gold": 4446,
+       "precision": 0.9291,
+       "pred": 4502,
+       "recall": 0.9408
+      },
+      "PHONE": {
+       "f1": 0.9396,
+       "gold": 1059,
+       "precision": 0.9708,
+       "pred": 993,
+       "recall": 0.9103
+      },
+      "SECRET": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 7,
+       "recall": 1.0
+      },
+      "UPI_ID": {
+       "f1": 0.8941,
+       "gold": 76,
+       "precision": 0.8085,
+       "pred": 94,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.8806,
+      "gold": 16596,
+      "precision": 0.8791,
+      "pred": 16654,
+      "recall": 0.8821
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 1745.4,
+     "p50": 6.048,
+     "p95": 17.999
+    },
+    "leak_rate": {
+     "by_genre": {
+      "address_block": {
+       "leaked": 2,
+       "rate": 0.0085,
+       "values": 234
+      },
+      "bank_change_request": {
+       "leaked": 1,
+       "rate": 0.0013,
+       "values": 765
+      },
+      "bgv_form": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 884
+      },
+      "csv_paste": {
+       "leaked": 2,
+       "rate": 0.0008,
+       "values": 2385
+      },
+      "email_thread": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1111
+      },
+      "form16_extract": {
+       "leaked": 91,
+       "rate": 0.1461,
+       "values": 623
+      },
+      "markdown_table": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1832
+      },
+      "ocr_noisy_scan": {
+       "leaked": 20,
+       "rate": 0.0366,
+       "values": 546
+      },
+      "payroll_fixed_width": {
+       "leaked": 332,
+       "rate": 0.0939,
+       "values": 3536
+      },
+      "salary_slip": {
+       "leaked": 276,
+       "rate": 0.2165,
+       "values": 1275
+      },
+      "tsv_paste": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1775
+      },
+      "whatsapp_chat": {
+       "leaked": 6,
+       "rate": 0.0037,
+       "values": 1630
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 234
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 4,
+       "rate": 0.0035,
+       "values": 1143
+      },
+      "COMPENSATION": {
+       "leaked": 660,
+       "rate": 0.1923,
+       "values": 3432
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 10,
+       "rate": 0.0254,
+       "values": 393
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 939
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 34,
+       "rate": 0.0148,
+       "values": 2293
+      },
+      "IDENTIFIER": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 162
+      },
+      "IFSC": {
+       "leaked": 2,
+       "rate": 0.0018,
+       "values": 1101
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1318
+      },
+      "PERSON": {
+       "leaked": 20,
+       "rate": 0.0045,
+       "values": 4446
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1059
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 76
+      }
+     },
+     "overall": {
+      "leaked": 730,
+      "rate": 0.044,
+      "values": 16596
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.04067
+    },
+    "overlap": {
+     "by_genre": {
+      "address_block": {
+       "f1": 0.7229,
+       "gold": 234,
+       "precision": 0.5761,
+       "pred": 394,
+       "recall": 0.9701
+      },
+      "bank_change_request": {
+       "f1": 0.9948,
+       "gold": 765,
+       "precision": 0.9935,
+       "pred": 767,
+       "recall": 0.9961
+      },
+      "bgv_form": {
+       "f1": 0.9199,
+       "gold": 884,
+       "precision": 0.8817,
+       "pred": 964,
+       "recall": 0.9615
+      },
+      "csv_paste": {
+       "f1": 0.9223,
+       "gold": 2385,
+       "precision": 0.8873,
+       "pred": 2581,
+       "recall": 0.9602
+      },
+      "email_thread": {
+       "f1": 0.984,
+       "gold": 1111,
+       "precision": 0.9694,
+       "pred": 1145,
+       "recall": 0.9991
+      },
+      "form16_extract": {
+       "f1": 0.7368,
+       "gold": 623,
+       "precision": 0.7259,
+       "pred": 642,
+       "recall": 0.748
+      },
+      "markdown_table": {
+       "f1": 0.9676,
+       "gold": 1832,
+       "precision": 0.9582,
+       "pred": 1867,
+       "recall": 0.9771
+      },
+      "ocr_noisy_scan": {
+       "f1": 0.8879,
+       "gold": 546,
+       "precision": 0.8911,
+       "pred": 542,
+       "recall": 0.8846
+      },
+      "payroll_fixed_width": {
+       "f1": 0.8671,
+       "gold": 3536,
+       "precision": 0.9124,
+       "pred": 3209,
+       "recall": 0.8261
+      },
+      "salary_slip": {
+       "f1": 0.8447,
+       "gold": 1275,
+       "precision": 0.9173,
+       "pred": 1088,
+       "recall": 0.7827
+      },
+      "tsv_paste": {
+       "f1": 0.8696,
+       "gold": 1775,
+       "precision": 0.8809,
+       "pred": 1730,
+       "recall": 0.8586
+      },
+      "whatsapp_chat": {
+       "f1": 0.9655,
+       "gold": 1630,
+       "precision": 0.942,
+       "pred": 1725,
+       "recall": 0.9902
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7412,
+       "gold": 234,
+       "precision": 0.7189,
+       "pred": 249,
+       "recall": 0.765
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 109,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 238,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.9175,
+       "gold": 1143,
+       "precision": 0.952,
+       "pred": 1063,
+       "recall": 0.8854
+      },
+      "CARD": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 2,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8278,
+       "gold": 3432,
+       "precision": 0.9102,
+       "pred": 2827,
+       "recall": 0.759
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8362,
+       "gold": 393,
+       "precision": 0.7323,
+       "pred": 523,
+       "recall": 0.9746
+      },
+      "EMAIL": {
+       "f1": 0.9812,
+       "gold": 939,
+       "precision": 0.9631,
+       "pred": 975,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8614,
+       "gold": 2293,
+       "precision": 0.8883,
+       "pred": 2158,
+       "recall": 0.836
+      },
+      "IDENTIFIER": {
+       "f1": 0.6778,
+       "gold": 162,
+       "precision": 0.5127,
+       "pred": 316,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9237,
+       "gold": 1101,
+       "precision": 0.8878,
+       "pred": 1194,
+       "recall": 0.9628
+      },
+      "PAN": {
+       "f1": 0.9677,
+       "gold": 1318,
+       "precision": 0.938,
+       "pred": 1404,
+       "recall": 0.9992
+      },
+      "PERSON": {
+       "f1": 0.9892,
+       "gold": 4446,
+       "precision": 0.9884,
+       "pred": 4502,
+       "recall": 0.9899
+      },
+      "PHONE": {
+       "f1": 0.9591,
+       "gold": 1059,
+       "precision": 0.9909,
+       "pred": 993,
+       "recall": 0.9292
+      },
+      "SECRET": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 7,
+       "recall": 1.0
+      },
+      "UPI_ID": {
+       "f1": 0.8941,
+       "gold": 76,
+       "precision": 0.8085,
+       "pred": 94,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.9049,
+      "gold": 16596,
+      "precision": 0.9038,
+      "pred": 16654,
+      "recall": 0.9059
+     }
+    }
+   },
+   "current+spacy+gliner": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "address_block": {
+       "f1": 0.6608,
+       "gold": 234,
+       "precision": 0.5034,
+       "pred": 447,
+       "recall": 0.9615
+      },
+      "bank_change_request": {
+       "f1": 0.9837,
+       "gold": 765,
+       "precision": 0.9793,
+       "pred": 772,
+       "recall": 0.9882
+      },
+      "bgv_form": {
+       "f1": 0.9139,
+       "gold": 884,
+       "precision": 0.8717,
+       "pred": 974,
+       "recall": 0.9604
+      },
+      "csv_paste": {
+       "f1": 0.9058,
+       "gold": 2385,
+       "precision": 0.8708,
+       "pred": 2585,
+       "recall": 0.9438
+      },
+      "email_thread": {
+       "f1": 0.9818,
+       "gold": 1111,
+       "precision": 0.9668,
+       "pred": 1146,
+       "recall": 0.9973
+      },
+      "form16_extract": {
+       "f1": 0.5886,
+       "gold": 623,
+       "precision": 0.5729,
+       "pred": 658,
+       "recall": 0.6051
+      },
+      "markdown_table": {
+       "f1": 0.9651,
+       "gold": 1832,
+       "precision": 0.9561,
+       "pred": 1867,
+       "recall": 0.9743
+      },
+      "ocr_noisy_scan": {
+       "f1": 0.8533,
+       "gold": 546,
+       "precision": 0.829,
+       "pred": 579,
+       "recall": 0.8791
+      },
+      "payroll_fixed_width": {
+       "f1": 0.8285,
+       "gold": 3536,
+       "precision": 0.869,
+       "pred": 3221,
+       "recall": 0.7916
+      },
+      "salary_slip": {
+       "f1": 0.8201,
+       "gold": 1275,
+       "precision": 0.8884,
+       "pred": 1093,
+       "recall": 0.7616
+      },
+      "tsv_paste": {
+       "f1": 0.8548,
+       "gold": 1775,
+       "precision": 0.8659,
+       "pred": 1730,
+       "recall": 0.8439
+      },
+      "whatsapp_chat": {
+       "f1": 0.9234,
+       "gold": 1630,
+       "precision": 0.898,
+       "pred": 1725,
+       "recall": 0.9503
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7412,
+       "gold": 234,
+       "precision": 0.7189,
+       "pred": 249,
+       "recall": 0.765
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 109,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 209,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.9039,
+       "gold": 1143,
+       "precision": 0.9379,
+       "pred": 1063,
+       "recall": 0.8723
+      },
+      "CARD": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 2,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.8036,
+       "gold": 3432,
+       "precision": 0.8899,
+       "pred": 2825,
+       "recall": 0.7325
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8362,
+       "gold": 393,
+       "precision": 0.7323,
+       "pred": 523,
+       "recall": 0.9746
+      },
+      "EMAIL": {
+       "f1": 0.9812,
+       "gold": 939,
+       "precision": 0.9631,
+       "pred": 975,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8397,
+       "gold": 2293,
+       "precision": 0.8664,
+       "pred": 2156,
+       "recall": 0.8147
+      },
+      "IDENTIFIER": {
+       "f1": 0.6792,
+       "gold": 162,
+       "precision": 0.5143,
+       "pred": 315,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9211,
+       "gold": 1101,
+       "precision": 0.8853,
+       "pred": 1194,
+       "recall": 0.96
+      },
+      "PAN": {
+       "f1": 0.9677,
+       "gold": 1318,
+       "precision": 0.938,
+       "pred": 1404,
+       "recall": 0.9992
+      },
+      "PERSON": {
+       "f1": 0.9188,
+       "gold": 4446,
+       "precision": 0.8959,
+       "pred": 4679,
+       "recall": 0.9429
+      },
+      "PHONE": {
+       "f1": 0.9396,
+       "gold": 1059,
+       "precision": 0.9708,
+       "pred": 993,
+       "recall": 0.9103
+      },
+      "SECRET": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 7,
+       "recall": 1.0
+      },
+      "UPI_ID": {
+       "f1": 0.8941,
+       "gold": 76,
+       "precision": 0.8085,
+       "pred": 94,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.8773,
+      "gold": 16596,
+      "precision": 0.8721,
+      "pred": 16797,
+      "recall": 0.8826
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 140.568,
+     "p50": 27.049,
+     "p95": 50.644
+    },
+    "leak_rate": {
+     "by_genre": {
+      "address_block": {
+       "leaked": 1,
+       "rate": 0.0043,
+       "values": 234
+      },
+      "bank_change_request": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 765
+      },
+      "bgv_form": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 884
+      },
+      "csv_paste": {
+       "leaked": 2,
+       "rate": 0.0008,
+       "values": 2385
+      },
+      "email_thread": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1111
+      },
+      "form16_extract": {
+       "leaked": 91,
+       "rate": 0.1461,
+       "values": 623
+      },
+      "markdown_table": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1832
+      },
+      "ocr_noisy_scan": {
+       "leaked": 19,
+       "rate": 0.0348,
+       "values": 546
+      },
+      "payroll_fixed_width": {
+       "leaked": 332,
+       "rate": 0.0939,
+       "values": 3536
+      },
+      "salary_slip": {
+       "leaked": 276,
+       "rate": 0.2165,
+       "values": 1275
+      },
+      "tsv_paste": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1775
+      },
+      "whatsapp_chat": {
+       "leaked": 6,
+       "rate": 0.0037,
+       "values": 1630
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 234
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 4,
+       "rate": 0.0035,
+       "values": 1143
+      },
+      "COMPENSATION": {
+       "leaked": 660,
+       "rate": 0.1923,
+       "values": 3432
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 10,
+       "rate": 0.0254,
+       "values": 393
+      },
+      "EMAIL": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 939
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 35,
+       "rate": 0.0153,
+       "values": 2293
+      },
+      "IDENTIFIER": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 162
+      },
+      "IFSC": {
+       "leaked": 2,
+       "rate": 0.0018,
+       "values": 1101
+      },
+      "PAN": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1318
+      },
+      "PERSON": {
+       "leaked": 16,
+       "rate": 0.0036,
+       "values": 4446
+      },
+      "PHONE": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 1059
+      },
+      "UPI_ID": {
+       "leaked": 0,
+       "rate": 0.0,
+       "values": 76
+      }
+     },
+     "overall": {
+      "leaked": 727,
+      "rate": 0.0438,
+      "values": 16596
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.04352
+    },
+    "overlap": {
+     "by_genre": {
+      "address_block": {
+       "f1": 0.6715,
+       "gold": 234,
+       "precision": 0.5123,
+       "pred": 447,
+       "recall": 0.9744
+      },
+      "bank_change_request": {
+       "f1": 0.9928,
+       "gold": 765,
+       "precision": 0.9883,
+       "pred": 772,
+       "recall": 0.9974
+      },
+      "bgv_form": {
+       "f1": 0.915,
+       "gold": 884,
+       "precision": 0.8727,
+       "pred": 974,
+       "recall": 0.9615
+      },
+      "csv_paste": {
+       "f1": 0.9215,
+       "gold": 2385,
+       "precision": 0.8859,
+       "pred": 2585,
+       "recall": 0.9602
+      },
+      "email_thread": {
+       "f1": 0.9841,
+       "gold": 1111,
+       "precision": 0.9695,
+       "pred": 1146,
+       "recall": 0.9991
+      },
+      "form16_extract": {
+       "f1": 0.7276,
+       "gold": 623,
+       "precision": 0.7082,
+       "pred": 658,
+       "recall": 0.748
+      },
+      "markdown_table": {
+       "f1": 0.9676,
+       "gold": 1832,
+       "precision": 0.9582,
+       "pred": 1867,
+       "recall": 0.9771
+      },
+      "ocr_noisy_scan": {
+       "f1": 0.8604,
+       "gold": 546,
+       "precision": 0.8359,
+       "pred": 579,
+       "recall": 0.8864
+      },
+      "payroll_fixed_width": {
+       "f1": 0.8661,
+       "gold": 3536,
+       "precision": 0.9106,
+       "pred": 3221,
+       "recall": 0.8258
+      },
+      "salary_slip": {
+       "f1": 0.8429,
+       "gold": 1275,
+       "precision": 0.9131,
+       "pred": 1093,
+       "recall": 0.7827
+      },
+      "tsv_paste": {
+       "f1": 0.8725,
+       "gold": 1775,
+       "precision": 0.8838,
+       "pred": 1730,
+       "recall": 0.8614
+      },
+      "whatsapp_chat": {
+       "f1": 0.9655,
+       "gold": 1630,
+       "precision": 0.942,
+       "pred": 1725,
+       "recall": 0.9902
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.7412,
+       "gold": 234,
+       "precision": 0.7189,
+       "pred": 249,
+       "recall": 0.765
+      },
+      "AADHAAR_LIKE": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 109,
+       "recall": 1.0
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 209,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.9175,
+       "gold": 1143,
+       "precision": 0.952,
+       "pred": 1063,
+       "recall": 0.8854
+      },
+      "CARD": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 2,
+       "recall": 1.0
+      },
+      "COMPENSATION": {
+       "f1": 0.828,
+       "gold": 3432,
+       "precision": 0.9108,
+       "pred": 2825,
+       "recall": 0.759
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.8362,
+       "gold": 393,
+       "precision": 0.7323,
+       "pred": 523,
+       "recall": 0.9746
+      },
+      "EMAIL": {
+       "f1": 0.9812,
+       "gold": 939,
+       "precision": 0.9631,
+       "pred": 975,
+       "recall": 1.0
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.8609,
+       "gold": 2293,
+       "precision": 0.8882,
+       "pred": 2156,
+       "recall": 0.8352
+      },
+      "IDENTIFIER": {
+       "f1": 0.6792,
+       "gold": 162,
+       "precision": 0.5143,
+       "pred": 315,
+       "recall": 1.0
+      },
+      "IFSC": {
+       "f1": 0.9237,
+       "gold": 1101,
+       "precision": 0.8878,
+       "pred": 1194,
+       "recall": 0.9628
+      },
+      "PAN": {
+       "f1": 0.9677,
+       "gold": 1318,
+       "precision": 0.938,
+       "pred": 1404,
+       "recall": 0.9992
+      },
+      "PERSON": {
+       "f1": 0.9729,
+       "gold": 4446,
+       "precision": 0.9547,
+       "pred": 4679,
+       "recall": 0.9919
+      },
+      "PHONE": {
+       "f1": 0.9591,
+       "gold": 1059,
+       "precision": 0.9909,
+       "pred": 993,
+       "recall": 0.9292
+      },
+      "SECRET": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 7,
+       "recall": 1.0
+      },
+      "UPI_ID": {
+       "f1": 0.8941,
+       "gold": 76,
+       "precision": 0.8085,
+       "pred": 94,
+       "recall": 1.0
+      }
+     },
+     "overall": {
+      "f1": 0.9017,
+      "gold": 16596,
+      "precision": 0.897,
+      "pred": 16797,
+      "recall": 0.9064
+     }
+    }
+   },
+   "gliner alone": {
+    "backend_notes": {},
+    "exact": {
+     "by_genre": {
+      "address_block": {
+       "f1": 0.907,
+       "gold": 234,
+       "precision": 0.9949,
+       "pred": 196,
+       "recall": 0.8333
+      },
+      "bank_change_request": {
+       "f1": 0.9267,
+       "gold": 765,
+       "precision": 0.9838,
+       "pred": 681,
+       "recall": 0.8758
+      },
+      "bgv_form": {
+       "f1": 0.7389,
+       "gold": 884,
+       "precision": 0.8455,
+       "pred": 686,
+       "recall": 0.6561
+      },
+      "csv_paste": {
+       "f1": 0.6777,
+       "gold": 2385,
+       "precision": 0.7622,
+       "pred": 1909,
+       "recall": 0.6101
+      },
+      "email_thread": {
+       "f1": 0.9032,
+       "gold": 1111,
+       "precision": 0.9604,
+       "pred": 986,
+       "recall": 0.8524
+      },
+      "form16_extract": {
+       "f1": 0.5849,
+       "gold": 623,
+       "precision": 0.5661,
+       "pred": 666,
+       "recall": 0.6051
+      },
+      "markdown_table": {
+       "f1": 0.8046,
+       "gold": 1832,
+       "precision": 0.8853,
+       "pred": 1526,
+       "recall": 0.7374
+      },
+      "ocr_noisy_scan": {
+       "f1": 0.679,
+       "gold": 546,
+       "precision": 0.8365,
+       "pred": 373,
+       "recall": 0.5714
+      },
+      "payroll_fixed_width": {
+       "f1": 0.2565,
+       "gold": 3536,
+       "precision": 0.4839,
+       "pred": 1275,
+       "recall": 0.1745
+      },
+      "salary_slip": {
+       "f1": 0.4501,
+       "gold": 1275,
+       "precision": 0.7769,
+       "pred": 520,
+       "recall": 0.3169
+      },
+      "tsv_paste": {
+       "f1": 0.4317,
+       "gold": 1775,
+       "precision": 0.6655,
+       "pred": 852,
+       "recall": 0.3194
+      },
+      "whatsapp_chat": {
+       "f1": 0.7765,
+       "gold": 1630,
+       "precision": 0.8238,
+       "pred": 1453,
+       "recall": 0.7344
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.0289,
+       "gold": 234,
+       "precision": 0.0446,
+       "pred": 112,
+       "recall": 0.0214
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 210,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.5016,
+       "gold": 1143,
+       "precision": 0.8685,
+       "pred": 464,
+       "recall": 0.3526
+      },
+      "COMPENSATION": {
+       "f1": 0.4383,
+       "gold": 3432,
+       "precision": 0.8165,
+       "pred": 1259,
+       "recall": 0.2995
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.784,
+       "gold": 393,
+       "precision": 0.7116,
+       "pred": 482,
+       "recall": 0.8728
+      },
+      "EMAIL": {
+       "f1": 0.8713,
+       "gold": 939,
+       "precision": 0.9048,
+       "pred": 872,
+       "recall": 0.8403
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.5391,
+       "gold": 2293,
+       "precision": 0.5742,
+       "pred": 2029,
+       "recall": 0.5081
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 162,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "IFSC": {
+       "f1": 0.4138,
+       "gold": 1101,
+       "precision": 0.6158,
+       "pred": 557,
+       "recall": 0.3115
+      },
+      "PAN": {
+       "f1": 0.0,
+       "gold": 1318,
+       "precision": 0.0,
+       "pred": 88,
+       "recall": 0.0
+      },
+      "PERSON": {
+       "f1": 0.8882,
+       "gold": 4446,
+       "precision": 0.92,
+       "pred": 4149,
+       "recall": 0.8585
+      },
+      "PHONE": {
+       "f1": 0.8228,
+       "gold": 1059,
+       "precision": 0.9351,
+       "pred": 832,
+       "recall": 0.7347
+      },
+      "SECRET": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "UPI_ID": {
+       "f1": 0.0147,
+       "gold": 76,
+       "precision": 0.0167,
+       "pred": 60,
+       "recall": 0.0132
+      }
+     },
+     "overall": {
+      "f1": 0.6257,
+      "gold": 16596,
+      "precision": 0.7796,
+      "pred": 11123,
+      "recall": 0.5225
+     }
+    },
+    "examples": 1000,
+    "latency_ms": {
+     "max": 2166.694,
+     "p50": 339.458,
+     "p95": 992.897
+    },
+    "leak_rate": {
+     "by_genre": {
+      "address_block": {
+       "leaked": 38,
+       "rate": 0.1624,
+       "values": 234
+      },
+      "bank_change_request": {
+       "leaked": 87,
+       "rate": 0.1137,
+       "values": 765
+      },
+      "bgv_form": {
+       "leaked": 278,
+       "rate": 0.3145,
+       "values": 884
+      },
+      "csv_paste": {
+       "leaked": 646,
+       "rate": 0.2709,
+       "values": 2385
+      },
+      "email_thread": {
+       "leaked": 153,
+       "rate": 0.1377,
+       "values": 1111
+      },
+      "form16_extract": {
+       "leaked": 122,
+       "rate": 0.1958,
+       "values": 623
+      },
+      "markdown_table": {
+       "leaked": 436,
+       "rate": 0.238,
+       "values": 1832
+      },
+      "ocr_noisy_scan": {
+       "leaked": 188,
+       "rate": 0.3443,
+       "values": 546
+      },
+      "payroll_fixed_width": {
+       "leaked": 2377,
+       "rate": 0.6722,
+       "values": 3536
+      },
+      "salary_slip": {
+       "leaked": 844,
+       "rate": 0.662,
+       "values": 1275
+      },
+      "tsv_paste": {
+       "leaked": 894,
+       "rate": 0.5037,
+       "values": 1775
+      },
+      "whatsapp_chat": {
+       "leaked": 458,
+       "rate": 0.281,
+       "values": 1630
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "leaked": 211,
+       "rate": 0.9017,
+       "values": 234
+      },
+      "BANK_ACCOUNT": {
+       "leaked": 628,
+       "rate": 0.5494,
+       "values": 1143
+      },
+      "COMPENSATION": {
+       "leaked": 2264,
+       "rate": 0.6597,
+       "values": 3432
+      },
+      "DATE_OF_BIRTH": {
+       "leaked": 50,
+       "rate": 0.1272,
+       "values": 393
+      },
+      "EMAIL": {
+       "leaked": 148,
+       "rate": 0.1576,
+       "values": 939
+      },
+      "EMPLOYEE_ID": {
+       "leaked": 772,
+       "rate": 0.3367,
+       "values": 2293
+      },
+      "IDENTIFIER": {
+       "leaked": 162,
+       "rate": 1.0,
+       "values": 162
+      },
+      "IFSC": {
+       "leaked": 655,
+       "rate": 0.5949,
+       "values": 1101
+      },
+      "PAN": {
+       "leaked": 897,
+       "rate": 0.6806,
+       "values": 1318
+      },
+      "PERSON": {
+       "leaked": 563,
+       "rate": 0.1266,
+       "values": 4446
+      },
+      "PHONE": {
+       "leaked": 157,
+       "rate": 0.1483,
+       "values": 1059
+      },
+      "UPI_ID": {
+       "leaked": 14,
+       "rate": 0.1842,
+       "values": 76
+      }
+     },
+     "overall": {
+      "leaked": 6521,
+      "rate": 0.3929,
+      "values": 16596
+     }
+    },
+    "over_masking": {
+     "benign_spans": 0,
+     "benign_spans_masked": null,
+     "non_pii_chars_masked": 0.04437
+    },
+    "overlap": {
+     "by_genre": {
+      "address_block": {
+       "f1": 0.9116,
+       "gold": 234,
+       "precision": 1.0,
+       "pred": 196,
+       "recall": 0.8376
+      },
+      "bank_change_request": {
+       "f1": 0.9364,
+       "gold": 765,
+       "precision": 0.9941,
+       "pred": 681,
+       "recall": 0.885
+      },
+      "bgv_form": {
+       "f1": 0.7401,
+       "gold": 884,
+       "precision": 0.8469,
+       "pred": 686,
+       "recall": 0.6572
+      },
+      "csv_paste": {
+       "f1": 0.708,
+       "gold": 2385,
+       "precision": 0.7962,
+       "pred": 1909,
+       "recall": 0.6373
+      },
+      "email_thread": {
+       "f1": 0.9318,
+       "gold": 1111,
+       "precision": 0.9909,
+       "pred": 986,
+       "recall": 0.8794
+      },
+      "form16_extract": {
+       "f1": 0.5849,
+       "gold": 623,
+       "precision": 0.5661,
+       "pred": 666,
+       "recall": 0.6051
+      },
+      "markdown_table": {
+       "f1": 0.8074,
+       "gold": 1832,
+       "precision": 0.8879,
+       "pred": 1526,
+       "recall": 0.7402
+      },
+      "ocr_noisy_scan": {
+       "f1": 0.7116,
+       "gold": 546,
+       "precision": 0.8767,
+       "pred": 373,
+       "recall": 0.5989
+      },
+      "payroll_fixed_width": {
+       "f1": 0.3433,
+       "gold": 3536,
+       "precision": 0.6824,
+       "pred": 1275,
+       "recall": 0.2294
+      },
+      "salary_slip": {
+       "f1": 0.4802,
+       "gold": 1275,
+       "precision": 0.8288,
+       "pred": 520,
+       "recall": 0.338
+      },
+      "tsv_paste": {
+       "f1": 0.4652,
+       "gold": 1775,
+       "precision": 0.7171,
+       "pred": 852,
+       "recall": 0.3442
+      },
+      "whatsapp_chat": {
+       "f1": 0.8507,
+       "gold": 1630,
+       "precision": 0.905,
+       "pred": 1453,
+       "recall": 0.8025
+      }
+     },
+     "by_type": {
+      "AADHAAR": {
+       "f1": 0.0289,
+       "gold": 234,
+       "precision": 0.0446,
+       "pred": 112,
+       "recall": 0.0214
+      },
+      "ADDRESS": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 210,
+       "recall": 1.0
+      },
+      "BANK_ACCOUNT": {
+       "f1": 0.5165,
+       "gold": 1143,
+       "precision": 0.8944,
+       "pred": 464,
+       "recall": 0.3631
+      },
+      "COMPENSATION": {
+       "f1": 0.4733,
+       "gold": 3432,
+       "precision": 0.8634,
+       "pred": 1259,
+       "recall": 0.326
+      },
+      "DATE_OF_BIRTH": {
+       "f1": 0.784,
+       "gold": 393,
+       "precision": 0.7116,
+       "pred": 482,
+       "recall": 0.8728
+      },
+      "EMAIL": {
+       "f1": 0.8901,
+       "gold": 939,
+       "precision": 0.9243,
+       "pred": 872,
+       "recall": 0.8584
+      },
+      "EMPLOYEE_ID": {
+       "f1": 0.5685,
+       "gold": 2293,
+       "precision": 0.6052,
+       "pred": 2029,
+       "recall": 0.536
+      },
+      "IDENTIFIER": {
+       "f1": 0.0,
+       "gold": 162,
+       "precision": 0.0,
+       "pred": 0,
+       "recall": 0.0
+      },
+      "IFSC": {
+       "f1": 0.4355,
+       "gold": 1101,
+       "precision": 0.6481,
+       "pred": 557,
+       "recall": 0.3279
+      },
+      "PAN": {
+       "f1": 0.0,
+       "gold": 1318,
+       "precision": 0.0,
+       "pred": 88,
+       "recall": 0.0
+      },
+      "PERSON": {
+       "f1": 0.9496,
+       "gold": 4446,
+       "precision": 0.9959,
+       "pred": 4149,
+       "recall": 0.9073
+      },
+      "PHONE": {
+       "f1": 0.8747,
+       "gold": 1059,
+       "precision": 0.994,
+       "pred": 832,
+       "recall": 0.7809
+      },
+      "SECRET": {
+       "f1": 0.0,
+       "gold": 0,
+       "precision": 0.0,
+       "pred": 9,
+       "recall": 1.0
+      },
+      "UPI_ID": {
+       "f1": 0.4853,
+       "gold": 76,
+       "precision": 0.55,
+       "pred": 60,
+       "recall": 0.4342
+      }
+     },
+     "overall": {
+      "f1": 0.6637,
+      "gold": 16596,
+      "precision": 0.8304,
+      "pred": 11123,
+      "recall": 0.5527
+     }
+    }
+   }
+  }
+ },
+ "role": "dev",
+ "threads": 4
+}

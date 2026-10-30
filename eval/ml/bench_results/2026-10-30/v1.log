@@ -1,0 +1,12 @@
+== pf [acct=IGNORE] alone / dev.jsonl
+== pf [acct=IGNORE] alone / dev2.jsonl
+== pf [acct=IGNORE] alone / dev3build.jsonl
+== pf [acct=IGNORE] alone / ml_train_synth_1000_seed7
+== current+pf [acct=IGNORE] / dev.jsonl
+== current+pf [acct=IGNORE] / dev2.jsonl
+== current+pf [acct=IGNORE] / dev3build.jsonl
+== current+pf [acct=IGNORE] / ml_train_synth_1000_seed7
+== current+spacy+pf [acct=IGNORE] / dev.jsonl
+== current+spacy+pf [acct=IGNORE] / dev2.jsonl
+== current+spacy+pf [acct=IGNORE] / dev3build.jsonl
+== current+spacy+pf [acct=IGNORE] / ml_train_synth_1000_seed7

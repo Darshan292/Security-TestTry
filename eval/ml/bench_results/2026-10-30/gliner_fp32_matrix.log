@@ -1,0 +1,12 @@
+== gliner alone / dev.jsonl
+== gliner alone / dev2.jsonl
+== gliner alone / dev3build.jsonl
+== gliner alone / ml_train_synth_1000_seed7
+== current+gliner / dev.jsonl
+== current+gliner / dev2.jsonl
+== current+gliner / dev3build.jsonl
+== current+gliner / ml_train_synth_1000_seed7
+== current+spacy+gliner / dev.jsonl
+== current+spacy+gliner / dev2.jsonl
+== current+spacy+gliner / dev3build.jsonl
+== current+spacy+gliner / ml_train_synth_1000_seed7

@@ -1,0 +1,12 @@
+== indicner alone / dev.jsonl
+== indicner alone / dev2.jsonl
+== indicner alone / dev3build.jsonl
+== indicner alone / ml_train_synth_1000_seed7
+== current+indicner / dev.jsonl
+== current+indicner / dev2.jsonl
+== current+indicner / dev3build.jsonl
+== current+indicner / ml_train_synth_1000_seed7
+== current+spacy+indicner / dev.jsonl
+== current+spacy+indicner / dev2.jsonl
+== current+spacy+indicner / dev3build.jsonl
+== current+spacy+indicner / ml_train_synth_1000_seed7

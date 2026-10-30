@@ -1,0 +1,20 @@
+== current / dev.jsonl
+== current / dev2.jsonl
+== current / dev3build.jsonl
+== current / ml_train_synth_1000_seed7
+== current+spacy / dev.jsonl
+== current+spacy / dev2.jsonl
+== current+spacy / dev3build.jsonl
+== current+spacy / ml_train_synth_1000_seed7
+== pf alone / dev.jsonl
+== pf alone / dev2.jsonl
+== pf alone / dev3build.jsonl
+== pf alone / ml_train_synth_1000_seed7
+== current+pf / dev.jsonl
+== current+pf / dev2.jsonl
+== current+pf / dev3build.jsonl
+== current+pf / ml_train_synth_1000_seed7
+== current+spacy+pf / dev.jsonl
+== current+spacy+pf / dev2.jsonl
+== current+spacy+pf / dev3build.jsonl
+== current+spacy+pf / ml_train_synth_1000_seed7
