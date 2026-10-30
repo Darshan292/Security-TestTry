@@ -31,17 +31,24 @@ GLINER_PII_PROMPTS: dict[str, str] = {
 # Token-classification label maps, keyed by NORMALISED label (see normalise_label). REVIEW BEFORE USE: a label that is
 # not in the table maps to IGNORE and is listed in the bundle's MODEL_CARD.md so a human adds it deliberately.
 INDICNER_MAP: dict[str, str] = {"per": "PERSON", "loc": IGNORE, "org": IGNORE, "misc": IGNORE}
-# openai/privacy-filter: the label set could not be read offline; this table lists the names such a filter plausibly
-# emits. The notebook prints the model's real labels and every one missing here goes to IGNORE (and into the card).
+# openai/privacy-filter: label set read from the Hub config.json (BIOES over 8 types). REVIEWED table:
+#   private_person  -> PERSON         the target
+#   private_email   -> EMAIL
+#   private_phone   -> PHONE
+#   account_number  -> BANK_ACCOUNT  also fires on card and other long numbers: measure the type confusion before use
+#   secret          -> SECRET
+#   private_date    -> IGNORE        all dates (not only dates of birth); DATE_OF_BIRTH would over-mask every date
+#   private_address -> IGNORE        the gateway has no address type
+#   private_url     -> IGNORE        the gateway has no URL type (URLs that carry credentials are SECRET by regex)
+# Anything not in the table maps to IGNORE and is listed in the card.
 PRIVACY_FILTER_MAP: dict[str, str] = {
-    "privateperson": "PERSON", "person": "PERSON", "privateemail": "EMAIL", "email": "EMAIL",
-    "privatephone": "PHONE", "phone": "PHONE", "accountnumber": "BANK_ACCOUNT", "bankaccount": "BANK_ACCOUNT",
-    "secret": "SECRET", "password": "SECRET", "privatedate": IGNORE, "privateaddress": IGNORE, "privateurl": IGNORE,
+    "privateperson": "PERSON", "privateemail": "EMAIL", "privatephone": "PHONE", "accountnumber": "BANK_ACCOUNT",
+    "secret": "SECRET", "privatedate": IGNORE, "privateaddress": IGNORE, "privateurl": IGNORE,
 }
 
 CANDIDATES: dict[str, dict] = {
     "openai_privacy_filter": {"repo": "openai/privacy-filter", "kind": "auto", "map": PRIVACY_FILTER_MAP,
-                              "note": "label set unverified offline; architecture decided from the Hub config"},
+                              "note": "BIOES, 8 types; official ONNX has external data (repack, scripts/ml/repack_onnx.py)"},
     "indicner": {"repo": "ai4bharat/IndicNER", "kind": "token", "map": INDICNER_MAP,
                  "note": "PER/LOC/ORG only: a PERSON detector for Indic-language names, nothing else"},
     "gliner_multi_pii_v1": {"repo": "urchade/gliner_multi_pii-v1", "kind": "span", "prompts": GLINER_PII_PROMPTS,

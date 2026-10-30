@@ -2,7 +2,8 @@
 
 Layout (flat directory, regular files only; no subdirectories, no symlinks):
 
-    model.onnx      ONNX graph (fp32 or int8), weights inline (no external data files)
+    model.onnx      ONNX graph (fp32 or int8), weights inline (external-data references are refused at load;
+                    repack with scripts/ml/repack_onnx.py)
     tokenizer.json  Hugging Face `tokenizers` tokenizer
     labels.json     label set and decoding parameters (format below)
     MODEL_CARD.md   provenance: base model and licence, training data, export command, evaluation results
@@ -16,9 +17,16 @@ missing file, a symlink or a subdirectory stops startup. The bytes that are hash
 labels.json (format "pgw-ml-labels/1"), by task:
 
     {"format": "pgw-ml-labels/1", "task": "token-classification",
-     "id2label": ["O", "B-PER", "I-PER", ...], "scheme": "BIO" | "BILOU" | "IO",
+     "id2label": ["O", "B-PER", "I-PER", ...], "scheme": "BIO" | "BILOU" | "BIOES" | "IO",
      "max_length": 256, "stride": 64, "aggregation": "first" | "token",
-     "special_tokens": {"cls": "[CLS]", "sep": "[SEP]", "pad": "[PAD]"}}          (special_tokens optional)
+     "special_tokens": {"cls": "[CLS]", "sep": "[SEP]", "pad": "[PAD]"},          (special_tokens optional)
+     "viterbi": {"biases": {<six transition biases, below>}}}                     (optional; scheme BIOES only)
+
+    viterbi: constrained Viterbi decoding over log-probabilities instead of a per-token argmax (the decoding that
+    openai/privacy-filter documents). Only the allowed BIOES transitions are possible (O->O|B|S, B|I->I|E,
+    E|S->O|B|S, same entity type inside a span); each of the six biases (transition_bias_background_stay,
+    _background_to_start, _end_to_background, _end_to_start, _inside_to_continue, _inside_to_end; floats) is added
+    to the score of the matching transition. All zero = the plain maximum-likelihood valid path.
 
     {"format": "pgw-ml-labels/1", "task": "span-classification",                   (GLiNER-style)
      "labels": ["person", "email", ...], "max_width": 12, "max_words": 256, "max_length": 512,
@@ -44,7 +52,13 @@ ARTIFACT_FORMAT = "pgw-ml-artifact/1"
 LABELS_FORMAT = "pgw-ml-labels/1"
 REQUIRED = ("model.onnx", "tokenizer.json", "labels.json", "MODEL_CARD.md")
 MAX_FILES = 32
-MAX_TOTAL_BYTES = 2 * 1024 ** 3          # ONNX protobuf limit; larger models need external data (not supported)
+MAX_TOTAL_BYTES = 2 * 1024 ** 3          # ONNX protobuf limit; larger models need external data (not supported).
+#   A model published with external data files is repacked into one model.onnx first (scripts/ml/repack_onnx.py), so
+#   the single file is covered by the manifest digest and loaded from the verified bytes.
+SCHEMES = ("BIO", "BILOU", "BIOES", "IO")
+VITERBI_BIASES = ("transition_bias_background_stay", "transition_bias_background_to_start",
+                  "transition_bias_end_to_background", "transition_bias_end_to_start",
+                  "transition_bias_inside_to_continue", "transition_bias_inside_to_end")
 TASKS = ("token-classification", "span-classification", "sequence-classification")
 _PREFIXES = ("B-", "I-", "L-", "U-", "E-", "S-")
 
@@ -129,6 +143,25 @@ def _specials(doc: dict) -> None:
         raise ArtifactError("labels.json: special_tokens must map cls/sep/pad to token strings")
 
 
+def _viterbi(doc: dict) -> None:
+    v = doc.get("viterbi")
+    if v is None:
+        return
+    if doc.get("scheme") != "BIOES":
+        raise ArtifactError("labels.json: viterbi decoding needs scheme BIOES")
+    b = v.get("biases") if isinstance(v, dict) and set(v) == {"biases"} else None
+    if not isinstance(b, dict) or set(b) != set(VITERBI_BIASES) or not all(
+            isinstance(x, (int, float)) and not isinstance(x, bool) and -20 <= x <= 20 for x in b.values()):
+        raise ArtifactError("labels.json: viterbi must be {\"biases\": {six transition biases, floats in [-20, 20]}}")
+    ents = {lab[2:] for lab in doc["id2label"] if lab != "O"}
+    for lab in doc["id2label"]:
+        if lab != "O" and (lab[:2] not in ("B-", "I-", "E-", "S-") or len(lab) < 3):
+            raise ArtifactError("labels.json: viterbi needs B-/I-/E-/S- labels and O only")
+    for e in ents:
+        if not all(f"{p}-{e}" in doc["id2label"] for p in "BIES"):
+            raise ArtifactError(f"labels.json: viterbi needs B-, I-, E- and S- for every entity ({e!r})")
+
+
 def validate_labels(doc) -> dict:
     if not isinstance(doc, dict) or doc.get("format") != LABELS_FORMAT or doc.get("task") not in TASKS:
         raise ArtifactError(f"labels.json must declare format {LABELS_FORMAT!r} and a task in {TASKS}")
@@ -138,8 +171,9 @@ def validate_labels(doc) -> dict:
         id2label = _str_list(doc, "id2label")
         if "O" not in id2label:
             raise ArtifactError("labels.json: id2label needs an 'O' label")
-        if doc.get("scheme", "BIO") not in ("BIO", "BILOU", "IO"):
-            raise ArtifactError("labels.json: scheme must be BIO, BILOU or IO")
+        if doc.get("scheme", "BIO") not in SCHEMES:
+            raise ArtifactError(f"labels.json: scheme must be one of {SCHEMES}")
+        _viterbi(doc)
         if doc.get("aggregation", "first") not in ("first", "token"):
             raise ArtifactError("labels.json: aggregation must be first or token")
         ml = _int(doc, "max_length", 8, 8192, 512)

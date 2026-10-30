@@ -3,7 +3,7 @@
 Pipeline per text: tokenizer.json (no truncation) -> token windows of `max_length` (special tokens included) that
 overlap by `stride` tokens -> batched ONNX runs -> softmax -> each token takes the prediction of the window in which it
 is farthest from an edge (most context) -> word aggregation ("first": a word takes its first sub-token's label) ->
-BIO/BILOU decoding -> character spans via the tokenizer's offsets (code-point offsets into the exact input string).
+BIO/BILOU/BIOES decoding (optionally constrained Viterbi, labels.json `viterbi`) -> character spans via the tokenizer's offsets (code-point offsets into the exact input string).
 
 Any failure raises MlUnavailable (the caller fails closed); a model that does not fit its labels.json raises
 ArtifactError at construction (startup stops).
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from .artifact import Artifact, ArtifactError
 from .base import MlUnavailable, Span, clean_text, trim_span
-from .decode import decode
+from .decode import decode, viterbi_labels
 from .onnx_util import input_spec, load_tokenizer, make_session, softmax, special_ids, windows
 
 _INPUTS = {"input_ids": "int", "attention_mask": "int", "token_type_ids": "int"}
@@ -27,6 +27,7 @@ class OnnxTokenClassifier:
         self.max_length = int(doc.get("max_length", 512))
         self.stride = int(doc.get("stride", min(128, self.max_length // 4)))
         self.aggregation = doc.get("aggregation", "first")
+        self.viterbi = (doc.get("viterbi") or {}).get("biases")     # BIOES constrained decoding (labels.json)
         self.batch_size = max(1, int(batch_size))
         self.session = make_session(art.files["model.onnx"], intra_op_threads, inter_op_threads)
         self.tok = load_tokenizer(art)
@@ -95,9 +96,14 @@ class OnnxTokenClassifier:
             off = 1 if self.cls_id is not None else 0
             for r, (ti, a, b) in enumerate(chunk):
                 p = probs[r, off:off + (b - a)]
-                lab = p.argmax(axis=-1)
-                pr = p.max(axis=-1)
                 j = np.arange(b - a)
+                if self.viterbi:
+                    lab = np.asarray(viterbi_labels(np.log(np.maximum(p, 1e-30)), self.id2label, self.viterbi,
+                                                    first=a == 0, last=b >= len(encs[ti].ids)), dtype=np.int64)
+                    pr = p[j, lab]
+                else:
+                    lab = p.argmax(axis=-1)
+                    pr = p.max(axis=-1)
                 dist = np.minimum(j if a > 0 else j + 10 ** 9, (b - a - 1 - j) if b < len(encs[ti].ids) else 10 ** 9)
                 sel = dist > best_d[ti][a:b]
                 best_d[ti][a:b][sel] = dist[sel]

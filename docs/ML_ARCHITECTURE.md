@@ -44,7 +44,7 @@ MlUnavailable                                                # any failure; the 
 Backends:
 
 - `OnnxTokenClassifier` (`pgw/ml/token_classifier.py`): ONNX Runtime CPU, fp32 or int8; HF `tokenizers`
-  tokenizer.json; BIO / BILOU / IO decoding (lenient: a stray I- starts an entity, it is never dropped); word
+  tokenizer.json; BIO / BILOU / BIOES / IO decoding (BIOES optionally by constrained Viterbi) (lenient: a stray I- starts an entity, it is never dropped); word
   aggregation `first` or `token`; sliding windows of `max_length` tokens overlapping by `stride`, each token taking
   the prediction from the window where it has most context; character offsets from the tokenizer (lone surrogates
   replaced length-preservingly); batching of windows across texts.
@@ -115,7 +115,7 @@ production CPU class before setting `timeout_s` and `workers`.
    licence, data, code commit). Training data: synthetic and public data only, never real personal data outside the
    boundary.
 2. **Export** to ONNX (`optimum-cli export onnx` or `torch.onnx.export`), then **quantise int8**
-   (`onnxruntime.quantization.quantize_dynamic`). Weights inline (< 2 GiB; external data files are refused).
+   (`onnxruntime.quantization.quantize_dynamic`). Weights inline (< 2 GiB). A model published with external data files (e.g. openai/privacy-filter's `onnx/model_quantized.onnx` + `.onnx_data`) is repacked once into a single `model.onnx` with `scripts/ml/repack_onnx.py` (pinned inputs, data read once into memory, no path escapes, refuses above the protobuf limit, parity check), so the manifest digest covers every weight byte. The runtime refuses any `model.onnx` that still references external data (`pgw.ml.onnx_util.reject_external_data`): ONNX Runtime resolves such paths against the process working directory when a model is built from bytes, which would load a file the digest does not cover.
 3. **Package** the directory: `model.onnx`, `tokenizer.json`, `labels.json` (format in `pgw/ml/artifact.py`),
    `MODEL_CARD.md` (provenance, licence, training data, export command, dev results). Nothing else is needed.
 4. **Pin**: `python -m pgw.ml.artifact <dir>` prints the manifest sha256 and the labels. Put `path`, `sha256`, the

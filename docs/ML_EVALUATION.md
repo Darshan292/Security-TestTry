@@ -261,3 +261,89 @@ Reading it (dev data, so indicative only):
   numbers but reports 51 of them as AADHAAR_LIKE (the cue-less checksum backstop, by design a different type), which the
   type-strict scorer counts as a miss; Presidio calls them AADHAAR. The union keeps the stack's verdict (0.556).
 - Nothing here changes the product: adoption of any of these is a separate decision after held-out measurement (ML_TRAINING.md).
+
+## Dev bench of open detectors, 2026-10-30 (dev only, not a release number) - STATUS: BLOCKED ON MODEL DOWNLOAD, NO SCORES YET
+
+Goal: run openai/privacy-filter and urchade/gliner_multi_pii-v1 through the gateway's CPU runtime slot and score them on the
+dev corpora (`eval/data` dev, `eval/data2` dev2, `eval/data3/dev3build`, `ml/train` synthetic). **No model has been run and
+no number is reported here**: the environment's network policy denies the hosts that serve the weights, so nothing was
+downloaded or scored. Nothing below is a measurement of detection quality.
+
+### What was verified (Hub API and small files only)
+
+- openai/privacy-filter: Apache-2.0, not gated, `OpenAIPrivacyFilterForTokenClassification`. config.json: 33 labels, `O` plus
+  B/I/E/S over `account_number, private_address, private_date, private_email, private_person, private_phone, private_url,
+  secret`. README: bidirectional banded attention (257-token effective window, 128k context), decoding is **constrained BIOES
+  Viterbi** with six transition biases; `viterbi_calibration.json` ships only the `default` operating point, all six biases 0.0.
+  The Hub has `onnx/model_quantized.onnx` (+ 1.62 GB `.onnx_data`), `model_q4*.onnx`, fp16 and fp32 (fp32 and fp16 split over
+  2-3 data files, over the 2 GiB limit). `tokenizer.json` (27.9 MB) is served from the CDN like the weights.
+- urchade/gliner_multi_pii-v1: by reading the `gliner` 0.2.29 source, `UniEncoderSpanModel` exports exactly the six inputs
+  `input_ids, attention_mask, words_mask, text_lengths, span_idx, span_mask` that `OnnxSpanModel` feeds, output `logits`. This
+  is source reading only; no export was run, so "compatible" is unconfirmed until a real export loads.
+- ai4bharat/IndicNER: MIT, gated (needs a Hugging Face token, not available): not attempted.
+
+### Blockers (named hosts, for the person who owns the network policy)
+
+| host | needed for | result |
+|---|---|---|
+| `us.aws.cdn.hf.co` (Hub LFS/Xet CDN, redirect target of every `resolve/` of an LFS file) | all ONNX/safetensors weights, `tokenizer.json` | 403 from the proxy ("CONNECT rejected") |
+| `download-r2.pytorch.org` (redirect target of `download.pytorch.org/whl/cpu`) | CPU torch wheel for the `gliner` export venv | 403 |
+
+`huggingface.co` itself, the Hub API and PyPI work (small files such as README, config.json, viterbi_calibration.json were
+downloaded to `/home/user/models/privacy-filter/`, outside git). Allowing the two hosts is the only thing missing for the
+steps below. GLiNER also needs the torch wheel for the export (`gliner` + `torch` in `/home/user/venv-export`).
+
+### Runtime changes made (all tested with tiny generated fixtures, `tests/test_ml_bioes.py`)
+
+1. **BIOES scheme** accepted in `labels.json` (`pgw/ml/artifact.py`). The tag decoder already treated `E-`/`S-` correctly;
+   tests added. `entity_labels` strips `E-`/`S-` too.
+2. **Optional constrained Viterbi** (`labels.json` `"viterbi": {"biases": {six floats}}`, BIOES only; `pgw.ml.decode.viterbi_labels`,
+   used by `OnnxTokenClassifier`). The README says the model is decoded this way, so argmax is not assumed equivalent: the
+   argmax-vs-Viterbi comparison on dev is the first thing to measure once the weights are available (not measured yet).
+   Windows: a window that is not the text start/end may begin/end inside a span; per-token labels still come from the window
+   with the most context. The biases are an operating-point control, left at the shipped default (0.0) until measured.
+3. **External-data ONNX: repack, do not extend the format.** The int8 file is 1.62 GB, below the 2 GiB protobuf limit, so
+   `scripts/ml/repack_onnx.py` rewrites `model_quantized.onnx` + `.onnx_data` into one `model.onnx`. This keeps the existing
+   property (one file covered by the manifest digest, loaded from the verified in-memory bytes) instead of adding a second
+   trust path. The script pins each source file by sha256 before parsing, reads each data file once into memory and fills the
+   tensors from those bytes, accepts only plain file names (no `/`, `..`, symlinks), checks offset/length, refuses above the
+   limit, and can compare outputs of the source and the repacked model (`--parity`). fp32 and fp16 cannot be repacked (over 2 GiB):
+   only int8 and q4 are candidates. Whether `model_q4` runs on the ORT CPU provider is **untested**.
+4. **Found while doing this: a latent hole, now closed.** ONNX Runtime resolves external-data paths of a model built from bytes
+   against the process working directory (verified with a tiny model). A `model.onnx` with external references would therefore
+   have passed the manifest digest and then loaded a data file the digest does not cover. `pgw.ml.onnx_util.reject_external_data`
+   (a dependency-free protobuf walk, called by `make_session`) now refuses such a model with an `ArtifactError`; tested with the
+   data file placed in the cwd.
+5. `scripts/ml/build_external_bundle.py`: builds the bench bundle (labels.json incl. Viterbi from `viterbi_calibration.json`,
+   card, metrics, train_meta with the reviewed label map, sha256sums), verifies it with `import_artifacts.py` and prints the
+   manifest digest. **No bundle was produced (no weights), so there is no digest to report.**
+
+### Reviewed label map for privacy-filter (ml/train/detectors.py `PRIVACY_FILTER_MAP`)
+
+| model label | gateway type | why |
+|---|---|---|
+| private_person | PERSON | the target |
+| private_email | EMAIL | |
+| private_phone | PHONE | |
+| account_number | BANK_ACCOUNT | will also fire on card and other long numbers: measure type confusion (CARD, AADHAAR, EMPLOYEE_ID) |
+| secret | SECRET | |
+| private_date | IGNORE | covers every date, not only dates of birth; DATE_OF_BIRTH would over-mask. Report the count found, not the mapping |
+| private_address | IGNORE | no address type in the gateway |
+| private_url | IGNORE | no URL type |
+
+Starting configuration to try (untested guesses, to be settled on dev): `max_length 512`, `stride 64`, `aggregation token`,
+no `special_tokens` (the model has no CLS/SEP; the `eos`/`pad` id is 199999), inputs expected `input_ids` + `attention_mask`
+(unconfirmed: the graph was not seen; `input_spec` refuses any other input, e.g. `position_ids`, which would then need a runtime change).
+
+### What to run once the two hosts are allowed
+
+```bash
+python scripts/ml/repack_onnx.py SRC onnx/model_quantized.onnx OUT/model.onnx --expect model_quantized.onnx=<sha> --expect model_quantized.onnx_data=<sha> --parity
+python scripts/ml/build_external_bundle.py /home/user/models/privacy_filter_int8 --model OUT/model.onnx --tokenizer tokenizer.json \
+    --config config.json --viterbi viterbi_calibration.json --repo openai/privacy-filter --licence apache-2.0 --table privacy_filter
+python scripts/ml/bench_detectors.py --bundle pf=/home/user/models/privacy_filter_int8 --ml-train-docs 1000 --out pf_dev.json
+```
+
+Still to do for the requested table (stack, stack + spaCy, each detector alone, stack + each detector by union): PERSON
+recall/precision, per-type confusion for `account_number`, count of `private_date` hits, latency per 512 tokens at 1 and 4
+threads, RAM. Held-out sets (`*heldout*`, dev3val, tester sets) were not opened; `bench_detectors.py` refuses them from the path.
