@@ -36,6 +36,10 @@ def main(argv=None) -> int:
     ap.add_argument("--cache-ml", action="store_true",
                     help="memoise detector output per (model, text) across configs: the FIRST config that runs a model has the real "
                          "latency, later configs reuse its spans (their ML latency is not meaningful). ONE bundle per process")
+    ap.add_argument("--cache-file", type=Path, help="with --cache-ml: load/save the memo (JSON of detector output per text) so "
+                    "variants (thresholds, label maps) reuse the detector output")
+    ap.add_argument("--label-override", help="comma list MODEL_LABEL=TYPE|IGNORE applied on top of the bundle's label map")
+    ap.add_argument("--suffix", default="", help="appended to the bundle name in config names (e.g. '[acct ignored]')")
     ap.add_argument("--only", help="comma list of config names to run")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
@@ -61,10 +65,18 @@ def main(argv=None) -> int:
         name, _, d = spec.partition("=")
         cfg, res = bd.model_config(Path(d), a.min_score)
         cfg.update({"intra_op_threads": a.threads})
+        if a.label_override:
+            for kv in a.label_override.split(","):
+                k, _, v = kv.partition("=")
+                if k not in cfg["labels"]:
+                    raise SystemExit(f"--label-override: {k!r} is not a label of the bundle")
+                cfg["labels"][k] = v
+        name += a.suffix
         digests[name] = res["manifest_digest"]
         cfgs[f"{name} alone"] = lambda cfg=cfg: Backend("ml_only", cfg)
         cfgs[f"current+{name}"] = lambda cfg=cfg: Backend("pipeline_ml", cfg)
         cfgs[f"current+spacy+{name}"] = lambda cfg=cfg: Backend("pipeline_ml", cfg, ner=a.ner)
+    memos: dict = {}
     if a.cache_ml:
         from pgw.ml import span_model, token_classifier
         for cls in (token_classifier.OnnxTokenClassifier, span_model.OnnxSpanModel):
@@ -79,6 +91,11 @@ def main(argv=None) -> int:
                 return [list(_memo[(self.session_key, t)]) for t in texts]
             cls.detect_many = cached
             cls.session_key = 0      # one model per process when --cache-ml is used
+            if a.cache_file and a.cache_file.exists():
+                from pgw.ml.base import Span
+                for t, sp in json.loads(a.cache_file.read_text(encoding="utf-8")).get(cls.__name__, {}).items():
+                    memo[(0, t)] = [Span(*x) for x in sp]
+            memos[cls.__name__] = memo
     only = set(a.only.split(",")) if a.only else None
     out = {"role": "dev", "note": "dev only, not a release number", "bundles": digests, "ner": a.ner,
            "threads": a.threads, "docs": {k: len(v) for k, v in sets.items()}, "results": {}}
@@ -89,6 +106,9 @@ def main(argv=None) -> int:
         for sname, exs in sets.items():
             print(f"== {cname} / {sname}", file=sys.stderr, flush=True)
             out["results"].setdefault(sname, {})[cname] = evaluate(b, exs)
+        if a.cache_ml and a.cache_file:
+            a.cache_file.write_text(json.dumps({k: {t: [[x.start, x.end, x.type, x.score] for x in sp]
+                                                    for (_, t), sp in m.items()} for k, m in memos.items()}), encoding="utf-8")
         a.out.write_text(json.dumps(out, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 
