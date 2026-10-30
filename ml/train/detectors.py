@@ -15,7 +15,8 @@ from pathlib import Path
 from .labels import ENTITY_TYPES
 
 IGNORE = "IGNORE"
-GATEWAY_TYPES = frozenset(ENTITY_TYPES)
+# External detectors may also emit ADDRESS (the gateway has the type; trained models exclude it, ml/train/labels.py).
+GATEWAY_TYPES = frozenset(ENTITY_TYPES) | {"ADDRESS"}
 
 # GLiNER prompt labels (natural-language label -> gateway type). The model is zero-shot over these strings, so the
 # prompt itself is part of the review. Anything the model could return outside this table does not exist: the labels
@@ -26,6 +27,7 @@ GLINER_PII_PROMPTS: dict[str, str] = {
     "employee id": "EMPLOYEE_ID", "salary": "COMPENSATION", "national id number": "AADHAAR",
     "tax id number": "PAN", "upi id": "UPI_ID", "ifsc code": "IFSC",
     # Labels the model knows but that are not gateway types: kept in the prompt so they cannot be mistaken for PII.
+    "address": "ADDRESS",
     "organization": IGNORE, "location": IGNORE,
 }
 # Token-classification label maps, keyed by NORMALISED label (see normalise_label). REVIEW BEFORE USE: a label that is
@@ -38,12 +40,12 @@ INDICNER_MAP: dict[str, str] = {"per": "PERSON", "loc": IGNORE, "org": IGNORE, "
 #   account_number  -> BANK_ACCOUNT  also fires on card and other long numbers: measure the type confusion before use
 #   secret          -> SECRET
 #   private_date    -> IGNORE        all dates (not only dates of birth); DATE_OF_BIRTH would over-mask every date
-#   private_address -> IGNORE        the gateway has no address type
+#   private_address -> ADDRESS      the gateway's restorable ADDRESS type (C1); measure against places.py before use
 #   private_url     -> IGNORE        the gateway has no URL type (URLs that carry credentials are SECRET by regex)
 # Anything not in the table maps to IGNORE and is listed in the card.
 PRIVACY_FILTER_MAP: dict[str, str] = {
     "privateperson": "PERSON", "privateemail": "EMAIL", "privatephone": "PHONE", "accountnumber": "BANK_ACCOUNT",
-    "secret": "SECRET", "privatedate": IGNORE, "privateaddress": IGNORE, "privateurl": IGNORE,
+    "secret": "SECRET", "privatedate": IGNORE, "privateaddress": "ADDRESS", "privateurl": IGNORE,
 }
 
 CANDIDATES: dict[str, dict] = {

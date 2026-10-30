@@ -6,7 +6,7 @@ from ml.train.labels import ENTITY_TYPES
 
 def test_every_reviewed_map_targets_gateway_types_or_ignore():
     for table in (D.INDICNER_MAP, D.PRIVACY_FILTER_MAP, D.GLINER_PII_PROMPTS):
-        assert all(v == D.IGNORE or v in ENTITY_TYPES for v in table.values())
+        assert all(v == D.IGNORE or v in ENTITY_TYPES or v == "ADDRESS" for v in table.values())
     assert D.span_prompt_map(D.GLINER_PII_PROMPTS)["phone number"] == "PHONE"
     with pytest.raises(AssertionError):
         D.span_prompt_map({"x": "NOT_A_TYPE"})
