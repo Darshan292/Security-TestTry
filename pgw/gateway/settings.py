@@ -51,11 +51,12 @@ Classification of every Settings field (`FIELD_CLASS`; a test fails if a field i
 | integrity_manifest | operational | PGW_INTEGRITY_MANIFEST | Path; whatever it names must verify under the trusted key, and its profile's config_serial must pass the rollback floors (SECURITY_BOUNDARY.md §2) |
 | trusted_config_pubkey | operational | PGW_TRUSTED_CONFIG_PUBKEY | The trust anchor cannot be inside what it verifies; must come from a store config authors cannot write |
 | min_config_serial | operational | PGW_MIN_CONFIG_SERIAL | Rollback floor next to the trust anchor (same custody): a signed tree whose config_serial is lower is refused. It cannot live in the profile it judges |
-| state_dir | operational | PGW_STATE_DIR | Holds the config high-water mark (config_serial.json); production requires an existing directory |
+| state_dir | operational | PGW_STATE_DIR | Holds the config high-water mark (config_serial.json) and, by default, the disclosure-control query history (disclosure_history.sqlite); production requires an existing directory |
 | policy_signing_key, master_key, openai_api_key, anthropic_api_key | operational | PGW_POLICY_SIGNING_KEY, PGW_MASTER_KEY, *_API_KEY | Secrets: must stay out of the repo |
 | tenant_keys_file | operational | PGW_TENANT_KEYS_FILE | Path to secrets |
 | require_signed_policy | operational | PGW_REQUIRE_SIGNED_POLICY | Borderline: it can only add the legacy HMAC check; production already requires Ed25519 |
 | ledger_db_path, egress_ledger_path, replay_db_path | operational | PGW_LEDGER_DB, PGW_EGRESS_LEDGER, PGW_REPLAY_DB | State and log destinations (borderline for the audit log: its protection is the hash chain and shipping to WORM storage, OPERATIONS.md) |
+| disclosure_db_path | operational | PGW_DISCLOSURE_DB | The disclosure-control query history (default `<state_dir>/disclosure_history.sqlite`; required in production when a RECORDS contract runs). Borderline like the replay store: pointing it at an empty file resets the history (logged at startup with its scope and query counts; SECURITY_BOUNDARY.md §12) |
 | private_model | operational | PGW_PRIVATE_MODEL | Borderline: the model name at the in-boundary endpoint; it does not change where data goes or what is inspected. Whether the endpoint is a real model is probed (GET /v1/models), not taken from this name |
 """
 from __future__ import annotations
@@ -166,6 +167,8 @@ class Settings:
     roster_path: str | None = None            # optional JSONL of employees
     ledger_db_path: str = "pgw_restore_ledger.sqlite"
     replay_db_path: str | None = None          # persistent single-use attestation store; required in production
+    # Disclosure-control query history (pgw.product.disclosure.HistoryStore). None: <state_dir>/disclosure_history.sqlite
+    disclosure_db_path: str | None = None
     egress_ledger_path: str = "pgw_egress.jsonl"
     upstream_kind: str = "mock"               # mock | openai | anthropic
     upstream_url: str = "https://api.openai.com/v1"
@@ -242,6 +245,7 @@ class Settings:
             roster_path=e.get("PGW_ROSTER") or None,
             ledger_db_path=e.get("PGW_LEDGER_DB", cls.ledger_db_path),
             replay_db_path=e.get("PGW_REPLAY_DB") or None,
+            disclosure_db_path=e.get("PGW_DISCLOSURE_DB") or None,
             egress_ledger_path=e.get("PGW_EGRESS_LEDGER", cls.egress_ledger_path),
             upstream_kind=e.get("PGW_UPSTREAM", "mock"),
             upstream_url=e.get("PGW_UPSTREAM_URL", cls.upstream_url),
@@ -281,6 +285,7 @@ FIELD_CLASS: dict[str, str] = {
     "mode": OPERATIONAL, "legacy_uncontracted": CODE, "dev_allow_real_provider": CODE,
     "policy_path": PROFILE, "registry_path": PROFILE, "roster_path": PROFILE,
     "ledger_db_path": OPERATIONAL, "egress_ledger_path": OPERATIONAL, "replay_db_path": OPERATIONAL,
+    "disclosure_db_path": OPERATIONAL,
     "upstream_kind": PROFILE, "upstream_url": PROFILE,
     "openai_api_key": OPERATIONAL, "anthropic_api_key": OPERATIONAL, "master_key": OPERATIONAL,
     "tenant_keys_file": OPERATIONAL, "provider_region": PROFILE, "provider_zero_retention": PROFILE,

@@ -26,6 +26,7 @@ replaced by their validated tokens and the regex/identifier detectors run over t
 """
 from __future__ import annotations
 
+import json
 import re
 import string
 from dataclasses import dataclass, field
@@ -77,6 +78,7 @@ class RecordSpec:
     timeout_s: float
     bands: dict = field(default_factory=dict, compare=False, hash=False)   # output name -> (edges, labels)
     min_group_size: int | None = None   # may only raise the sealed disclosure_control k (pgw.product.disclosure)
+    dataset: str | None = None          # sealed dataset label: part of the differencing-history scope (with the schema)
 
 
 def _int(raw, where, lo, hi) -> int:
@@ -98,7 +100,7 @@ def parse_spec(raw, outputs_raw) -> RecordSpec:
     if not isinstance(raw, dict):
         raise ContractError("RECORDS contracts need a records block")
     allowed = {"sources", "select", "label", "show", "compute", "rules", "max_rows", "max_bytes", "max_listed",
-               "max_prompt_chars", "timeout_s", "min_group_size"}
+               "max_prompt_chars", "timeout_s", "min_group_size", "dataset"}
     if set(raw) - allowed:
         raise ContractError(f"records: unknown keys {sorted(set(raw) - allowed)}")
     compute = raw.get("compute")
@@ -110,6 +112,9 @@ def parse_spec(raw, outputs_raw) -> RecordSpec:
     timeout = raw.get("timeout_s", 30)
     if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or not 1 <= timeout <= MAX_TIMEOUT_S:
         raise ContractError(f"records.timeout_s: 1-{MAX_TIMEOUT_S} seconds")
+    dataset = raw.get("dataset")
+    if dataset is not None and not (isinstance(dataset, str) and disclosure.DATASET_RE.fullmatch(dataset)):
+        raise ContractError("records.dataset: a dataset label ([a-z][a-z0-9_.-], up to 64 characters)")
     bands = {}
     for name, o in (outputs_raw or {}).items():
         if isinstance(o, dict) and "band" in o:
@@ -131,7 +136,8 @@ def parse_spec(raw, outputs_raw) -> RecordSpec:
         timeout_s=float(timeout), bands=bands,
         min_group_size=None if raw.get("min_group_size") is None else _int(raw["min_group_size"], "min_group_size",
                                                                            disclosure.ABSOLUTE_MIN_K,
-                                                                           disclosure.MAX_K))
+                                                                           disclosure.MAX_K),
+        dataset=dataset)
 
 
 # =============================================================================================================
@@ -269,9 +275,7 @@ def bind(purpose: str, contract: Contract, registry_dir: Path, read) -> Plan:
         if spec.min_group_size < cfg.k:
             raise ContractError(f"records.min_group_size: may only raise the sealed min_group_size ({cfg.k})")
         k = spec.min_group_size
-    control = disclosure.Control(cfg, k, cfg.listing, controls,
-                                 disclosure.QueryLog(cfg.max_scopes, cfg.max_queries, cfg.ttl_s)
-                                 if cfg.differencing else None)
+    control = disclosure.Control(cfg, k, cfg.listing, controls, differencing=cfg.differencing, rounding=cfg.rounding)
     return Plan(purpose, contract, spec, schemas, comp, rules, rules_ref, starter_rules, view, dict(comp.catalog),
                 literals, control)
 
@@ -771,7 +775,7 @@ class _Disclosure:
     stats: dict = field(default_factory=lambda: dict.fromkeys(
         ("cells_suppressed", "cells_suppressed_complementary", "totals_suppressed", "groups_merged",
          "groups_suppressed", "rows_coarsened", "rows_attributes_withheld", "lists_withheld", "queries_refused",
-         "queries_compared"), 0))
+         "queries_compared", "history_queries", "counts_rounded"), 0))
 
 
 def _leaves(plan: Plan, name: str) -> bool:
@@ -779,7 +783,94 @@ def _leaves(plan: Plan, name: str) -> bool:
     return o is not None and o.egress != "INTERNAL"
 
 
-def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Disclosure, k: int, scope) -> None:
+def record_key_fields(plan: Plan) -> tuple:
+    """The fields whose values identify a record across exports (the differencing history's record key): the
+    contract's label fields that are employee identifiers in every source schema (stable usernames / employee ids),
+    else the label fields that name people, else every label field. Changing such a value between exports makes the
+    record count as a leaver plus a joiner."""
+    label = plan.spec.label
+
+    def ent(n, e):
+        return all(s.spec(n) is not None and s.spec(n).entity is e for s in plan.schemas.values())
+    ids = tuple(n for n in label if ent(n, _T.EMPLOYEE_ID))
+    people = tuple(n for n in label if not ent(n, T_IDENTIFIER))
+    return ids or people or tuple(label)
+
+
+def _identity(fields: tuple):
+    """Row -> the bytes the record key is computed from (never stored): the key fields' values, or one shared
+    marker for a record without any (such records count with multiplicity, see disclosure.keyset)."""
+    def ident(row) -> bytes:
+        vals = [row.values.get(n) for n in fields]
+        if all(v is None for v in vals):
+            return b'["#no-record-key"]'
+        return json.dumps(vals, ensure_ascii=False, default=str).encode("utf-8")
+    return ident
+
+
+def _history_check(plan: Plan, schema: FieldSchema, t, params: dict, rows: list, outs: dict, history,
+                   dc: _Disclosure, k: int) -> None:
+    """Differencing across the durable history of (tenant, app, purpose, dataset): every count this response
+    reveals, as the set of keyed record hashes behind it (pgw.product.disclosure.HistoryStore)."""
+    mc = outs["matched_count"]
+    flt = params["filter"]
+    matched_idx = mc.meta.get("matched", frozenset())
+    matched = [r for r in rows if r.index in matched_idx]
+    missing = [r for r in rows if r.index not in matched_idx and hrcompute.roster_match(r, flt) == -1]
+    missing_idx = {r.index for r in missing}
+    cells = t.cells
+
+    def shown(n):
+        return cells[n].shown
+
+    def exact(n):
+        return cells[n].shown and not cells[n].suppressed
+    ident = _identity(record_key_fields(plan))
+    gb = params.get("group_by")
+    gsizes = outs["group_counts"].meta.get("sizes") or []
+
+    def build(subkey: bytes) -> list:
+        cache: dict = {}
+
+        def ks(rs):
+            return disclosure.keyset(rs, subkey, ident, cache)
+        RS = disclosure.RevealedSet
+        out = []
+        filtered = bool(flt)
+        if shown("total_rows"):
+            out.append(RS("total", ks(rows), exact("total_rows"), whole=True))
+        if shown("matched_count"):
+            out.append(RS("matched", ks(matched), exact("matched_count"), whole=not filtered))
+        if shown("rows_missing_filter_field"):
+            out.append(RS("missing", ks(missing), exact("rows_missing_filter_field")))
+        if shown("total_rows") and shown("matched_count") and filtered:
+            out.append(RS("complement", ks([r for r in rows if r.index not in matched_idx]),
+                          exact("total_rows") and exact("matched_count")))
+            if shown("rows_missing_filter_field") and missing:
+                out.append(RS("did_not_match", ks([r for r in rows if r.index not in matched_idx
+                                                   and r.index not in missing_idx]),
+                              exact("total_rows") and exact("matched_count") and exact("rows_missing_filter_field")))
+        if gb and gsizes and _leaves(plan, "group_counts"):
+            by: dict = {}
+            for r in matched:
+                by.setdefault(r.values.get(gb), []).append(r)
+            for i, (key, _n) in enumerate(gsizes):
+                out.append(RS("group", ks(by.get(key, [])), not cells[f"#group{i}"].suppressed))
+        return out
+    predicate = {"filter": [[n, op, list(v) if isinstance(v, tuple) else v] for n, op, v, _o in flt],
+                 "group_by": gb, "list": bool(params.get("list"))}
+    try:
+        st = history.store.check_and_record(history, disclosure.dataset_id(schema.id, plan.spec.dataset), predicate,
+                                            build, k, plan.control.cfg)
+    except disclosure.DisclosureRefused:
+        dc.stats["queries_refused"] += 1
+        raise
+    dc.stats["queries_compared"] = st["queries_compared"]
+    dc.stats["history_queries"] = st["history_queries"]
+
+
+def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Disclosure, k: int, history,
+                    schema: FieldSchema) -> None:
     """Count table of a roster query: total = matched + missing + did-not-match; matched = sum of the groups."""
     t = disclosure.Table(k)
     mc = outs["matched_count"]
@@ -819,14 +910,8 @@ def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Discl
         dc.list_withheld["matched"] = (f"none listed: fewer than {k} records match" if c.primary
                                       else "none listed (withheld by disclosure control)")
         dc.stats["lists_withheld"] += 1
-    if scope is not None and plan.control is not None and plan.control.log is not None:
-        try:
-            dc.stats["queries_compared"] = plan.control.log.check_and_record(
-                scope, params["filter"], rows, mc.meta.get("matched", frozenset()),
-                t.cells["total_rows"].shown and not t.cells["total_rows"].suppressed, k, hrcompute.roster_match)
-        except disclosure.DisclosureRefused:
-            dc.stats["queries_refused"] += 1
-            raise
+    if history is not None and plan.control is not None and plan.control.differencing:
+        _history_check(plan, schema, t, params, rows, outs, history, dc, k)
     dc.prewithhold = {params["group_by"]: suppressed_vals} if params.get("group_by") and suppressed_vals else {}
 
 
@@ -860,6 +945,14 @@ class _Renderer:
         self.listed = 0
         self.not_listed = 0
 
+    def _count(self, v) -> str:
+        """A published count: exact, or rounded to the sealed base for roster count tables when rounding is on."""
+        base = self.plan.control.rounding if self.plan.control is not None else 0
+        if not base or self.plan.spec.compute != "roster_question" or not str(v).isdigit():
+            return str(v)
+        self.dc.stats["counts_rounded"] += 1
+        return disclosure.rounded(int(v), base)
+
     def sent(self, token: str) -> str:
         s = self._by_token.get(token)
         if s is None:
@@ -890,7 +983,7 @@ class _Renderer:
         if mark is not None:
             return self.sent(mark)
         if k == "count":
-            return self.sent(str(int(v)))
+            return self.sent(self._count(int(v)))
         if k == "label":
             return self.sent(str(v))
         if k == "codes":
@@ -902,7 +995,8 @@ class _Renderer:
             if not v:
                 return self.sent("none")
             marks = self.dc.group_marks.get(name, {})
-            return "\n".join(f"- {self.sent(str(key))}: {self.sent(marks.get(i, tok))}" for i, (key, tok) in enumerate(v))
+            return "\n".join(f"- {self.sent(str(key))}: {self.sent(marks.get(i) or self._count(tok))}"
+                             for i, (key, tok) in enumerate(v))
         if k == "list":
             if name in self.dc.list_withheld:
                 return self.sent(self.dc.list_withheld[name])
@@ -986,8 +1080,9 @@ def parse_envelope(messages: list, plan: Plan) -> dict:
     return env
 
 
-def run(plan: Plan, messages: list, scope=None) -> RecordResult:
-    """scope: the differencing-log key (tenant, app, purpose, conversation id or ''); None = no query log."""
+def run(plan: Plan, messages: list, history=None) -> RecordResult:
+    """history: the differencing-history scope (disclosure.HistoryScope: store, tenant, app, purpose, key) bound by
+    the gateway from the authenticated app; None = no history (unit tests of single responses only)."""
     env = parse_envelope(messages, plan)
     schema = plan.schemas[env["source"]]
     params = parse_params(plan, env.get("params"), schema)
@@ -1001,7 +1096,7 @@ def run(plan: Plan, messages: list, scope=None) -> RecordResult:
     if plan.control is not None:
         try:
             if plan.spec.compute == "roster_question":
-                _roster_control(plan, outs, params, rows, dc, plan.k, scope)
+                _roster_control(plan, outs, params, rows, dc, plan.k, history, schema)
             _list_control(plan, schema, outs, rows, dc, plan.k, ctx)
         except disclosure.DisclosureRefused as e:
             e.report = _report(plan, schema, env["format"], rows, stats, outs, [], _Renderer(plan, schema, dc),
@@ -1061,6 +1156,7 @@ def _disclosure_report(plan, schema, dc) -> dict:
         return {"enforced": False}
     ctrl = plan.control.schemas.get(schema.id)
     return {"enforced": True, "config": plan.control.cfg.ref, "min_group_size": plan.k,
-            "listing": plan.control.listing, "differencing": plan.control.log is not None,
+            "listing": plan.control.listing, "differencing": plan.control.differencing,
+            "rounding_base": plan.control.rounding or None,
             "quasi_identifiers": list(ctrl.qis) if ctrl is not None else [], **dc.stats}
 

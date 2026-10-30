@@ -506,7 +506,9 @@ verbatim. On the RECORDS route values are classified by field, not by detection.
 | Parsing is bounded and safe: size, rows, depth, CSV shape; XML with any DTD/entity is refused (XXE, billion laughs) | `recparse`, contract `max_bytes`/`max_rows`/`timeout_s` | `test_malformed_payloads_are_400_without_values[*]`, `test_xml_external_entities_dtds_and_bombs_are_refused[*]`, `test_row_and_size_bounds`, `test_large_register_within_time_and_output_bounds` |
 | Small groups: no count of 1..k-1 people defined by quasi-identifiers leaves (roster cells; a filter matching 1..k-1 prints "fewer than k" and lists nobody). Complementary suppression continues until no suppressed cell is determined by the printed numbers of the response | `disclosure.Table.protect` (exact interval audit over the response's sums), `records._roster_control`. k comes from the sealed `registry/rules/disclosure_control.yaml`: k < 3 needs a sealed override with a justification, and a missing or modified file stops startup | `tests/test_disclosure_control.py`: `test_a_count_of_one_never_leaves`, `test_complementary_suppression_no_suppressed_cell_is_determined[*]` (an independent brute-force solver over 300 random tables), `test_small_did_not_match_cell_hides_the_total`, `test_tampered_k_stops_startup`, `test_k_below_3_is_refused_even_when_sealed`, `test_missing_disclosure_config_stops_startup` |
 | Listed aliases: every printed combination of `show` attributes is shared by at least k people of the population the listing is drawn from (coarsening along sealed hierarchies, then per-row withholding; withheld rows are indistinguishable among at least k). Cost-centre bands are printed only for groups of at least k people | `disclosure.anonymize_listing`, `records._list_control`, `hrcompute.contractor_budget` | `test_listing_rows_meet_k_after_coarsening[*]`, `test_exception_list_with_selected_quasi_identifiers_meets_k`, `test_contractor_cost_centre_bands_need_k_people` |
-| Differencing within a conversation: a roster query is refused (422, nothing sent) when its result set differs by 1..k-1 records from an earlier query's result set, or from that set's complement once the total was printed | `disclosure.QueryLog` (filter predicates only; in memory, bounded) | `test_differencing_across_two_queries_in_one_conversation_is_refused`, `test_differencing_against_a_previously_printed_total_is_refused`, `test_query_log_stores_filter_specs_only_and_is_bounded` |
+| Differencing across the tenant's whole history (threat model: the provider sees every request of the tenant; conversation ids are caller-chosen, not a boundary): a roster query is refused (422 `disclosure_control_refused`, `reason: differencing`, nothing sent) when any count it prints as a number covers a record set whose symmetric difference with any earlier printed count's set has 1..k-1 records, in the scope (tenant, app, purpose, dataset = source schema id + sealed `records.dataset` label). Covers other conversations, gateway restarts and refreshed exports (sets are compared on keyed record hashes, not on predicates) | `disclosure.HistoryStore` (SQLite under `PGW_STATE_DIR`, one IMMEDIATE transaction per check-and-record), `records._history_check` | `test_bypass_a_differencing_across_conversations_is_refused`, `test_bypass_b_history_survives_a_restart_and_a_wrong_key_fails_closed`, `test_bypass_d_refreshed_export_with_a_new_joiner_is_refused`, `test_differencing_in_one_conversation_is_refused`, `test_differencing_against_a_previously_printed_total_is_refused` |
+| The history holds no personal data in clear: record members are HMAC-SHA256(scope key, record identity) truncated to 16 bytes; the scope key derives from the tenant's key in the gateway key store (pinned key id + key-check value). Predicates hold field names, operators and sealed filter values only | `disclosure.keyset`, `HistoryStore._scope_key` | `test_history_store_holds_no_personal_data_in_clear` (scans the SQLite file and WAL for every synthetic name, username, id and date), `test_history_unit_record_keys_are_stable_and_keyed` |
+| The history is bounded and never evicts: a full scope refuses (422, `reason: history_full`), logged and counted (`app.state.pgw_disclosure_metrics`, `/healthz`); reset is a logged admin action with a written reason. Store failure, a retired pinned key id or a different key: 503 `disclosure_store_unavailable`, nothing sent. Production refuses to start without a persistent history | `HistoryStore.check_and_record`, `HistoryStore.reset`, `create_app` | `test_bypass_c_history_is_never_evicted`, `test_full_history_refuses_and_an_operator_reset_is_logged`, `test_history_unit_complexity_bounds_and_capacity`, `test_store_failure_is_503_and_nothing_is_sent`, `test_production_requires_a_persistent_history` |
 
 **Computed tokens.** Counts, exception codes, sealed band labels, KEEP enumeration values and generalised values are
 the gateway's own validated output. A count can coincide with an input amount (20,000 rows; a Rs 20,000 basic): the
@@ -517,19 +519,27 @@ value appears in what leaves **outside** a validated computed token.
 **Small groups: enforced and not enforced.** Enforced, deterministically, with k from sealed config:
 - small-cell suppression, with complementary suppression within one response;
 - k-anonymous attributes next to listed aliases;
-- refusal of near-duplicate roster queries within one conversation.
+- refusal of a roster query any of whose printed counts differs by 1..k-1 records from a count printed earlier for
+  the same tenant, app, purpose and dataset: across conversations, restarts and refreshed exports, with a durable,
+  bounded (refuse-when-full), keyed-hash history that fails closed;
+- optional deterministic rounding of roster counts to a sealed base (shipped off: it does not stop differencing at
+  rounding boundaries and listings print every alias; docs/HRMS_CONTRACTS.md "Small groups").
 
-Differential privacy was considered and is not built; docs/HRMS_CONTRACTS.md "Small groups" gives the reasons.
+Differential privacy was considered and is not built (OpenDP remains the future option for released statistics);
+docs/HRMS_CONTRACTS.md "Small groups" gives the reasons.
 
 **Not enforced** (small groups):
 - Inference from the LLM's background knowledge. A provider that already knows who is in a group of k learns that
   group's printed attribute.
 - Attribute disclosure when all k people of a group share the same value (homogeneity). l-diversity and t-closeness
   are not built.
-- Differencing across conversations, since a caller can rotate `X-PGW-Conversation-Id`.
-- Differencing across gateway processes or restarts, since the log is in memory.
-- Differencing across two different exports, since no input is stored.
-- Differencing through `group_by` cells of overlapping filters, since only matched sets are compared.
+- Differencing across different tenants, apps, purposes (two roster contracts over the same export) or dataset
+  identities: each has its own history.
+- Combinations of three or more counts where no single pair of printed counts differs by 1..k-1, and intervals from
+  suppression markers combined across responses (pairs of exactly printed counts are compared).
+- Answers given before an operator reset, or recorded in another store file (the path is operational, like the
+  replay store; the startup log line shows the history's size).
+- Records whose identity (the label values used as record key) changes between exports count as leaver + joiner.
 - Reasoning about the suppression algorithm itself.
 - The per-person exception codes of payroll, timecard and contractor lists. They are about the aliased person by
   design and carry no quasi-identifier unless the contract shows one.

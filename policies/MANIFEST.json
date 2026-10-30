@@ -62,8 +62,8 @@
    "version": 1
   },
   "registry/rules/disclosure_control.yaml": {
-   "sha256": "9d2107494af043d98407e5fadde195f77d0470f7bcb3e9f1a7b86b35cfb10cd9",
-   "version": 1
+   "sha256": "2fc68f5c5aa445da84740ce883e651b47917349849bf550f496e5615c1a39a45",
+   "version": 2
   },
   "registry/rules/india_payroll_statutory.yaml": {
    "sha256": "e1a71e536bf5ae8faf6a741ad59484ac739b93c096ee6e874bc2d26a3d811bc2",

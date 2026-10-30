@@ -603,6 +603,34 @@ def create_app(settings: Settings) -> Starlette:
         raise ValueError("production requires a persistent attestation replay store (PGW_REPLAY_DB)")
     else:
         replay_cache = attest.ReplayCache(attest.REPLAY_CACHE_MAX)
+    # Disclosure-control query history (SECURITY_BOUNDARY.md §12): durable, per (tenant, app, purpose, dataset), shared
+    # by every process on the host. Production needs a persistent file; development without a state directory keeps
+    # it in memory (lost on restart, warned).
+    disclosure_history = None
+    if any(p.control is not None and p.control.differencing for p in record_plans.values()):
+        dpath = settings.disclosure_db_path or (str(Path(settings.state_dir) / _records.disclosure.HISTORY_DB_NAME)
+                                                if settings.state_dir else None)
+        if dpath is None and prod:
+            raise ValueError("production requires a persistent disclosure-control history (PGW_STATE_DIR or "
+                             "PGW_DISCLOSURE_DB)")
+        if dpath is None:
+            _log(logging.WARNING, event="disclosure_history_in_memory_development_only")
+        disclosure_history = _records.disclosure.HistoryStore(dpath or ":memory:")
+        _sz = disclosure_history.sizes()
+        log.info("event='disclosure_history_opened' persistent=%r scopes=%d queries=%d", dpath is not None,
+                 _sz["scopes"], _sz["queries"])
+
+    def history_scope(app: AppEntry, purpose: str):
+        """The differencing scope of a RECORDS request: the authenticated app's tenant and id and the purpose (the
+        dataset is added from the payload's source schema). Never the conversation id: it is caller-chosen."""
+        if disclosure_history is None:
+            return None
+        tenant = app.tenant
+
+        def keyfn(key_id):
+            kid = key_id or keys.active_id(tenant)
+            return kid, keys.derive(tenant, _records.disclosure.KEY_PURPOSE, kid)
+        return _records.disclosure.HistoryScope(disclosure_history, tenant, app.app_id, purpose, keyfn)
 
     def report_of(rep, outcome: str, error: dict | None = None) -> dict | None:
         """The finished pgw_report, or None if building it failed (logged by type only; the response is not
@@ -884,7 +912,7 @@ def create_app(settings: Settings) -> Starlette:
                 _tr("route", route="RECORDS", reason="field contract: computed results and aliases only")
                 rep.begin("compute")
                 try:
-                    rr = await bounded(_records.run, plan, messages, (app.tenant, app.app_id, purpose, conv or ""),
+                    rr = await bounded(_records.run, plan, messages, history_scope(app, purpose),
                                        timeout=plan.spec.timeout_s)
                 except _Reject:
                     rep.end("compute", "failed")
@@ -896,7 +924,15 @@ def create_app(settings: Settings) -> Starlette:
                         rep.records = e.report
                     ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                                 "disclosure_control", contract)
-                    raise _Reject(422, "disclosure_control_refused", str(e)) from None
+                    raise _Reject(422, "disclosure_control_refused", str(e), reason=e.code) from None
+                except _records.disclosure.HistoryUnavailable as e:
+                    rep.end("compute", "failed")
+                    _log(logging.ERROR, event="disclosure_history_unavailable", request_id=rid,
+                         error_type=str(e))
+                    ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
+                                "disclosure_history_unavailable", contract)
+                    raise _Reject(503, "disclosure_store_unavailable",
+                                  "disclosure-control history unavailable; request not sent") from None
                 except local_compute.PayloadError as e:
                     rep.end("compute", "failed")
                     ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
@@ -1374,7 +1410,10 @@ def create_app(settings: Settings) -> Starlette:
                                  headers={"X-PGW-Request-Id": rid, "Cache-Control": "no-store"})
 
     async def health(request: Request) -> Response:
-        return JSONResponse({"status": "ok", "mode": settings.mode})
+        out = {"status": "ok", "mode": settings.mode}
+        if disclosure_history is not None:   # counts only (operator metric)
+            out["disclosure_history"] = await to_thread.run_sync(disclosure_history.metrics.snapshot)
+        return JSONResponse(out)
 
     import contextlib
 
@@ -1383,7 +1422,7 @@ def create_app(settings: Settings) -> Starlette:
         try:
             yield
         finally:   # release NER worker processes (each holds a model copy) when the app stops
-            for comp in (getattr(contract_protector, "ner", None), ml_detector, gate):
+            for comp in (getattr(contract_protector, "ner", None), ml_detector, gate, disclosure_history):
                 close = getattr(comp, "close", None)
                 if close is not None:
                     close()
@@ -1392,4 +1431,9 @@ def create_app(settings: Settings) -> Starlette:
                              Route("/healthz", health, methods=["GET"])], lifespan=lifespan)
     # Plugin shadow/union counters (operator metrics, never in pgw_report): app.state.pgw_plugin_metrics.snapshot()
     app_.state.pgw_plugin_metrics = plugin_set.metrics if plugin_set is not None else None
+    # Disclosure-control history counters (answered, refused_differencing, refused_capacity, store_unavailable, scopes,
+    # queries): app.state.pgw_disclosure_metrics.snapshot(); also on /healthz as counts. The store itself (operator
+    # reset: python -m pgw.product.disclosure history reset ...) is app.state.pgw_disclosure_history.
+    app_.state.pgw_disclosure_history = disclosure_history
+    app_.state.pgw_disclosure_metrics = disclosure_history.metrics if disclosure_history is not None else None
     return app_
