@@ -3,7 +3,7 @@
 # file stops startup. A change needs review, a version bump and a re-seal (OPERATIONS.md).
 kind: pgw-disclosure-control
 config: disclosure_control
-version: 1
+version: 2
 # k: no count of 1..k-1 people defined by quasi-identifiers leaves, and every listed alias's leaving attributes are
 # shared by at least k people. Below 3 only with `min_group_size_override: {justification: "..."}` (reviewed).
 # A contract may raise it (records.min_group_size), never lower it.
@@ -12,13 +12,22 @@ min_group_size: 5
 # then drop the column; rows that still fail show "attributes withheld") | withhold (no coarsening) | alias_only
 # (no attributes next to aliases at all).
 listing: coarsen
-# Per-conversation log of roster filter predicates (never values): refuse a query whose result differs from an
-# earlier one by 1..k-1 records. In memory per gateway process; partial protection (SECURITY_BOUNDARY.md §12).
+# Durable query history per (tenant, app, purpose, dataset) -- not per conversation (the provider sees every
+# conversation; conversation ids are caller-chosen). Keeps each answered roster query's predicate and the keyed
+# record hashes behind every count it revealed; refuses a query any of whose counts differs from any earlier one by
+# 1..k-1 records (also across gateway restarts and refreshed exports). Full history REFUSES (never evicts); an
+# operator resets it deliberately (python -m pgw.product.disclosure history reset ..., logged). SECURITY_BOUNDARY.md §12.
 differencing:
   enabled: true
-  max_queries_per_scope: 64
+  max_queries_per_scope: 1000        # answered queries kept per scope
+  max_stored_keys_per_scope: 5000000 # record hashes kept per scope (16 bytes each)
   max_scopes: 10000
-  ttl_s: 86400
+# Deterministic rounding of published roster counts to a base ("about 15"). Off: the set-difference check above is
+# the control; rounding does not stop differencing at rounding boundaries and listings print every matching alias
+# anyway (docs/HRMS_CONTRACTS.md "Small groups").
+rounding:
+  enabled: false
+  base: 5
 # Quasi-identifiers: by default every KEEP and GENERALIZE field of a schema (every field whose value can leave).
 # A schema block may only ADD names. Hierarchies: roll-ups of a KEEP enumeration, finest first (STARTER mapping:
 # replace with your organisation's reference table and re-seal).

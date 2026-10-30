@@ -182,9 +182,12 @@ def test_table_audit_unit():
 # a count of 1 never leaves; filters matching 1..k-1 list nobody
 # =============================================================================================================
 
-@pytest.fixture(scope="module")
-def gw(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("dc")
+@pytest.fixture
+def gw(tmp_path):
+    """A fresh gateway (and so a fresh disclosure-control history) per test: the history is per tenant, app,
+    purpose and dataset, not per conversation, so tests sharing one gateway would difference each other's
+    synthetic populations (which reuse the same synthetic usernames)."""
+    tmp = tmp_path
     t = {"roster_question": str(ROOT / "contracts/roster_question.yaml"),
          "roster_pin": variant(tmp, "roster_pin", {"select": ["display_name", "username", "department", "enabled",
                                                               "created_month", "pin_district"],
@@ -343,58 +346,309 @@ def test_contractor_cost_centre_bands_need_k_people(gw):
 
 
 # =============================================================================================================
-# differencing within a conversation
+# differencing: a durable history per (tenant, app, purpose, dataset), never per conversation
 # =============================================================================================================
+# Threat model: the external provider sees every outbound request of the tenant, from every conversation, user and
+# day; conversation ids are chosen by the caller. Each test below reproduces one bypass an external tester found
+# against the earlier per-conversation, in-memory, evicting log (population with 2 people in Legal, k = 5).
 
-def test_differencing_across_two_queries_in_one_conversation_is_refused(gw):
+FIN_LEGAL = {"filter": [{"field": "department", "op": "in", "value": ["Finance", "Legal"]}], "list": False}
+FIN = {"filter": [{"field": "department", "op": "eq", "value": "Finance"}], "list": False}
+
+
+def _pop12():
+    return S.ad_population([person("Finance")] * 12 + [person("Legal")] * 2 + [person("Sales")] * 8)
+
+
+def _refused(r, reason="differencing"):
+    assert r.status_code == 422, r.text
+    err = r.json()["error"]
+    assert err["type"] == "disclosure_control_refused" and err["reason"] == reason
+    return err
+
+
+def test_differencing_in_one_conversation_is_refused(gw):
     client, mock = gw
-    people = [person("Finance")] * 12 + [person("Legal")] * 2 + [person("Sales")] * 8
-    sy = S.ad_population(people)
+    sy = _pop12()
     h = {"X-PGW-Conversation-Id": "diff-1"}
-    q1 = {"filter": [{"field": "department", "op": "in", "value": ["Finance", "Legal"]}], "list": False}
-    q2 = {"filter": [{"field": "department", "op": "eq", "value": "Finance"}], "list": False}
-    assert post(client, "roster_question", sy.envelope(q1), headers=h).status_code == 200
+    assert post(client, "roster_question", sy.envelope(FIN_LEGAL), headers=h).status_code == 200
     n0 = len(mock.received)
-    r = post(client, "roster_question", sy.envelope(q2), headers=h)   # 14 - 12 = the two Legal people
-    assert r.status_code == 422 and r.json()["error"]["type"] == "disclosure_control_refused"
-    assert len(mock.received) == n0                                  # nothing sent
-    assert r.json()["error"]["pgw_report"]["records"]["disclosure"]["queries_refused"] == 1
-    # the same query alone, in another conversation, is answered
-    r = post(client, "roster_question", sy.envelope(q2), headers={"X-PGW-Conversation-Id": "diff-2"})
-    assert r.status_code == 200
-    # repeating the first query in the first conversation is fine (no new information)
-    assert post(client, "roster_question", sy.envelope(q1), headers=h).status_code == 200
+    err = _refused(post(client, "roster_question", sy.envelope(FIN), headers=h))   # 14 - 12 = the two Legal people
+    assert len(mock.received) == n0                                               # nothing sent
+    assert err["pgw_report"]["records"]["disclosure"]["queries_refused"] == 1
+    # repeating the first query is fine (the same records: no new information)
+    assert post(client, "roster_question", sy.envelope(FIN_LEGAL), headers=h).status_code == 200
+
+
+def test_bypass_a_differencing_across_conversations_is_refused(gw):
+    """a. "Finance+Legal" then "Finance" in two different conversation ids (or none): 14 and 12 -> Legal = 2."""
+    client, mock = gw
+    sy = _pop12()
+    r = post(client, "roster_question", sy.envelope(FIN_LEGAL), headers={"X-PGW-Conversation-Id": "conv-A"})
+    assert r.status_code == 200 and "Matching: 14" in sent_since(mock, len(mock.received) - 1)
+    n0 = len(mock.received)
+    _refused(post(client, "roster_question", sy.envelope(FIN), headers={"X-PGW-Conversation-Id": "conv-B"}))
+    _refused(post(client, "roster_question", sy.envelope(FIN)))                      # no conversation id at all
+    assert len(mock.received) == n0
+
+
+def _fixed_settings(tmp: Path, cfg: dict, mock, master: str):
+    from pgw.gateway.settings import Settings
+    return Settings(**cfg, ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
+                    master_key=master, upstream=mock)
+
+
+def test_bypass_b_history_survives_a_restart_and_a_wrong_key_fails_closed(tmp_path):
+    """b. A gateway restart between the two questions: the history is durable (state directory), so the second
+    question is refused by a NEW app instance. A restart with a different key cannot read it: 503, nothing sent."""
+    import os
+
+    from pgw.gateway.upstream import MockLLMUpstream
+    from tests.test_hrms_records import TestClient as _TC
+    _c, _m, cfg = make(tmp_path, {"roster_question": str(ROOT / "contracts/roster_question.yaml")})
+    master = os.urandom(32).hex()
+    sy = _pop12()
+    mock1 = MockLLMUpstream("summarise")
+    c1 = _TC(create_app(_fixed_settings(tmp_path, cfg, mock1, master)))
+    assert post(c1, "roster_question", sy.envelope(FIN_LEGAL)).status_code == 200
+    db = Path(cfg["state_dir"]) / disclosure.HISTORY_DB_NAME
+    assert db.is_file()
+    mock2 = MockLLMUpstream("summarise")
+    c2 = _TC(create_app(_fixed_settings(tmp_path, cfg, mock2, master)))      # "restart": new process state
+    _refused(post(c2, "roster_question", sy.envelope(FIN)))
+    assert mock2.received == []
+    mock3 = MockLLMUpstream("summarise")
+    c3 = _TC(create_app(_fixed_settings(tmp_path, cfg, mock3, os.urandom(32).hex())))
+    r = post(c3, "roster_question", sy.envelope(FIN))
+    assert r.status_code == 503 and r.json()["error"]["type"] == "disclosure_store_unavailable"
+    assert mock3.received == []
+
+
+def test_bypass_c_history_is_never_evicted(gw):
+    """c. 70 harmless questions, then the pair, in one conversation: the old 64-entry log had evicted the first."""
+    client, mock = gw
+    sy = _pop12()
+    h = {"X-PGW-Conversation-Id": "fill"}
+    assert post(client, "roster_question", sy.envelope(FIN_LEGAL), headers=h).status_code == 200
+    for i in range(70):                          # 70 distinct predicates, all matching everyone (no new information)
+        month = f"{2021 + (3 + i) // 12}-{(3 + i) % 12 + 1:02d}"
+        q = {"filter": [{"field": "created_month", "op": "lte", "value": month}], "list": False}
+        r = post(client, "roster_question", sy.envelope(q), headers=h)
+        assert r.status_code == 200, (i, r.text)
+    assert r.json()["pgw_report"]["records"]["disclosure"]["history_queries"] == 71
+    n0 = len(mock.received)
+    _refused(post(client, "roster_question", sy.envelope(FIN), headers=h))
+    assert len(mock.received) == n0
+
+
+def test_bypass_d_refreshed_export_with_a_new_joiner_is_refused(gw):
+    """d. The same question on Monday's and Tuesday's export (one new joiner): 6 then 7 gives the joiner's
+    department away. The history is keyed by the dataset (schema + sealed label), not the export's content, and
+    compares record sets, so Monday's {A..F} vs Tuesday's {A..G} (difference 1) is refused."""
+    client, mock = gw
+    monday = [person("Finance")] * 6 + [person("Sales")] * 10
+    tuesday = monday + [person("Finance", created=(2026, 10))]          # same people (same synthetic ids) + 1
+    q = {"filter": [{"field": "department", "op": "eq", "value": "Finance"}], "list": False}
+    r = post(client, "roster_question", S.ad_population(monday).envelope(q), headers={"X-PGW-Conversation-Id": "mon"})
+    assert r.status_code == 200 and "Matching: 6" in sent_since(mock, len(mock.received) - 1)
+    n0 = len(mock.received)
+    _refused(post(client, "roster_question", S.ad_population(tuesday).envelope(q),
+                  headers={"X-PGW-Conversation-Id": "tue"}))
+    assert len(mock.received) == n0
+    # the grouped form of the same question as well (Finance 6 -> 7 among the printed group counts)
+    g = {"filter": [], "group_by": "department", "list": False}
+    assert post(client, "roster_question", S.ad_population(monday).envelope(g)).status_code == 200
+    n0 = len(mock.received)
+    _refused(post(client, "roster_question", S.ad_population(tuesday).envelope(g)))
+    # a joiner in ANOTHER department: Finance is unchanged, but total 17 and Finance 6 give "not Finance: 11" (was
+    # 10), so the joiner's department is still given away through the complement
+    other = monday + [person("Sales", created=(2026, 10))]
+    _refused(post(client, "roster_question", S.ad_population(other).envelope(q)))
+    assert len(mock.received) == n0
+    # an unchanged refresh is answered (same records, same counts)
+    assert post(client, "roster_question", S.ad_population(monday).envelope(q)).status_code == 200
 
 
 def test_differencing_against_a_previously_printed_total_is_refused(gw):
     client, _mock = gw
     sy = S.ad_population([person("Finance")] * 10 + [person("Finance", enabled=False)] * 2 + [person("Sales")] * 6)
-    h = {"X-PGW-Conversation-Id": "diff-3"}
-    assert post(client, "roster_question", sy.envelope({"filter": [], "list": False}), headers=h).status_code == 200
-    r = post(client, "roster_question", sy.envelope({"filter": [{"field": "enabled", "op": "eq", "value": True}]}),
-             headers=h)
-    assert r.status_code == 422
+    assert post(client, "roster_question", sy.envelope({"filter": [], "list": False}),
+                headers={"X-PGW-Conversation-Id": "diff-3"}).status_code == 200
+    _refused(post(client, "roster_question", sy.envelope({"filter": [{"field": "enabled", "op": "eq", "value": True}]}),
+                  headers={"X-PGW-Conversation-Id": "diff-4"}))
 
 
-def test_query_log_stores_filter_specs_only_and_is_bounded():
-    log = disclosure.QueryLog(max_scopes=2, max_queries=3, ttl_s=3600)
+def _dc_variant(tmp_path, **dif):
+    """A production gateway whose sealed disclosure_control.yaml has the given differencing settings."""
+    _c, _m, cfg = make(tmp_path, {"roster_question": str(ROOT / "contracts/roster_question.yaml")})
+    p = _dc_path(cfg)
+    raw = yaml.safe_load(p.read_text())
+    raw["differencing"].update(dif)
+    p.write_text(yaml.safe_dump(raw, sort_keys=False))
+    _reseal(cfg)
+    from pgw.gateway.upstream import MockLLMUpstream
+    from tests.test_hrms_records import TestClient as _TC
+    mock = MockLLMUpstream("summarise")
+    app = create_app(_settings(tmp_path, cfg, mock))
+    return _TC(app), mock, app, cfg
+
+
+def test_full_history_refuses_and_an_operator_reset_is_logged(tmp_path):
+    client, mock, app, cfg = _dc_variant(tmp_path, max_queries_per_scope=3)
+    # groups far enough apart that no two of these queries difference each other
+    sy = S.ad_population([person("Finance")] * 12 + [person("Sales")] * 8 + [person("Legal")] * 7
+                         + [person("Support")] * 6)
+    queries = [{"filter": [{"field": "department", "op": "eq", "value": d}], "list": False}
+               for d in ("Finance", "Sales", "Legal", "Support")]
+    for q in queries[:3]:
+        assert post(client, "roster_question", sy.envelope(q)).status_code == 200
+    n0 = len(mock.received)
+    _refused(post(client, "roster_question", sy.envelope(queries[3])), reason="history_full")
+    _refused(post(client, "roster_question", sy.envelope(queries[0])), reason="history_full")  # even a repeat
+    assert len(mock.received) == n0
+    m = app.state.pgw_disclosure_metrics.snapshot()
+    assert m["refused_capacity"] == 2 and m["answered"] == 3 and m["queries"] == 3 and m["scopes"] == 1
+    assert client.get("/healthz").json()["disclosure_history"]["refused_capacity"] == 2
+    # the deliberate, logged admin action: needs a written reason; recorded without any value
+    db = str(Path(cfg["state_dir"]) / disclosure.HISTORY_DB_NAME)
+    store = disclosure.HistoryStore(db)
+    with pytest.raises(ValueError, match="written reason"):
+        store.reset("acme", "pilot", "roster_question", "ad_user", "because")
+    assert store.reset("acme", "pilot", "roster_question", "ad_user", "CHG-1234 quarterly review by DPO") == 3
+    (entry,) = store.admin_log()
+    assert entry["action"] == "reset" and entry["queries"] == 3 and entry["reason"].startswith("CHG-1234")
+    store.close()
+    assert post(client, "roster_question", sy.envelope(queries[3])).status_code == 200
+    out = disclosure._main(["history", "list", "--db", db])
+    assert out == 0
+
+
+def test_store_failure_is_503_and_nothing_is_sent(gw):
+    client, mock = gw
+    client.app.state.pgw_disclosure_history._db.close()      # the database becomes unusable
+    n0 = len(mock.received)
+    r = post(client, "roster_question", _pop12().envelope(FIN))
+    assert r.status_code == 503 and r.json()["error"]["type"] == "disclosure_store_unavailable"
+    assert len(mock.received) == n0
+    assert client.app.state.pgw_disclosure_metrics.c["store_unavailable"] == 1
+
+
+def test_production_requires_a_persistent_history(tmp_path):
+    _c, _m, cfg = make(tmp_path, {"roster_question": str(ROOT / "contracts/roster_question.yaml")})
+    cfg = {**cfg, "state_dir": None}
+    with pytest.raises(Exception, match="state|PGW_STATE_DIR"):
+        create_app(_settings(tmp_path, cfg))
+
+
+def test_history_store_holds_no_personal_data_in_clear(gw, tmp_path):
+    client, _mock = gw
+    people = S.unique_combo_population(40, seed=11)
+    sy = S.ad_population(people, seed=11)
+    for q in ({"filter": [], "group_by": "department", "list": True},
+              {"filter": [{"field": "enabled", "op": "eq", "value": True}], "list": True},
+              {"filter": [{"field": "department", "op": "in", "value": ["Finance", "Sales", "Engineering"]}],
+               "group_by": "account_state", "list": True}):
+        r = post(client, "roster_question", sy.envelope(q))
+        assert r.status_code in (200, 422), r.text
+    store = client.app.state.pgw_disclosure_history
+    assert store.sizes()["queries"] >= 1
+    db = Path(store.path)
+    blob = b"".join(p.read_bytes() for p in (db, Path(str(db) + "-wal")) if p.exists())
+    values = [v for kind, v in sy.secrets if isinstance(v, str)] + [n for n, _u in sy.people] + \
+             [u for _n, u in sy.people] + [f"E{70000 + i}" for i in range(len(people))]
+    assert len(values) > 100
+    for v in values:
+        for form in {v, v.lower(), v.upper()}:
+            assert form.encode("utf-8") not in blob, v
+            assert form.encode("utf-16-le") not in blob, v
+    for kind, v in sy.secrets:
+        if kind == "date":
+            assert str(v).encode() not in blob
+
+
+def _history_scope(store, tenant="t", key=b"k" * 32, kid="k1"):
+    return disclosure.HistoryScope(store, tenant, "app", "roster_question", lambda key_id: (key_id or kid, key))
+
+
+def test_history_unit_record_keys_are_stable_and_keyed():
     plan = plan_for()
+    assert records.record_key_fields(plan) == ("username",)        # the stable identifier, not the display name
+    store = disclosure.HistoryStore(":memory:")
+    monday = S.ad_population([person("Finance")] * 6 + [person("Sales")] * 6)
+    run(plan, monday, FIN, _history_scope(store))
+    # another tenant (different key) has its own scope: no comparison, no shared hashes
+    run(plan, S.ad_population([person("Finance")] * 7 + [person("Sales")] * 6), FIN,
+        _history_scope(store, tenant="t2", key=b"x" * 32))
+    with pytest.raises(disclosure.DisclosureRefused) as e:
+        run(plan, S.ad_population([person("Finance")] * 7 + [person("Sales")] * 6), FIN, _history_scope(store))
+    assert e.value.code == "differencing"
+    rows = store._db.execute("SELECT sid, keys FROM rset").fetchall()
+    by_sid: dict = {}
+    for sid, keys in rows:
+        by_sid.setdefault(sid, set()).update(keys[i:i + 16] for i in range(0, len(keys), 16))
+    a, b = by_sid.values()
+    assert not a & b                                               # per-scope keys: hashes do not link
+    # a retired (unavailable) key id fails closed
+    def nokey(key_id):
+        raise RuntimeError("retired")
+    with pytest.raises(disclosure.HistoryUnavailable):
+        run(plan, monday, FIN, disclosure.HistoryScope(store, "t", "app", "roster_question", nokey))
+    # the dataset label is part of the scope
+    labelled = plan_for({"dataset": "acme_in"})
+    run(labelled, S.ad_population([person("Finance")] * 7 + [person("Sales")] * 6), FIN, _history_scope(store))
+    with pytest.raises(ContractError, match="records.dataset"):
+        plan_for({"dataset": "Bad Label"})
+
+
+def test_history_unit_complexity_bounds_and_capacity():
+    """Only sets whose size is within k-1 are compared; identical sets are skipped; the stored-key bound refuses."""
+    plan = plan_for()
+    cfg = disclosure.Config(**{**plan.control.cfg.__dict__, "max_keys": 50})
+    plan.control.cfg = cfg
+    store = disclosure.HistoryStore(":memory:")
     sy = S.ad_population([person(d) for d in ("Finance", "Sales", "Support") for _ in range(6)])
-    plan.control.log = log
-    for i in range(5):                       # five conversations: only the two most recent are kept
-        run(plan, sy, {"filter": [{"field": "department", "op": "eq", "value": "Finance"}]}, ("t", "a", "p", f"c{i}"))
-    for d in ("Finance", "Sales", "Support", "Finance", "Sales"):   # one conversation, disjoint groups of 6
-        run(plan, sy, {"filter": [{"field": "department", "op": "eq", "value": d}]}, ("t", "a", "p", "c4"))
-    run(plan, sy, {"filter": [{"field": "department", "op": "in", "value": ["Finance", "Sales"]}]},
-        ("t", "a", "p", "c4"))
-    assert len(log) == 2
-    assert max(len(sc.specs) for sc in log._scopes.values()) == 3
-    for sc in log._scopes.values():
-        assert len(sc.specs) <= 3
-        for spec in sc.specs:
-            for name, op, val, _order in spec:
-                assert name in plan.view and op in ("eq", "ne", "in", "gte", "lte")
-                assert isinstance(val, (str, bool, tuple))
+    rr = run(plan, sy, {"filter": [], "group_by": "department"}, _history_scope(store))
+    st = rr.report["disclosure"]
+    assert st["history_queries"] == 1 and st["queries_compared"] == 0
+    rr = run(plan, sy, FIN, _history_scope(store))
+    # FIN's matched set equals the stored Finance group (identical: skipped without loading) and is compared with
+    # the two other 6-record groups; its complement (12) has nothing stored in its window 8..16 (the 18-record
+    # export is outside it), so 2 comparisons in all
+    assert rr.report["disclosure"]["queries_compared"] == 2
+    with pytest.raises(disclosure.DisclosureRefused) as e:   # 18 + 3 x 6 + 12 stored; 12 more would exceed 50
+        run(plan, sy, {"filter": [{"field": "department", "op": "in", "value": ["Finance", "Sales"]}]},
+            _history_scope(store))
+    assert e.value.code == "history_full"
+
+
+def test_rounding_is_deterministic_and_consistent():
+    assert [disclosure.rounded(n, 5) for n in (0, 1, 5, 7, 8, 12, 13, 15, 17, 18)] == [
+        "0", "about 5", "about 5", "about 5", "about 10", "about 10", "about 15", "about 15", "about 15", "about 20"]
+    assert disclosure.rounded(4, 10) == "about 10" and disclosure.rounded(14, 10) == "about 10"
+    assert disclosure.load_config(DC).rounding == 0                       # shipped: off (docs: why)
+    plan = plan_for()
+    plan.control.rounding = 5
+    sy = S.ad_population([person("Finance")] * 12 + [person("Sales")] * 12 + [person("Support")] * 7)
+    texts = [leaving(run(plan, sy, {"filter": [], "group_by": "department"})) for _ in range(2)]
+    assert texts[0] == texts[1]
+    p = parse_roster(texts[0])
+    assert p["total"] == "about 30" and p["matched"] == "about 30"
+    assert p["groups"] == {"Finance": "about 10", "Sales": "about 10", "Support": "about 5"}
+    rr = run(plan, sy, {"filter": [{"field": "department", "op": "eq", "value": "Sales"}]})
+    assert "Matching: about 10" in leaving(rr) and rr.report["disclosure"]["counts_rounded"] >= 2
+    # markers are never rounded away: a small cell still reads "fewer than k"
+    small = S.ad_population([person("Finance")] * 12 + [person("Legal")] * 2)
+    assert "Matching: fewer than 5" in leaving(run(plan, small, {"filter": [{"field": "department", "op": "eq",
+                                                                               "value": "Legal"}]}))
+
+
+def test_unsafe_history_configs_are_refused(tmp_path):
+    for text, msg in (("max_queries_per_scope: 0", "integer between 1"), ("ttl_s: 60", "unknown keys")):
+        raw = DC.read_text().replace("max_queries_per_scope: 1000", text)
+        p = tmp_path / "disclosure_control.yaml"
+        p.write_text(raw)
+        with pytest.raises(SchemaError, match=msg):
+            disclosure.load_config(p)
 
 
 # =============================================================================================================

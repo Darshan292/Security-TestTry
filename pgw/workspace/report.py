@@ -226,8 +226,12 @@ ERRORS: dict[str, tuple[str, str, bool | None]] = {
                                   "“People in this request” and run it again.", False),
     "declared_subjects_not_supported": ("Stopped", "This task does not take a list of people.", False),
     "disclosure_control_refused": ("Stopped: would single people out",
-                                   "This question differs from an earlier one in this conversation by only a few "
-                                   "people; answering both would reveal those people. Nothing was sent.", False),
+                                   "A number in this answer would differ from one already given for this data (in "
+                                   "any conversation, on any day) by only a few people; answering would reveal them. "
+                                   "Or the gateway's record of earlier questions on this data is full and needs an "
+                                   "administrator. Nothing was sent.", False),
+    "disclosure_store_unavailable": ("Gateway unavailable", "A gateway safety store is unavailable, so it sent "
+                                     "nothing. Try again shortly.", False),
     "input_not_source_sanitized": ("Stopped: source not verified",
                                    "This task only accepts input signed by an approved source system.", False),
     "invalid_contract_payload": ("Stopped: form not accepted",

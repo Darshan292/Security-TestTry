@@ -210,18 +210,22 @@ aliased identities found in the prompt (`field: "prompt"`, `source: "declared"`)
   "outputs": [ {"name": "exceptions", "kind": "list", "egress": "RAW"},
                {"name": "total_gross", "kind": "amount", "egress": "INTERNAL"}, … ],
   "left": {"outputs": ["rows_checked", …], "aliased_identities": 74, "listed_rows": 37, "not_listed": 0},
-  "disclosure": {"enforced": true, "config": "disclosure_control@1", "min_group_size": 5, "listing": "coarsen",
-                 "differencing": true, "quasi_identifiers": ["department", "pin_district", …],
+  "disclosure": {"enforced": true, "config": "disclosure_control@2", "min_group_size": 5, "listing": "coarsen",
+                 "differencing": true, "rounding_base": null, "quasi_identifiers": ["department", "pin_district", …],
                  "cells_suppressed": 2, "cells_suppressed_complementary": 1, "totals_suppressed": 0,
                  "groups_merged": 0, "groups_suppressed": 0, "rows_coarsened": 37, "rows_attributes_withheld": 0,
-                 "lists_withheld": 0, "queries_refused": 0, "queries_compared": 3}
+                 "lists_withheld": 0, "queries_refused": 0, "queries_compared": 3, "history_queries": 12,
+                 "counts_rounded": 0}
 }
 ```
 
 `disclosure` is an addition: small-group control, described in [HRMS_CONTRACTS.md](HRMS_CONTRACTS.md) "Small
-groups". It holds counts and schema field names only, never a value. When the differencing check refuses a query,
-the response is 422 `disclosure_control_refused` and nothing is sent. The `pgw_report` inside the error carries the
-same section with `queries_refused: 1`.
+groups". It holds counts and schema field names only, never a value. `history_queries` is the number of answered
+queries in the differencing history of this tenant, app, purpose and dataset (including this one); `queries_compared`
+is how many stored record sets this query was compared with. When the differencing check refuses a query, the
+response is 422 `disclosure_control_refused` with `reason` `differencing` (or `history_full` /
+`history_scopes_full` when the history has no room) and nothing is sent. The `pgw_report` inside the error carries
+the same section with `queries_refused: 1`. A history store failure is 503 `disclosure_store_unavailable`.
 
 ## Size
 
