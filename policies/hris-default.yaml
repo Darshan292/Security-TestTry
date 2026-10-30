@@ -1,7 +1,7 @@
 # Policy pack: per-entity actions by purpose (ADR-0006).
 # Slice note: pack signing is not implemented yet; packs are loaded from the repo.
 pack: hris-default
-version: 3
+version: 4
 
 defaults:
   AADHAAR: BLOCK_REQUEST
@@ -12,6 +12,7 @@ defaults:
   SECRET: BLOCK_REQUEST
   IFSC: ALLOW              # identifies a bank branch, not a person
   PERSON: TOKENIZE
+  ADDRESS: TOKENIZE        # home/postal address: aliased and restored like a name (class C1)
   EMAIL: TOKENIZE
   PHONE: TOKENIZE
   EMPLOYEE_ID: TOKENIZE

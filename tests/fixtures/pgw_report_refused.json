@@ -30,7 +30,7 @@
           "version": 1,
           "request_id": "req_1569ea4947f340a6afbdffa7",
           "purpose": "ticket_summary",
-          "contract": "ticket_summary@8",
+          "contract": "ticket_summary@9",
           "route": "EXT_PSEUDO",
           "outcome": "refused",
           "input_source": {

@@ -32,7 +32,7 @@ Tests: `tests/test_transparency_report.py`.
   "version": 1,
   "request_id": "req_…",                       // equals the X-PGW-Request-Id header
   "purpose": "ticket_summary" | null,          // null if the purpose header was missing or not permitted
-  "contract": "ticket_summary@8" | null,       // null before the contract was resolved, or on the dev legacy path
+  "contract": "ticket_summary@9" | null,       // null before the contract was resolved, or on the dev legacy path
   "route": "EXT_PSEUDO" | "LOCAL_COMPUTE" | "RECORDS" | "PRIVATE_LOCAL" | null,
   "outcome": "sent" | "kept_inside" | "refused" | "error",
   "input_source": {"id": "helpdesk-ticket-export@1" | null, "verified": true | false},
@@ -118,7 +118,7 @@ On LOCAL_COMPUTE, entries name fields of the JSON payload instead of offsets. Th
 
 | Key | Values |
 |---|---|
-| `type` | `PERSON`, `EMAIL`, `PHONE`, `EMPLOYEE_ID`, `COMPENSATION`, `DATE_OF_BIRTH`, `AADHAAR`, `PAN`, `BANK_ACCOUNT`, `IFSC`, `CARD`, `UPI_ID`, `SECRET`, `IDENTIFIER`, `AADHAAR_LIKE`, `DERIVED` |
+| `type` | `PERSON`, `ADDRESS`, `EMAIL`, `PHONE`, `EMPLOYEE_ID`, `COMPENSATION`, `DATE_OF_BIRTH`, `AADHAAR`, `PAN`, `BANK_ACCOUNT`, `IFSC`, `CARD`, `UPI_ID`, `SECRET`, `IDENTIFIER`, `AADHAAR_LIKE`, `DERIVED` |
 | `class` | `C0`, `C1`, `C2`, `C3`, `REF`, `D` |
 | `action` | `alias` (scoped placeholder, restorable), `remove` (type marker, never restored), `generalize` (coarsened value), `withhold` (LOCAL_COMPUTE: never leaves in any form), `allow` (detected but crosses unchanged: a C0 type such as IFSC, or a RAW output) |
 | `source` | `declared` (a declared subject or contract field covered the span), `detected` (a detector, the roster, this conversation's memory, or a union-mode plugin, docs/PLUGINS.md), `computed` (a LOCAL_COMPUTE output). Shadow-mode plugins never appear in the report: their disagreement counts are operator metrics |
@@ -240,7 +240,7 @@ rejected."}]`, with the requester declared as Imran Ansari.
 ```json
 "pgw_report": {
   "version": 1, "request_id": "req_79ead8d163e44160b12be8a8", "purpose": "ticket_summary",
-  "contract": "ticket_summary@8", "route": "EXT_PSEUDO", "outcome": "sent",
+  "contract": "ticket_summary@9", "route": "EXT_PSEUDO", "outcome": "sent",
   "input_source": {"id": "helpdesk-ticket-export@1", "verified": true},
   "stages": [
     {"id": "received", "status": "done", "ms": 1.887}, {"id": "verify_source", "status": "done", "ms": 1.63},

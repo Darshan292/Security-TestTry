@@ -1,12 +1,12 @@
 # Data contract: explain an employee's ESI coverage (LOCAL_COMPUTE). The wage stays inside the gateway; the
 # coverage decision is computed locally and, by explicit decision below, crosses next to an aliased identity.
 contract: esi_letter
-version: 5
+version: 6
 task_type: esi_coverage_explanation
 route: LOCAL_COMPUTE
 compute: esi_eligibility
 data_classes:
-  C1: ALIAS
+  C1: ALIAS  # names, ids, emails, phones and postal ADDRESSES (aliased/restored per this class)
   C2: GENERALIZE
   C3: REDACT
   C4: REFUSE

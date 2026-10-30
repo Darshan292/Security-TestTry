@@ -1,11 +1,11 @@
 # Data contract: draft an email from HR to an employee (PATH A, EXT_PSEUDO).
 # Owner: HR helpdesk app team. The draft is restored for a human to review and send; it is never auto-sent.
 contract: hr_email_draft
-version: 9
+version: 10
 task_type: hr_email_draft
 route: EXT_PSEUDO
 data_classes:
-  C1: ALIAS
+  C1: ALIAS  # names, ids, emails, phones and postal ADDRESSES (aliased/restored per this class)
   C2: ALIAS        # salary, DOB -> scoped aliases; the model never sees the value, the reply gets it back
   C3: REDACT
   REF: ALIAS       # identifier-shaped references of no recognised scheme (tickets, documents) -> aliases

@@ -43,7 +43,7 @@
         "version": 1,
         "request_id": "req_da9e80c0a2ac40a282ed6e85",
         "purpose": "salary_comparison",
-        "contract": "salary_comparison@6",
+        "contract": "salary_comparison@7",
         "route": "LOCAL_COMPUTE",
         "outcome": "sent",
         "input_source": {

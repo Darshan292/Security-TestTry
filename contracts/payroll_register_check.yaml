@@ -3,11 +3,11 @@
 # and aliased employee identities leave. No amount leaves: totals are INTERNAL unless a reviewed change marks one
 # TRANSFORMED with sealed band edges.
 contract: payroll_register_check
-version: 1
+version: 2
 task_type: payroll_register_check
 route: RECORDS
 data_classes:
-  C1: ALIAS
+  C1: ALIAS  # names, ids, emails, phones and postal ADDRESSES (aliased/restored per this class)
   C2: REDACT
   C3: REDACT
   C4: REFUSE

@@ -40,11 +40,11 @@ MAX_TEXT = 200_000
 _PLACEHOLDER = re.compile(r"\[[A-Z][A-Z0-9_]{1,40}\]")
 
 # Colour family of each entity type (CSS classes in static/app.css). Unknown types fall back to "other".
-CATEGORY = {"PERSON": "person", "EMPLOYEE_ID": "id", "PAN": "id", "AADHAAR": "id", "AADHAAR_LIKE": "id",
+CATEGORY = {"PERSON": "person", "ADDRESS": "person", "EMPLOYEE_ID": "id", "PAN": "id", "AADHAAR": "id", "AADHAAR_LIKE": "id",
             "BANK_ACCOUNT": "id", "IFSC": "id", "CARD": "id", "UPI_ID": "id", "IDENTIFIER": "id", "SECRET": "id",
             "COMPENSATION": "money", "DERIVED": "money", "DATE_OF_BIRTH": "date", "EMAIL": "contact",
             "PHONE": "contact"}
-TYPE_LABEL = {"PERSON": "Name", "EMPLOYEE_ID": "Employee ID", "PAN": "PAN", "AADHAAR": "Aadhaar",
+TYPE_LABEL = {"PERSON": "Name", "ADDRESS": "Address", "EMPLOYEE_ID": "Employee ID", "PAN": "PAN", "AADHAAR": "Aadhaar",
               "AADHAAR_LIKE": "Aadhaar-like number", "BANK_ACCOUNT": "Bank account", "IFSC": "IFSC code",
               "CARD": "Card number", "UPI_ID": "UPI ID", "IDENTIFIER": "Reference", "SECRET": "Secret",
               "COMPENSATION": "Pay", "DERIVED": "Computed value", "DATE_OF_BIRTH": "Date of birth", "EMAIL": "Email",

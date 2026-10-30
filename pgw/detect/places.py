@@ -1,7 +1,7 @@
 """Postal addresses (house/flat number with street and locality words) and Indian PIN codes in an address context.
 
-Type: IDENTIFIER (pgw.types has no address type; an address identifies a person's residence and is withheld like
-the shape backstop's identifiers: REDACTed on the shipped contracts, never restored). Score 0.8: above the shape
+Type: ADDRESS (class C1: an address identifies where a person lives, so it is aliased and restored like a name; one
+alias per detected span, however many lines the original had). Score 0.8: above the shape
 backstop (0.4) and statistical NER (which tags building and locality names as PERSON and would otherwise split the
 address), below the scheme recognizers.
 
@@ -16,6 +16,12 @@ What is detected
   comma-separated address line.
 City and state names are general geographic knowledge (the states and union territories, and large cities with
 their common older spellings); the street vocabulary is the ordinary vocabulary of Indian addresses.
+
+Multi-line: after a street part that ends its line, up to three following lines join it while each is itself a run of
+address segments (a street or locality word, no prose); spans that touch or are separated only by commas, dashes and
+line breaks merge into one ADDRESS. The city or state name before a PIN stays outside the span (a city is not what
+identifies a residence); the PIN is its own span. Nothing else is inferred: a locality line with no house marker, street word or PIN is not recognised here; the ML detector's address label (profile
+`labels`) covers free-form addresses.
 
 Linear: one pass of bounded regexes; each candidate looks at most one line (capped at 300 characters) around it.
 """
@@ -138,6 +144,38 @@ def _street_end(text: str, start: int, num_end: int, le: int) -> int | None:
     return end
 
 
+_LINE_BREAK = re.compile(r"[ \t]*,?[ \t]*\r?\n[ \t]*")
+
+
+def _next_lines(text: str, end: int) -> int:
+    """An address written over several lines: while the street part ends its line, the next line (at most three more)
+    joins it if it is itself a run of address segments (a street or locality word, no prose)."""
+    for _ in range(3):
+        m = _LINE_BREAK.match(text, end)
+        if not m:
+            break
+        _, le = _line(text, m.end())
+        e = _street_end(text, m.end(), m.end(), le)
+        if e is None or e <= m.end():
+            break
+        end = e
+    return end
+
+
+_JOIN = re.compile(r"[ \t,\-–\r\n]*")
+
+
+def _merge(text: str, spans: list) -> list:
+    """Sorted spans; overlapping ones, and ones separated only by commas, dashes and line breaks, become one."""
+    out: list = []
+    for s, e, t, sc, src in sorted(spans):
+        if out and s - out[-1][1] <= 12 and (s <= out[-1][1] or _JOIN.fullmatch(text[out[-1][1]:s])):
+            out[-1] = (out[-1][0], max(e, out[-1][1]), t, sc, src)
+        else:
+            out.append((s, e, t, sc, src))
+    return out
+
+
 def addresses(text: str) -> list[tuple[int, int, T, float, str]]:
     out: list[tuple[int, int, T, float, str]] = []
     if len(text) > 200_000 or not re.search(r"\d", text):
@@ -147,7 +185,7 @@ def addresses(text: str) -> list[tuple[int, int, T, float, str]]:
         ls, le = _line(text, m.start())
         e = _street_end(text, m.start(), m.end("n"), le)
         if e is not None:
-            out.append((m.start(), e, T.IDENTIFIER, SCORE, SOURCE))
+            out.append((m.start(), _next_lines(text, e), T.ADDRESS, SCORE, SOURCE))
             starts.add(m.start())
     for m in _ADDR_CUE.finditer(text):
         b = _BARE_HOUSE.match(text, m.end())
@@ -156,7 +194,7 @@ def addresses(text: str) -> list[tuple[int, int, T, float, str]]:
         ls, le = _line(text, b.start())
         e = _street_end(text, b.start(), b.end("n"), le)
         if e is not None:
-            out.append((b.start(), e, T.IDENTIFIER, SCORE, SOURCE))
+            out.append((b.start(), _next_lines(text, e), T.ADDRESS, SCORE, SOURCE))
     for m in _PIN.finditer(text):
         a = m.start()
         before = text[max(0, a - 60):a]
@@ -169,5 +207,5 @@ def addresses(text: str) -> list[tuple[int, int, T, float, str]]:
             ok = line.count(",") >= 2 and bool(re.search(r",[ \t]*[A-Z][\w .\-]*[ \t,\-–]*$", line)) and \
                 bool(_LOCALITY_RE.search(line) or _ends_with_place(line))
         if ok:
-            out.append((m.start(), m.end(), T.IDENTIFIER, SCORE, SOURCE))
-    return out
+            out.append((m.start(), m.end(), T.ADDRESS, SCORE, SOURCE))
+    return _merge(text, out)

@@ -1,12 +1,15 @@
 """Label sets for the ML detectors (pure Python, no dependency on the gateway package).
 
-ENTITY_TYPES must equal the gateway's `pgw.types.EntityType` members minus the two excluded below.
+ENTITY_TYPES must equal the gateway's `pgw.types.EntityType` members minus the three excluded below.
 tests/ml_train/test_labels.py derives the expected set from the enum, so this list cannot drift silently.
 
 Excluded on purpose:
   AADHAAR_LIKE  is not a *kind* of value; it is the gateway's cue-less backstop verdict for a 12-digit number that
                 happens to pass the Aadhaar checksum. The model labels such numbers AADHAAR (the value is an Aadhaar
                 number or indistinguishable from one); the backstop stays in the deterministic layer.
+  ADDRESS       is detected by the gateway's address structure rules (pgw.detect.places) and by an ML detector's address
+                label (e.g. openai/privacy-filter's private_address, mapped in the ml_detector profile `labels`). The
+                models trained here have no address class yet; adding one means new synthetic data and a new label set.
   DERIVED       is a value computed inside the gateway (LOCAL_COMPUTE outputs). It never appears in input text, so
                 no detector can or should be trained to find it.
 """
@@ -16,7 +19,7 @@ ENTITY_TYPES: tuple[str, ...] = (
     "PERSON", "EMAIL", "PHONE", "EMPLOYEE_ID", "COMPENSATION", "DATE_OF_BIRTH", "AADHAAR", "PAN",
     "BANK_ACCOUNT", "CARD", "UPI_ID", "SECRET", "IFSC", "IDENTIFIER",
 )
-EXCLUDED_GATEWAY_TYPES: tuple[str, ...] = ("AADHAAR_LIKE", "DERIVED")
+EXCLUDED_GATEWAY_TYPES: tuple[str, ...] = ("AADHAAR_LIKE", "ADDRESS", "DERIVED")
 
 # Types whose surface form may legitimately contain a line break (a multi-line private key). Every other type is a
 # single-line value; a span of one of them that crosses a newline is a labelling bug (e.g. a PERSON swallowing the

@@ -121,7 +121,9 @@ production CPU class before setting `timeout_s` and `workers`.
 4. **Pin**: `python -m pgw.ml.artifact <dir>` prints the manifest sha256 and the labels. Put `path`, `sha256`, the
    label map and per-type thresholds in `ml_detector` (or `content_gate_model`) in `registry/deployment.yaml`; bump
    `version` and `config_serial`; review; re-seal and sign. The model directory itself is copied to the hosts out of
-   band (read-only); the signed pin is what makes it trusted.
+   band (read-only); the signed pin is what makes it trusted. A model's address label (e.g. `private_address`) maps
+   to the gateway type `ADDRESS` (class C1: aliased and restored like a name); `IGNORE` leaves addresses to the
+   rule-based detector (`pgw/detect/places.py`: house marker + street words, PIN codes) alone.
 5. **Evaluate**: dev set for selection and thresholds; then the release gate (external tester's sets + the
    human-labelled real sample), once, with thresholds set beforehand ([ML_EVALUATION.md](ML_EVALUATION.md)).
 6. **Release** only on a PASS verdict; keep the previous artefact and profile for rollback (a rollback is a new

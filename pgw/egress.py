@@ -20,6 +20,8 @@ from .types import EgressViolation, EntityType
 # bracketed form is blanked; lenient or partial alias-like text is still swept.
 _EMITTED_ALIAS = re.compile(rf"\[(?:{_TYPE_NAMES})_[0-9][{_CK}]{{5}}(?:[{_CK}]{{2}})?\]")
 MIN_NEEDLE = 4  # shorter needles would fire on ordinary text; such values are rare and covered by D5 tests
+_SPACES = re.compile(r"\s+")
+_ESCAPED_SPACES = re.compile(r"(?:\s|\\[nrt])+")     # whitespace, also as a JSON escape sequence in the body
 _NUMERIC = (EntityType.AADHAAR, EntityType.CARD, EntityType.BANK_ACCOUNT, EntityType.PHONE)
 
 
@@ -27,6 +29,8 @@ def _needles(t: EntityType, value: str) -> set[str]:
     forms = {value, json.dumps(value)[1:-1], json.dumps(value, ensure_ascii=False)[1:-1]}
     if t in _NUMERIC:
         forms.add(canon(t, value))
+    if t is EntityType.ADDRESS:
+        forms.add(_SPACES.sub(" ", value).strip())      # a multi-line address re-wrapped on one line (see check)
     return {f.casefold() for f in forms if len(f) >= MIN_NEEDLE}
 
 
@@ -85,6 +89,11 @@ def check(body: bytes, sensitive: list[tuple[EntityType, str]], own_text: tuple[
     text = body.decode("utf-8", errors="replace")
     hay = _EMITTED_ALIAS.sub(lambda m: " " * len(m.group(0)), text).casefold()
     hits = []
+    if any(t is EntityType.ADDRESS for t, _v in sensitive):
+        # an address is also swept in the whitespace-normalised outbound text, so line breaks, tabs and runs of spaces
+        # inside it cannot hide it (the needles above include its single-line form)
+        flat = _ESCAPED_SPACES.sub(" ", hay)
+        hits += [t for _e, (t, _n) in auto.iter(flat) if t == EntityType.ADDRESS.value]
     for end, (t, n) in auto.iter(hay):
         if bounded[n]:
             start = end - len(n) + 1
