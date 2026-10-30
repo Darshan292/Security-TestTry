@@ -40,7 +40,7 @@ class DataClass(str, Enum):
 
 
 CLASS_OF: dict[T, DataClass] = {
-    T.PERSON: DataClass.C1, T.EMAIL: DataClass.C1, T.PHONE: DataClass.C1, T.EMPLOYEE_ID: DataClass.C1,
+    T.PERSON: DataClass.C1, T.ADDRESS: DataClass.C1, T.EMAIL: DataClass.C1, T.PHONE: DataClass.C1, T.EMPLOYEE_ID: DataClass.C1,
     T.COMPENSATION: DataClass.C2, T.DATE_OF_BIRTH: DataClass.C2,
     T.AADHAAR: DataClass.C3, T.PAN: DataClass.C3, T.BANK_ACCOUNT: DataClass.C3, T.CARD: DataClass.C3,
     T.UPI_ID: DataClass.C3, T.SECRET: DataClass.C3,
@@ -158,6 +158,8 @@ class Contract:
     def actions(self) -> dict[T, Action]:
         """Per-entity-type actions for the detection pipeline. DERIVED values are only ever aliased."""
         acts = {t: _ACTION[self.classes[c]] for t, c in CLASS_OF.items() if c in self.classes}
+        for t in (x for x in T if x not in CLASS_OF):   # a type without a data class is never sent: fail closed, not ALLOW
+            acts.setdefault(t, Action.REDACT)
         acts[T.DERIVED] = Action.TOKENIZE
         exact = tuple(re.compile(re.escape(x)) for x in self.org_identifiers)
         return PurposeRules(acts, self.business_identifiers + exact)

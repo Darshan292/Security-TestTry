@@ -1,12 +1,12 @@
 # Data contract: explain where an employee sits in their pay band (LOCAL_COMPUTE). The exact CTC stays inside
 # the gateway; only a coarse position (which third of the band) crosses, next to an aliased identity.
 contract: band_position
-version: 5
+version: 6
 task_type: pay_band_position_explanation
 route: LOCAL_COMPUTE
 compute: band_position
 data_classes:
-  C1: ALIAS
+  C1: ALIAS  # names, ids, emails, phones and postal ADDRESSES (aliased/restored per this class)
   C2: GENERALIZE
   C3: REDACT
   C4: REFUSE

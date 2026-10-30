@@ -2,11 +2,11 @@
 # SuccessFactors export (route RECORDS, docs/HRMS_CONTRACTS.md). Filters and groupings only on KEEP and GENERALIZE
 # fields, with values from their sealed enumerations or generalised formats; people are listed only as aliases.
 contract: roster_question
-version: 2
+version: 3
 task_type: roster_question
 route: RECORDS
 data_classes:
-  C1: ALIAS
+  C1: ALIAS  # names, ids, emails, phones and postal ADDRESSES (aliased/restored per this class)
   C2: REDACT
   C3: REDACT
   C4: REFUSE

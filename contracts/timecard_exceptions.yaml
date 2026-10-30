@@ -1,11 +1,11 @@
 # Data contract: timecard exceptions from a UKG/Kronos timecard export (route RECORDS, docs/HRMS_CONTRACTS.md).
 # Absences are counted as "absence" only: the pay code / absence reason is NEVER and is dropped at parse time.
 contract: timecard_exceptions
-version: 1
+version: 2
 task_type: timecard_exceptions
 route: RECORDS
 data_classes:
-  C1: ALIAS
+  C1: ALIAS  # names, ids, emails, phones and postal ADDRESSES (aliased/restored per this class)
   C2: REDACT
   C3: REDACT
   C4: REFUSE

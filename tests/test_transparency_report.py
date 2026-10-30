@@ -162,7 +162,7 @@ def test_non_stream_report_shape_and_outbound_is_exactly_what_went_upstream(tmp_
     assert list(body)[-1] == "pgw_report" and list(rep) == TOP_KEYS
     assert rep["version"] == 1 and rep["request_id"] == r.headers["X-PGW-Request-Id"]
     assert (rep["purpose"], rep["contract"], rep["route"], rep["outcome"]) == \
-        ("ticket_summary", "ticket_summary@8", "EXT_PSEUDO", "sent")
+        ("ticket_summary", "ticket_summary@9", "EXT_PSEUDO", "sent")
     assert rep["input_source"] == {"id": "helpdesk-ticket-export@1", "verified": True}
     assert [s["id"] for s in rep["stages"]] == STAGE_IDS
     assert {s["id"]: s["status"] for s in rep["stages"]}["compute"] == "skipped"
@@ -337,7 +337,7 @@ def test_local_compute_reports_fields_not_offsets(tmp_path):
     r = post(client, "salary_comparison", user(json.dumps(payload)))
     assert r.status_code == 200, r.text
     rep = r.json()["pgw_report"]
-    assert rep["route"] == "LOCAL_COMPUTE" and rep["contract"] == "salary_comparison@6"
+    assert rep["route"] == "LOCAL_COMPUTE" and rep["contract"] == "salary_comparison@7"
     assert {s["id"]: s["status"] for s in rep["stages"]}["compute"] == "done"
     assert all("start" not in d and "end" not in d and d["field"] for d in rep["detected"])
     by = {d["field"]: d for d in rep["detected"]}
@@ -554,7 +554,7 @@ def test_multi_turn_report_holds_no_value_from_earlier_turns_or_other_conversati
         allowed = ({d["placeholder"] for d in rep["detected"]} | set(STAGE_IDS) | set(CHECK_IDS) | set(LABELS)
                    | {t.value for t in EntityType} | {c.value for c in DataClass} | set(ACTION.values())
                    | {"declared", "detected", "done", "skipped", "failed", "pass", "fail", "n/a", "sent",
-                      "EXT_PSEUDO", "ticket_summary", "ticket_summary@8", "helpdesk-ticket-export@1",
+                      "EXT_PSEUDO", "ticket_summary", "ticket_summary@9", "helpdesk-ticket-export@1",
                       rep["request_id"]})
         for s in strings({k: v for k, v in rep.items() if k != "outbound"}):
             assert s in allowed, s

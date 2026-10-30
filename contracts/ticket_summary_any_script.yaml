@@ -2,11 +2,11 @@
 # Owner: HR helpdesk app team. Language work over business content; identities are aliased and restored;
 # government/financial identifiers are not needed for a summary, so they are removed, not blocked.
 contract: ticket_summary_any_script
-version: 6
+version: 7
 task_type: hr_ticket_summary
 route: EXT_PSEUDO
 data_classes:
-  C1: ALIAS        # names, employee IDs, emails, phones -> scoped aliases
+  C1: ALIAS        # names, employee IDs, emails, phones -> scoped aliases; postal addresses (ADDRESS)
   C2: ALIAS        # salary, DOB -> scoped aliases; the model never sees the value, the reply gets it back
   C3: REDACT       # PAN, Aadhaar, bank account, card, UPI, secrets -> removed
   REF: ALIAS       # identifier-shaped references of no recognised scheme (tickets, documents) -> aliases

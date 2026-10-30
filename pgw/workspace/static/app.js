@@ -17,10 +17,10 @@
   const TASK_ICON = { ticket_summary: "i-doc", hr_case_explanation: "i-case", hr_email_draft: "i-mail",
                       salary_comparison: "i-scale", esi_letter: "i-heart", band_position: "i-band" };
   const NODE_OF = { received: 0, verify_source: 1, content_gate: 1, structure_check: 1, compute: 1, protect: 1, egress_check: 2, provider: 3, restore: 4 };
-  const CATEGORY = { PERSON: "person", EMPLOYEE_ID: "id", PAN: "id", AADHAAR: "id", AADHAAR_LIKE: "id",
+  const CATEGORY = { PERSON: "person", ADDRESS: "person", EMPLOYEE_ID: "id", PAN: "id", AADHAAR: "id", AADHAAR_LIKE: "id",
                      BANK_ACCOUNT: "id", IFSC: "id", CARD: "id", UPI_ID: "id", IDENTIFIER: "id", SECRET: "id",
                      COMPENSATION: "money", DERIVED: "money", DATE_OF_BIRTH: "date", EMAIL: "contact", PHONE: "contact" };
-  const TYPE_LABEL = { PERSON: "Name", EMPLOYEE_ID: "Employee ID", PAN: "PAN", AADHAAR: "Aadhaar",
+  const TYPE_LABEL = { PERSON: "Name", ADDRESS: "Address", EMPLOYEE_ID: "Employee ID", PAN: "PAN", AADHAAR: "Aadhaar",
                        AADHAAR_LIKE: "Aadhaar-like number", BANK_ACCOUNT: "Bank account", IFSC: "IFSC code",
                        CARD: "Card number", UPI_ID: "UPI ID", IDENTIFIER: "Reference", SECRET: "Secret",
                        COMPENSATION: "Pay", DERIVED: "Computed value", DATE_OF_BIRTH: "Date of birth", EMAIL: "Email",

@@ -2,52 +2,52 @@
  "ed25519": null,
  "files": {
   "contracts/band_position.yaml": {
-   "sha256": "0ed927c1e461fe005cd853d026f4d40700c9d32bda8c05979820a9ce9118b866",
-   "version": 5
+   "sha256": "7be1ef601b73a43c00abbab7f22d7e35ded123544cb242289009d108ec4f0fdd",
+   "version": 6
   },
   "contracts/contractor_budget.yaml": {
-   "sha256": "58b87ee7e3e5c9007e8299e741dba8d4963ea4e84094d8c5d481da7c9a93b43e",
-   "version": 2
+   "sha256": "ffea7616c517e86fd27ff8bb45290751981793a13c1edab8c6db2d2fe9e3fed3",
+   "version": 3
   },
   "contracts/esi_letter.yaml": {
-   "sha256": "f3220f80849af44be00d4f10c147e163cb559c89377bd829361f43ff8f26824b",
-   "version": 5
+   "sha256": "d366a7406e4e030d2565a47aa4c747703515029aa3d02acc2adf395968c15284",
+   "version": 6
   },
   "contracts/hr_case_explanation.yaml": {
-   "sha256": "a2c9f7f80840eb5774c78363873719ea0bf79aae15c99837e663dc573ec15558",
-   "version": 8
-  },
-  "contracts/hr_email_draft.yaml": {
-   "sha256": "cac05d98b90e7590edf6346ffe91d80fbe888edd1f13acbd196dc496f2450f7c",
+   "sha256": "5096df36c5f0f60506c4d6086f94bd6421d1f2f079564853fdd1719773cc484f",
    "version": 9
   },
-  "contracts/payroll_register_check.yaml": {
-   "sha256": "b24b3067e1b4ba31f7a0344f915cc123d3f6255d55dcee572129128fd5742fc0",
-   "version": 1
+  "contracts/hr_email_draft.yaml": {
+   "sha256": "7027839be34f7fcb7ab4ec4f987bba06066c231c2f861ad3e552a7794ae4a544",
+   "version": 10
   },
-  "contracts/roster_question.yaml": {
-   "sha256": "0d162d0d9d5dda037416cf14ad73bfe92f69bba592b255ffbf426267fb5151d5",
+  "contracts/payroll_register_check.yaml": {
+   "sha256": "df7daeba27b3fec7d1a58a9ef4557ccc1c4a76f62b8a58412fbd0c2f883f9083",
    "version": 2
   },
+  "contracts/roster_question.yaml": {
+   "sha256": "f97fae344c3de087823cb309197d652fee16bfa9fda193eaf7cab176a1b7c6d3",
+   "version": 3
+  },
   "contracts/salary_comparison.yaml": {
-   "sha256": "1580cfd74f235a071064b8cbcd1a4b84e7a1898ccbf4dfbb27e4aac23e4601d2",
-   "version": 6
+   "sha256": "5727cd368fb929d7678823fda91f16940689f76ee2892490bee8cb2c1120fd03",
+   "version": 7
   },
   "contracts/ticket_summary.yaml": {
-   "sha256": "aff6e081fb8b570fe84b9fee5a765842a470c56f75647b81d99258c1a24e84b2",
-   "version": 8
+   "sha256": "7052e450e4fc5979f00737b467e0e1bfdd82c198524c7297b4aa1654dd1e49b4",
+   "version": 9
   },
   "contracts/ticket_summary_any_script.yaml": {
-   "sha256": "c8a29acf250b4f46071b13a98f1f36d8da83a4fdbf6d52294775cf27164544cf",
-   "version": 6
+   "sha256": "1363afbf19b1583071b620ce1925afde14f858ecf72bdc1e5b1cb0e0a29e2db0",
+   "version": 7
   },
   "contracts/timecard_exceptions.yaml": {
-   "sha256": "fe80517d1d8e3b279b4319ff8b4509d4131b5382682708107edb474588ce98b1",
-   "version": 1
+   "sha256": "80523a4b765f64348ff7e14a9f849183248ddc98afa268d83371216ca7b96149",
+   "version": 2
   },
   "policies/hris-default.yaml": {
-   "sha256": "3e0e317566635d7eb387eba49ac336ab54813f0020b466f789ec990d81d7ebae",
-   "version": 3
+   "sha256": "d40534e48995f8dec4e2ea98ec115d1b4e9d530b37677fc34898a88fc82a8769",
+   "version": 4
   },
   "registry/apps.yaml": {
    "sha256": "1b184a532b9dfad344ae61c536340db167b9aebd4a0fde55d4a2d44e3901963c",

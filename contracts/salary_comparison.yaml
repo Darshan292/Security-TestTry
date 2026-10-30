@@ -2,12 +2,12 @@
 # Exact CTC values arrive as structured C2 fields, are used only inside the gateway, and never leave it.
 # Every computed output has an explicit egress rule; anything unlisted is INTERNAL.
 contract: salary_comparison
-version: 6
+version: 7
 task_type: salary_comparison
 route: LOCAL_COMPUTE
 compute: salary_difference
 data_classes:
-  C1: ALIAS
+  C1: ALIAS  # names, ids, emails, phones and postal ADDRESSES (aliased/restored per this class)
   C2: GENERALIZE   # applies to free text (the instruction); structured C2 inputs are withheld entirely
   C3: REDACT
   C4: REFUSE

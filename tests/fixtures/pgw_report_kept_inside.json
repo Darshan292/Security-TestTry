@@ -51,7 +51,7 @@
         "version": 1,
         "request_id": "req_a630f95104b14eb88c400095",
         "purpose": "ticket_summary",
-        "contract": "ticket_summary@8",
+        "contract": "ticket_summary@9",
         "route": "PRIVATE_LOCAL",
         "outcome": "kept_inside",
         "input_source": {

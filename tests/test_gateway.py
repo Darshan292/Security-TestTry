@@ -135,7 +135,7 @@ def test_non_stream_round_trip(env):
     L = lines[0]
     assert L["decision"] == "SENT" and L["tenant"] == "acme" and L["app"] == "hr-assistant"
     assert L["purpose"] == "email_draft" and L["body_sha256"] == hashlib.sha256(mock.received[0]).hexdigest()
-    assert L["entity_counts"]["PERSON:TOKENIZE"] >= 1 and L["policy"] == "hris-default@3"
+    assert L["entity_counts"]["PERSON:TOKENIZE"] >= 1 and L["policy"] == "hris-default@4"
     raw_ledger = egress.read_text()
     for v in RAW + ["Draft an email"]:
         assert v not in raw_ledger

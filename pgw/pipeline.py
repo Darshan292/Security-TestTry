@@ -429,10 +429,13 @@ def _extend_initials(text: str, dets: list[Detection], initials: dict[str, set[s
 def _occurrences(text: str, t: EntityType, surface: str) -> list[tuple[int, int]]:
     if len(surface) < 2:
         return []
-    flags = re.IGNORECASE if t in (EntityType.PERSON, EntityType.EMAIL, EntityType.UPI_ID) else 0
+    flags = re.IGNORECASE if t in (EntityType.PERSON, EntityType.EMAIL, EntityType.UPI_ID, EntityType.ADDRESS) else 0
     pre = r"(?<![\w@])" if surface[0].isalnum() else ""
     post = r"(?![\w@])" if surface[-1].isalnum() else ""
-    return [(m.start(), m.end()) for m in re.finditer(pre + re.escape(surface) + post, text, flags)]
+    body = re.escape(surface)
+    if t is EntityType.ADDRESS:       # the same address re-wrapped (line breaks, tabs, runs of spaces) is the same address
+        body = r"\s+".join(re.escape(w) for w in surface.split())
+    return [(m.start(), m.end()) for m in re.finditer(pre + body + post, text, flags)]
 
 
 _POSSESSIVE = re.compile(r"[^\W\d_]{2,}['’]s$")
