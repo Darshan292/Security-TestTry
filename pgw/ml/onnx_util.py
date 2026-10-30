@@ -61,9 +61,10 @@ def _has_external(buf, kind: str) -> bool:
 
 def reject_external_data(model_bytes: bytes) -> None:
     """Refuse a model whose tensors point at external data files: weights must be inline (repack with
-    scripts/ml/repack_onnx.py), so the manifest digest covers every weight byte. Defence in depth: onnxruntime 1.31.1
-    already refuses to resolve external data for a model built from bytes (pinned by tests/test_ml_ort_external.py),
-    but this check keeps the property independent of the ORT version."""
+    scripts/ml/repack_onnx.py), so the manifest digest covers every weight byte. This is NOT only defence in depth:
+    onnxruntime 1.31.1 resolves the external-data path of a model built from bytes against the process working directory
+    and loads the file if it exists there (measured; tests/test_ml_bioes.py::test_runtime_refuses_external_data_even_when_
+    the_file_is_in_the_cwd), a file the manifest digest does not cover."""
     try:
         found = _has_external(memoryview(model_bytes), "model")
     except (ValueError, IndexError):
