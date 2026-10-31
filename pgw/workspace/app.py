@@ -35,6 +35,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from .. import enduser
 from ..product import attest
 from . import report, tasks as T
 from .settings import WorkspaceSettings
@@ -181,16 +182,19 @@ def create_app(settings: WorkspaceSettings, *, transport: httpx.AsyncBaseTranspo
             raise _Reject(400, "invalid_json", "body must be a JSON object")
         return body
 
-    async def call_gateway(purpose: str, body: dict, extra_headers: dict) -> GatewayResult:
+    async def call_gateway(purpose: str, body: dict, extra_headers: dict, user: str | None = None) -> GatewayResult:
+        payload = json.dumps(body).encode()
         headers = {"Authorization": f"Bearer {s.gateway_key}", "X-PGW-Purpose": purpose,
                    "Content-Type": "application/json", **extra_headers}
+        if user:   # the SSO identity, as an opaque id the gateway rate-limits by (asserted by this app: pgw.enduser)
+            headers.update(enduser.sign(s.gateway_key, purpose, enduser.opaque_id(user), payload))
         t0 = time.perf_counter()
 
         def done(status, data=None, route=None, rid=None, failure=None, private=None) -> GatewayResult:
             return GatewayResult(status, data, route, rid, round((time.perf_counter() - t0) * 1000, 1), failure,
                                  private if private in ("model", "standin", "unverified") else None)
         try:
-            r = await client.post("/v1/chat/completions", content=json.dumps(body).encode(), headers=headers)
+            r = await client.post("/v1/chat/completions", content=payload, headers=headers)
         except httpx.TimeoutException:
             return done(0, failure="gateway_timeout")
         except httpx.HTTPError:
@@ -282,7 +286,7 @@ def create_app(settings: WorkspaceSettings, *, transport: httpx.AsyncBaseTranspo
             return _json_error(400, "invalid_input", e.message, field=e.path)
         except _Reject as r:
             return _json_error(r.status, r.etype, r.message, **r.extra)
-        res = await call_gateway(task.purpose, gw_body, headers)
+        res = await call_gateway(task.purpose, gw_body, headers, user)
         out = result_view(res, texts)
         _log(event="run", task=task.id, status=res.status, outcome=out["view"]["outcome"],
              error_type=(out["error"] or {}).get("type"), round_trip_ms=res.round_trip_ms,

@@ -232,6 +232,10 @@ ERRORS: dict[str, tuple[str, str, bool | None]] = {
                                    "administrator. Nothing was sent.", False),
     "disclosure_store_unavailable": ("Gateway unavailable", "A gateway safety store is unavailable, so it sent "
                                      "nothing. Try again shortly.", False),
+    "end_user_invalid": ("Gateway unavailable", "The workspace's identity assertion was not accepted by the gateway "
+                         "(check the clocks and the app key). Nothing was sent.", False),
+    "end_user_required": ("Gateway unavailable", "The gateway requires the workspace to identify the signed-in "
+                          "user. Nothing was sent.", False),
     "input_not_source_sanitized": ("Stopped: source not verified",
                                    "This task only accepts input signed by an approved source system.", False),
     "invalid_contract_payload": ("Stopped: form not accepted",

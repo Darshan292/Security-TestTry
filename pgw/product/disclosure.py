@@ -42,11 +42,13 @@ the suppression algorithm itself.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import json
 import logging
 import re
+import sys
 import threading
 import time
 import unicodedata
@@ -74,8 +76,21 @@ MAX_KEYS_CEILING = 50_000_000
 DEFAULT_MAX_CELLS = 100_000         # distinct revealed record sets per scope
 DEFAULT_MAX_ATOMS = 20_000          # atoms of the audit partition per scope (bounds the audit's cost)
 DEFAULT_QUERY_LOG = 10_000          # query-log rows kept per scope (metadata only; older rows are compacted)
-DEFAULT_PER_MINUTE = 20             # new (information-adding) queries per caller per minute (per process)
-DEFAULT_PER_DAY = 500               # new queries per caller per day (shared by every process)
+# Sealed rate limits (differencing.per_caller). All counters live in the history database (one atomic increment
+# inside the check-and-record transaction), so they are shared by every gateway process on the host. Fixed windows
+# (calendar minute / UTC day): a caller can use up to twice a minute limit around a boundary.
+DEFAULT_PER_MINUTE = 20             # NEW (information-adding) queries per APP per minute
+DEFAULT_PER_DAY = 500               # new queries per APP per day
+DEFAULT_USER_PER_MINUTE = 5         # per (app, end user): the fair share, well below the app and scope capacity
+DEFAULT_USER_PER_DAY = 100
+DEFAULT_SCOPE_PER_MINUTE = 40       # per scope (all apps and users of the tenant's dataset together)
+DEFAULT_SCOPE_PER_DAY = 1000
+DEFAULT_REFUSED_PER_MINUTE = 10     # REFUSED queries are metered too (probing is not free): per (app, end user)
+DEFAULT_REFUSED_PER_DAY = 100
+DEFAULT_REFUSED_APP_PER_MINUTE = 40 # ... and per app
+DEFAULT_REFUSED_APP_PER_DAY = 400
+STORE_TIMEOUT_S = 3.0               # bound on every wait for the database / a lock; then fail closed (HistoryUnavailable)
+ANONYMOUS = b"*"                    # an app that asserts no end user is ONE bucket (its per-app limits apply)
 DEFAULT_ROUNDING_BASE = 5
 _LABEL_BAD = re.compile(r"[\x00-\x1f\x7f]")
 log = logging.getLogger("pgw.disclosure")
@@ -85,10 +100,12 @@ class DisclosureRefused(ValueError):
     """A query refused by disclosure control. The message has no value; `code` is the reason (differencing,
     history_full, history_scopes_full); `report` is the records section of the transparency report."""
 
-    def __init__(self, message: str, report: dict | None = None, code: str = "differencing"):
+    def __init__(self, message: str, report: dict | None = None, code: str = "differencing",
+                 retry_after: int | None = None):
         super().__init__(message)
         self.report = report
         self.code = code
+        self.retry_after = retry_after       # seconds, for a rate-limit refusal (HTTP Retry-After)
 
 
 class _Withheld:
@@ -122,6 +139,14 @@ class Config:
     per_minute: int = DEFAULT_PER_MINUTE
     per_day: int = DEFAULT_PER_DAY
     audit_budget: int = setaudit.DEFAULT_BUDGET
+    user_per_minute: int = DEFAULT_USER_PER_MINUTE
+    user_per_day: int = DEFAULT_USER_PER_DAY
+    scope_per_minute: int = DEFAULT_SCOPE_PER_MINUTE
+    scope_per_day: int = DEFAULT_SCOPE_PER_DAY
+    refused_per_minute: int = DEFAULT_REFUSED_PER_MINUTE
+    refused_per_day: int = DEFAULT_REFUSED_PER_DAY
+    refused_app_per_minute: int = DEFAULT_REFUSED_APP_PER_MINUTE
+    refused_app_per_day: int = DEFAULT_REFUSED_APP_PER_DAY
     separate_apps: bool = False   # history scope per app (default: shared by every app of the tenant)
     separate_purposes: bool = False   # history scope per purpose (default: shared by every RECORDS purpose)
 
@@ -193,7 +218,10 @@ def load_config(path: str | Path, data: bytes | None = None) -> Config:
         raise SchemaError(f"{name}.differencing.scope: separating histories needs a written justification "
                           "(20+ characters): the provider sees every app and purpose of the tenant")
     pc = dif.get("per_caller") or {}
-    _keys(pc, {"new_queries_per_minute", "new_queries_per_day"}, f"{name}.differencing.per_caller")
+    _keys(pc, {"new_queries_per_minute", "new_queries_per_day", "new_queries_per_user_per_minute",
+               "new_queries_per_user_per_day", "new_queries_per_scope_per_minute", "new_queries_per_scope_per_day",
+               "refused_per_user_per_minute", "refused_per_user_per_day", "refused_per_app_per_minute",
+               "refused_per_app_per_day"}, f"{name}.differencing.per_caller")
     rnd = raw.get("rounding") or {}
     _keys(rnd, {"enabled", "base"}, f"{name}.rounding")
     if not isinstance(rnd.get("enabled", False), bool):
@@ -221,13 +249,41 @@ def load_config(path: str | Path, data: bytes | None = None) -> Config:
                                   f"{w}.per_caller.new_queries_per_day", 1, 10 ** 6),
                   audit_budget=_posint(dif.get("audit_budget", setaudit.DEFAULT_BUDGET), f"{w}.audit_budget",
                                        1000, 100_000_000),
+                  **{f: _posint(pc.get(k_, d_), f"{w}.per_caller.{k_}", 1, 10 ** 6) for f, k_, d_ in (
+                      ("user_per_minute", "new_queries_per_user_per_minute", DEFAULT_USER_PER_MINUTE),
+                      ("user_per_day", "new_queries_per_user_per_day", DEFAULT_USER_PER_DAY),
+                      ("scope_per_minute", "new_queries_per_scope_per_minute", DEFAULT_SCOPE_PER_MINUTE),
+                      ("scope_per_day", "new_queries_per_scope_per_day", DEFAULT_SCOPE_PER_DAY),
+                      ("refused_per_minute", "refused_per_user_per_minute", DEFAULT_REFUSED_PER_MINUTE),
+                      ("refused_per_day", "refused_per_user_per_day", DEFAULT_REFUSED_PER_DAY),
+                      ("refused_app_per_minute", "refused_per_app_per_minute", DEFAULT_REFUSED_APP_PER_MINUTE),
+                      ("refused_app_per_day", "refused_per_app_per_day", DEFAULT_REFUSED_APP_PER_DAY))},
                   separate_apps=bool(sc.get("separate_apps", False)),
                   separate_purposes=bool(sc.get("separate_purposes", False)))
 
 
-NORM_OPTIONS = ("casefold", "strip_domain", "strip_upn_suffix", "strip_leading_zeros")
-DEFAULT_NORM = {"casefold": True, "strip_domain": True, "strip_upn_suffix": True, "strip_leading_zeros": False}
+NORM_OPTIONS = ("casefold", "strip_domain", "strip_upn_suffix", "strip_leading_zeros", "strip_trailing_dots")
+DEFAULT_NORM = {"casefold": True, "strip_domain": True, "strip_upn_suffix": True, "strip_leading_zeros": False,
+                "strip_trailing_dots": True}
 _INVISIBLE = {"Cc", "Cf", "Zs", "Zl", "Zp"}
+# Characters that render as nothing but are NOT in the categories above (Unicode Default_Ignorable_Code_Point and
+# blank-looking symbols): combining grapheme joiner, Hangul fillers (halfwidth form maps here under NFKC), Mongolian
+# free variation selectors, variation selectors (incl. the emoji presentation selector FE0F), Braille blank, Khmer
+# inherent vowels. They are removed (two spellings of one id become one id); every other character outside the key's
+# allowed set REFUSES the dataset (below).
+_BLANKS = {0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x180B, 0x180C, 0x180D, 0x180E, 0x180F, 0x2800, 0x3164, 0xFFA0,
+           *range(0xFE00, 0xFE10), *range(0xE0100, 0xE01F0)}
+# The allowed character set of a record key AFTER normalisation, per sealed key spec (record_key.normalise.<f>.charset).
+# There is no confusables table: a Cyrillic/Greek look-alike of a Latin letter is not mapped (a table is never
+# complete and a wrong entry merges two people); it is outside the set, so the dataset is refused.
+CHARSETS = {"username": re.compile(r"[a-z0-9._-]{1,128}"),             # sAMAccountName / login (the default)
+            "numeric": re.compile(r"[0-9]{1,40}"),                      # numeric employee ids
+            "email": re.compile(r"[a-z0-9._%+-]{1,64}@[a-z0-9.-]{1,190}")}   # when the UPN is the key (suffix kept)
+DEFAULT_CHARSET = "username"
+
+
+class IdentityInvalid(ValueError):
+    """A record key is missing, empty, or has a character outside its allowed set. The message holds no value."""
 
 
 @dataclass(frozen=True)
@@ -235,27 +291,43 @@ class RecordKey:
     """The dataset-level record identity of a schema (the differencing history's record key): the fields whose
     normalised values identify a person across exports and across contracts, and per field the normalisation."""
     fields: tuple
-    norm: dict                    # field -> {option: bool} (NORM_OPTIONS)
+    norm: dict                    # field -> {option: bool, "charset": name} (NORM_OPTIONS, CHARSETS)
 
 
 def normalise_identity(value, opts: dict) -> str:
-    """One identity value as the record key sees it: Unicode NFKC, every whitespace / control / format character
-    (zero-width joiners, BOM) removed, then per the sealed options: casefold, a Windows domain prefix stripped
-    (CORP\\asha -> asha), a UPN suffix stripped (asha@corp.example -> asha), leading zeros stripped from an
-    all-digit value (only if configured: 00123 and 123 are then one person). NFKC is applied again after casefolding
-    (casefolding can leave a non-normalised string). Lists are normalised element-wise and sorted."""
+    """One identity value as the record key sees it: Unicode NFKC, every whitespace / control / format / blank
+    character (zero-width joiners, BOM, fillers, variation selectors) removed, then per the sealed options: casefold,
+    a Windows domain prefix stripped (CORP\\asha and CORP/asha -> asha), a UPN suffix stripped (asha@corp.example ->
+    asha), trailing dots stripped, leading zeros stripped from an all-digit value (only if configured). The result
+    MUST then match the key's allowed character set (CHARSETS; default [a-z0-9._-], uppercase too if casefold is
+    off) or IdentityInvalid is raised: look-alike letters, combining marks, '%40', quotes and the like are refused,
+    never guessed at. Lists are normalised element-wise and sorted."""
     if isinstance(value, (list, tuple)):
+        if not value:
+            raise IdentityInvalid("record key is empty")
         return json.dumps(sorted(normalise_identity(v, opts) for v in value), ensure_ascii=False)
+    if isinstance(value, bool) or value is None or not isinstance(value, (str, int)):
+        raise IdentityInvalid("record key has an unsupported type")
     t = unicodedata.normalize("NFKC", str(value))
-    t = "".join(ch for ch in t if not ch.isspace() and unicodedata.category(ch) not in _INVISIBLE)
+    t = "".join(ch for ch in t if not ch.isspace() and unicodedata.category(ch) not in _INVISIBLE
+                and ord(ch) not in _BLANKS)
     if opts.get("casefold"):
         t = unicodedata.normalize("NFKC", t.casefold())
-    if opts.get("strip_domain") and "\\" in t:
-        t = t.rsplit("\\", 1)[1]
-    if opts.get("strip_upn_suffix") and "@" in t:
-        t = t.split("@", 1)[0]
+        t = "".join(ch for ch in t if ord(ch) not in _BLANKS)
+    charset = opts.get("charset", DEFAULT_CHARSET)
+    if charset != "numeric":
+        if opts.get("strip_domain") and ("\\" in t or "/" in t):
+            t = re.split(r"[\\/]", t)[-1]
+        if opts.get("strip_upn_suffix") and charset != "email" and "@" in t:
+            t = t.split("@", 1)[0]
+        if opts.get("strip_trailing_dots"):
+            t = t.rstrip(".")
     if opts.get("strip_leading_zeros") and t.isdigit():
         t = t.lstrip("0") or "0"
+    pat = CHARSETS[charset]
+    ok = pat.fullmatch(t) if opts.get("casefold") else pat.fullmatch(t.lower()) and t.isascii()
+    if not ok:
+        raise IdentityInvalid("record key is empty or has a character outside its allowed set")
     return t
 
 
@@ -269,12 +341,12 @@ class SchemaControl:
 def _record_key(block, schema, where: str) -> RecordKey | None:
     """record_key: {fields: [..], normalise: {field: {casefold, strip_domain, strip_upn_suffix,
     strip_leading_zeros}}}. Default: the schema's first employee-identifier field, default normalisation (every
-    option on except strip_leading_zeros)."""
+    option on except strip_leading_zeros; charset username)."""
     from ..types import EntityType
     raw = block.get("record_key")
     if raw is None:
         ids = [f.name for f in schema.fields if f.entity is EntityType.EMPLOYEE_ID]
-        return RecordKey((ids[0],), {ids[0]: dict(DEFAULT_NORM)}) if ids else None
+        return RecordKey((ids[0],), {ids[0]: {**DEFAULT_NORM, "charset": DEFAULT_CHARSET}}) if ids else None
     _keys(raw, {"fields", "normalise", "note"}, f"{where}.record_key")
     fields = raw.get("fields")
     if not isinstance(fields, list) or not fields or not all(isinstance(x, str) for x in fields):
@@ -288,11 +360,14 @@ def _record_key(block, schema, where: str) -> RecordKey | None:
     norm = {}
     for n in fields:
         o = norm_raw.get(n) or {}
-        _keys(o, set(NORM_OPTIONS), f"{where}.record_key.normalise.{n}")
+        _keys(o, {*NORM_OPTIONS, "charset"}, f"{where}.record_key.normalise.{n}")
         for opt, v in o.items():
-            if not isinstance(v, bool):
+            if opt == "charset":
+                if v not in CHARSETS:
+                    raise SchemaError(f"{where}.record_key.normalise.{n}.charset: one of {sorted(CHARSETS)}")
+            elif not isinstance(v, bool):
                 raise SchemaError(f"{where}.record_key.normalise.{n}.{opt}: true or false")
-        norm[n] = {**DEFAULT_NORM, **o}
+        norm[n] = {**DEFAULT_NORM, "charset": DEFAULT_CHARSET, **o}
     return RecordKey(tuple(dict.fromkeys(fields)), norm)
 
 
@@ -642,7 +717,9 @@ REFUSE_DIFFERENCING = "differencing"
 REFUSE_FULL = "history_full"
 REFUSE_SCOPES = "history_scopes_full"
 REFUSE_RATE = "rate_limited"
+REFUSE_KEY = "invalid_record_key"
 SHARED = "*"
+OPERATOR_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@-]{1,63}")
 DATASET_RE = re.compile(r"[a-z][a-z0-9_.-]{0,63}")
 
 
@@ -672,13 +749,16 @@ class AuditCell:
 
 @dataclass(frozen=True)
 class HistoryScope:
-    """Who asks (bound by the gateway from the authenticated app, never from a request header): the store, tenant,
-    app (also the rate-limited caller), purpose and `keyfn(key_id or None) -> (key_id, key bytes)`."""
+    """Who asks (bound by the gateway from the authenticated app and the app's signed end-user assertion): the store, tenant,
+    app (the rate-limited caller; authenticated by its key), purpose, `keyfn(key_id or None) -> (key_id, key bytes)`
+    and `user`: the END USER the app asserts (pgw.enduser: HMAC-bound with the app key, so asserted by the app, not
+    authenticated by the gateway) or None. Rate limits apply per (app, user), per app and per scope."""
     store: "HistoryStore"
     tenant: str
     app: str
     purpose: str
     keyfn: object
+    user: str | None = None
 
 
 def dataset_id(schema_id: str, label: str | None) -> str:
@@ -718,7 +798,7 @@ class HistoryMetrics:
     """Operator counters (never in pgw_report, never a value) since start. `snapshot()` adds the stored sizes."""
 
     NAMES = ("answered", "answered_repeat", "suppressed_more", "refused_differencing", "refused_capacity",
-             "refused_rate", "store_unavailable")
+             "refused_rate", "refused_identity", "store_unavailable")
 
     def __init__(self, store: "HistoryStore"):
         self._store = store
@@ -740,6 +820,33 @@ class HistoryMetrics:
 
 
 # --- high-water mark (PGW_STATE_DIR; the pattern of pgw.gateway.rollback) -------------------------------------------
+#
+# The mark is {kind, db_id, seq, key_id, mac}: mac = HMAC-SHA256(platform key "disclosure-hwm" from the key store,
+# db_id, seq, key_id). The database carries the same MAC over its own (db_id, seq) (meta.seq_mac), and
+# pgw.gateway.rollback keeps an independent monotonic copy (disclosure_seq.json). So: a mark or database label cannot be
+# forged or re-labelled without the key; restoring the database AND the mark to an older consistent pair is caught
+# by the copy. Residual: an attacker holding the key store can forge everything; an attacker who restores the WHOLE state
+# directory together with the database to one older consistent state replays validly MACed files (keep a remote
+# anchor of the copy, OPERATIONS.md). The cell contents of the database are not themselves authenticated.
+
+HWM_MAC_PURPOSE = "disclosure-hwm"          # platform key purpose (tenant "*") of the mark / sequence MACs
+_HWM_TAG = b"pgw-disclosure-history/hwm/v1\x00"
+_HWM_KEYS = {"kind", "db_id", "seq"}
+_HWM_KEYS_MAC = {"kind", "db_id", "seq", "key_id", "mac"}
+
+
+def seq_mac(key: bytes, db_id: str, seq: int, key_id: str) -> str:
+    return hmac.new(key, _HWM_TAG + f"{db_id}\x00{seq}\x00{key_id}".encode(), "sha256").hexdigest()
+
+
+def mac_keyfn_for(keys):
+    """The MAC key function of the high-water mark from a key store (pgw.pipeline.Keys / pgw.keys.TenantKeyring):
+    the PLATFORM key's purpose key. keyfn(None) -> the active key id; keyfn(id) -> that id (KeyUnavailable if retired)."""
+    def keyfn(key_id=None):
+        kid = key_id or keys.active_id("*")
+        return kid, keys.derive("*", HWM_MAC_PURPOSE, kid)
+    return keyfn
+
 
 def read_hwm(state_dir) -> dict | None:
     path = Path(state_dir) / HWM_NAME
@@ -753,32 +860,39 @@ def read_hwm(state_dir) -> dict | None:
         doc = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         doc = None
-    if not (isinstance(doc, dict) and set(doc) == {"kind", "db_id", "seq"} and doc["kind"] == HWM_KIND
+    if not (isinstance(doc, dict) and set(doc) in (_HWM_KEYS, _HWM_KEYS_MAC) and doc["kind"] == HWM_KIND
             and isinstance(doc["db_id"], str) and re.fullmatch(r"[0-9a-f]{32}", doc["db_id"])
-            and isinstance(doc["seq"], int) and not isinstance(doc["seq"], bool) and doc["seq"] >= 0):
+            and isinstance(doc["seq"], int) and not isinstance(doc["seq"], bool) and doc["seq"] >= 0
+            and ("mac" not in doc or (isinstance(doc["mac"], str) and re.fullmatch(r"[0-9a-f]{64}", doc["mac"])
+                                      and isinstance(doc["key_id"], str) and 1 <= len(doc["key_id"]) <= 32))):
         raise HistoryIntegrityError(f"{HWM_NAME} is corrupt; startup refused (investigate, then run "
                                     "`python -m pgw.product.disclosure history recover`)")
     return doc
 
 
-def write_hwm(state_dir, db_id: str, seq: int) -> None:
-    """Atomically raise the mark (temp file, fsync, rename, directory fsync) under an exclusive lock; never lowered
-    for the same database."""
+def write_hwm(state_dir, db_id: str, seq: int, mac: tuple | None = None, force: bool = False) -> None:
+    """Atomically raise the mark (temp file, fsync, rename, directory fsync) under an exclusive lock (bounded wait:
+    TimeoutError); never lowered for the same database unless `force`. mac: (key_id, hex) of seq_mac."""
     import contextlib
     import fcntl
     import os
+
+    from ..gateway import rollback
     d = Path(state_dir)
     lock = os.open(d / (HWM_NAME + ".lock"), os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        rollback.flock_timeout(lock, STORE_TIMEOUT_S, fcntl.LOCK_EX)
         try:
             cur = read_hwm(d)
         except HistoryIntegrityError:
             cur = None
-        if cur is not None and cur["db_id"] == db_id and cur["seq"] >= seq:
+        if cur is not None and not force and cur["db_id"] == db_id and cur["seq"] >= seq:
             return
         tmp = d / f".{HWM_NAME}.{os.getpid()}.tmp"
-        data = (json.dumps({"kind": HWM_KIND, "db_id": db_id, "seq": seq}, sort_keys=True) + "\n").encode()
+        doc = {"kind": HWM_KIND, "db_id": db_id, "seq": seq}
+        if mac is not None:
+            doc.update(key_id=mac[0], mac=mac[1])
+        data = (json.dumps(doc, sort_keys=True) + "\n").encode()
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
             with os.fdopen(fd, "wb") as f:
@@ -823,33 +937,47 @@ def _secure_file(path: str) -> None:
 
 class HistoryStore:
     """Durable audit history (one SQLite file, WAL, synchronous=FULL, mode 0600). Shared by every gateway process on
-    a host; check-and-record is one IMMEDIATE transaction, so two processes cannot both answer a differencing pair.
-    Any database error raises HistoryUnavailable. Not for network filesystems.
+    a host; check-and-record is one IMMEDIATE transaction, so two processes cannot both answer a differencing pair,
+    and the rate counters (table `rate`) are incremented in the same transaction, so they are shared by every process
+    and atomic. Any database error, and any wait longer than `timeout` seconds (database busy, store lock, mark lock),
+    raises HistoryUnavailable: fail closed (503), never an unbounded wait. Not for network filesystems.
+    All calls are blocking: the gateway calls them from worker threads only (never on the event loop).
 
     Startup integrity (state_dir given): the database carries a random id and a commit sequence; the high-water
-    mark <state_dir>/disclosure_history.hwm.json records both. Production refuses to start when the database is
-    missing, replaced (other id), older than the mark, or has no mark -- except on the first start of a fresh state
-    directory (`fresh`: no config high-water mark yet), where both are created (logged). Development only warns.
+    mark <state_dir>/disclosure_history.hwm.json records both, and pgw.gateway.rollback keeps an independent monotonic
+    copy; with `mac_keyfn` (production: required) the mark, the copy and the database's own sequence are HMACed with a
+    platform key from the key store (see the section above). Production refuses to start when the database is
+    missing, replaced (other id), older than the mark or the copy, when a MAC fails, or when there is no mark -- except
+    on the first start of a fresh state directory (`fresh`: no config high-water mark yet), where all are created
+    (logged). Development only warns.
+
+    `live=True` (the gateway) holds a shared lock on <db>.live for its lifetime: the operator's `recover` takes the
+    exclusive lock and refuses while any gateway process holds the store.
 
     Per scope, an in-memory pgw.product.setaudit.Auditor is kept and rebuilt from the stored cells when another
     process has written (scope generation counter)."""
 
-    def __init__(self, path: str, state_dir: str | None = None, production: bool = False, fresh: bool = False):
+    def __init__(self, path: str, state_dir: str | None = None, production: bool = False, fresh: bool = False,
+                 mac_keyfn=None, live: bool = False, timeout: float = STORE_TIMEOUT_S):
         import sqlite3
         self._sq = sqlite3
         self.path = path
         self.state_dir = state_dir
         self.production = production
+        self.mac_keyfn = mac_keyfn
+        self.timeout = timeout
         self._lock = threading.Lock()
         self.metrics = HistoryMetrics(self)
         self._auditors: dict = {}          # sid -> (generation, Auditor)
-        self._burst: dict = {}             # (sid, caller) -> [monotonic times of new queries in the last minute]
+        self._live_fd = None
         persistent = path != ":memory:"
         existed = persistent and Path(path).is_file() and Path(path).stat().st_size > 0
         if persistent:
             _secure_file(path)
+            if live:
+                self._take_live_lock()
         try:
-            self._db = sqlite3.connect(path, timeout=10.0, isolation_level=None, check_same_thread=False)
+            self._db = sqlite3.connect(path, timeout=timeout, isolation_level=None, check_same_thread=False)
             if persistent:
                 self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=FULL")
@@ -868,31 +996,107 @@ class HistoryStore:
                     keys BLOB NOT NULL, UNIQUE (sid, digest));
                 CREATE TABLE IF NOT EXISTS query (sid TEXT NOT NULL, seq INTEGER NOT NULL, day INTEGER NOT NULL,
                     predicate BLOB NOT NULL, caller BLOB NOT NULL, new INTEGER NOT NULL, PRIMARY KEY (sid, seq));
-                CREATE TABLE IF NOT EXISTS caller_day (sid TEXT NOT NULL, caller BLOB NOT NULL, day INTEGER NOT NULL,
-                    n INTEGER NOT NULL, PRIMARY KEY (sid, caller, day));
+                CREATE TABLE IF NOT EXISTS rate (sid TEXT NOT NULL, subject BLOB NOT NULL, kind TEXT NOT NULL,
+                    per TEXT NOT NULL, win INTEGER NOT NULL, n INTEGER NOT NULL,
+                    PRIMARY KEY (sid, subject, kind, per, win));
                 CREATE TABLE IF NOT EXISTS admin_log (day INTEGER NOT NULL, action TEXT NOT NULL, sid TEXT,
                     tenant TEXT, dataset TEXT, detail TEXT NOT NULL, reason TEXT NOT NULL);
             """)
+            if "operator" not in {r[1] for r in self._db.execute("PRAGMA table_info(admin_log)")}:
+                self._db.execute("ALTER TABLE admin_log ADD COLUMN operator TEXT")
             meta = dict(self._db.execute("SELECT k, v FROM meta").fetchall())
         except sqlite3.Error as e:
             raise HistoryUnavailable(type(e).__name__) from None
         if persistent:
             _secure_file(path)
         self.db_id = meta.get("db_id")
-        self._check_integrity(existed and self.db_id is not None, fresh)
+        self._meta = meta
+        try:
+            self._check_integrity(existed and self.db_id is not None, fresh)
+        except BaseException:
+            self.close()          # a refused start must not keep the live lock (or the file) open
+            raise
+
+    # --- liveness lock (operator recovery refuses while a gateway holds the store) -------------------------------------
+
+    def _live_path(self) -> str:
+        return self.path + ".live"
+
+    def _take_live_lock(self) -> None:
+        import fcntl
+        import os
+
+        from ..gateway import rollback
+        fd = os.open(self._live_path(), os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            rollback.flock_timeout(fd, self.timeout, fcntl.LOCK_SH)    # blocked only by a running `recover`
+        except TimeoutError:
+            os.close(fd)
+            raise HistoryUnavailable("recovery_in_progress") from None
+        self._live_fd = fd
 
     # --- startup integrity ------------------------------------------------------------------------------------------
+
+    def _mac(self, db_id: str, seq: int) -> tuple | None:
+        if self.mac_keyfn is None:
+            return None
+        try:
+            kid, key = self.mac_keyfn(None)
+        except Exception:   # noqa: BLE001 - any key store failure: fail closed
+            raise HistoryUnavailable("key_unavailable") from None
+        return kid, seq_mac(key, db_id, seq, kid)
+
+    def _set_seq(self, seq: int) -> None:
+        """Inside a transaction: the commit sequence and its MAC (the database cannot be re-labelled without the key)."""
+        m = self._mac(self.db_id, seq)
+        rows = [("seq", str(seq))] + ([("seq_mac", m[1]), ("seq_kid", m[0])] if m else [])
+        self._db.executemany("INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)", rows)
 
     def _init_meta(self) -> None:
         import os
         self.db_id = os.urandom(16).hex()
         with self._lock:
-            self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('db_id', ?), ('seq', '0'), ('schema', ?)",
-                             (self.db_id, SCHEMA_VERSION))
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('db_id', ?), ('schema', ?)",
+                                 (self.db_id, SCHEMA_VERSION))
+                self._set_seq(0)
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
 
     def seq(self) -> int:
         r = self._db.execute("SELECT v FROM meta WHERE k = 'seq'").fetchone()
         return int(r[0]) if r else 0
+
+    def _publish_mark(self, seq: int, force: bool = False) -> None:
+        """The state-directory mark and the rollback copy for (db_id, seq): mark first, copy second, so the copy
+        never runs ahead of the mark."""
+        from ..gateway import rollback
+        m = self._mac(self.db_id, seq)
+        try:
+            write_hwm(self.state_dir, self.db_id, seq, m, force)
+            if m is not None:
+                rollback.record_disclosure(self.state_dir, {"kind": rollback.DISC_KIND, "db_id": self.db_id,
+                                                            "seq": seq, "key_id": m[0], "mac": m[1]}, force)
+        except (OSError, TimeoutError, rollback.RollbackError) as e:
+            self.metrics.inc("store_unavailable")
+            log.error("event='disclosure_history_hwm_write_failed' error_type=%s", type(e).__name__)
+            raise HistoryUnavailable("hwm_write_failed") from None
+
+    def _bad_mac(self, doc: dict, what: str) -> str | None:
+        if self.mac_keyfn is None:
+            return None
+        if "mac" not in doc:
+            return f"{what} is not authenticated (written by a version without MACs): re-bind it with `history recover`"
+        try:
+            kid, key = self.mac_keyfn(doc["key_id"])
+        except Exception:   # noqa: BLE001
+            return f"{what}'s MAC key id is not in the key store"
+        if kid != doc["key_id"] or not hmac.compare_digest(seq_mac(key, doc["db_id"], doc["seq"], kid), doc["mac"]):
+            return f"{what} failed authentication (forged, or the key changed)"
+        return None
 
     def _check_integrity(self, had_db: bool, fresh: bool) -> None:
         if not self.state_dir or not Path(self.state_dir).is_dir() or self.path == ":memory:":
@@ -902,13 +1106,20 @@ class HistoryStore:
                 raise HistoryIntegrityError("production requires the history high-water mark in an existing state "
                                             "directory (PGW_STATE_DIR) and a persistent history file")
             return
+        if self.production and self.mac_keyfn is None:
+            raise HistoryIntegrityError("production requires the platform key store for the history high-water mark")
+        from ..gateway import rollback
         hwm = read_hwm(self.state_dir)
+        try:
+            copy = rollback.read_disclosure_copy(self.state_dir)
+        except rollback.RollbackError as e:
+            raise HistoryIntegrityError(str(e)) from None
         problem = None
         if hwm is None and not had_db:
             if fresh or not self.production:
                 self._init_meta()
                 if self.production:
-                    write_hwm(self.state_dir, self.db_id, 0)
+                    self._publish_mark(0)
                     log.warning("event='disclosure_history_initialised' first_start_of_state_dir=True")
                 return
             problem = ("no disclosure-control history and no high-water mark, but this state directory has started "
@@ -921,12 +1132,30 @@ class HistoryStore:
             problem = "the history database is not the one the high-water mark records (replaced)"
         elif self.seq() < hwm["seq"]:
             problem = "the history database is older than its high-water mark (restored from an older copy)"
+        elif self.mac_keyfn is not None:
+            problem = self._bad_mac(hwm, "the high-water mark")
+            if problem is None:
+                m = self._meta
+                own = {"db_id": self.db_id, "seq": self.seq(), "key_id": m.get("seq_kid"), "mac": m.get("seq_mac")}
+                problem = self._bad_mac(own, "the database's sequence") if own["mac"] else \
+                    "the database's sequence is not authenticated: re-bind it with `history recover`"
+            if problem is None:
+                if copy is None:
+                    problem = f"the rollback copy of the sequence ({rollback.DISC_NAME}) is missing"
+                else:
+                    problem = self._bad_mac(copy, "the rollback copy of the sequence")
+                if problem is None and copy["db_id"] != self.db_id:
+                    problem = "the rollback copy of the sequence records another database"
+                elif problem is None and (self.seq() < copy["seq"] or hwm["seq"] < copy["seq"]):
+                    problem = ("the history database and its high-water mark are older than the rollback copy "
+                               "(joint rollback of both files)")
         if problem is None:
             return
         if self.production:
             log.error("event='disclosure_history_integrity_failed' reason=%r", problem)
             raise HistoryIntegrityError(f"disclosure-control history: {problem}; startup refused. Investigate, then "
-                                        "run `python -m pgw.product.disclosure history recover` (logged)")
+                                        "run `python -m pgw.product.disclosure history recover --operator ID "
+                                        "--reason ...` with the gateway stopped (logged)")
         log.warning("event='disclosure_history_integrity_failed_development_only' reason=%r", problem)
         if self.db_id is None:
             self._init_meta()
@@ -944,7 +1173,7 @@ class HistoryStore:
 
     def sizes(self) -> dict:
         try:
-            with self._lock:
+            with self._guard(min(self.timeout, 0.25)):     # a health probe must not queue behind a stuck writer
                 r = self._db.execute("SELECT COUNT(*), COALESCE(SUM(queries), 0), COALESCE(SUM(cells), 0), "
                                      "COALESCE(MAX(cells), 0) FROM scope").fetchone()
         except self._sq.Error as e:
@@ -983,7 +1212,7 @@ class HistoryStore:
         labels = self.scope_labels(scope, dataset, cfg)
         sid = self.scope_id(*labels)
         sq = self._sq
-        with self._lock:
+        with self._guard():
             try:
                 self._db.execute("BEGIN IMMEDIATE")
                 pending = None
@@ -1005,7 +1234,11 @@ class HistoryStore:
                     pending.commit()
             except DisclosureRefused as e:
                 self.metrics.inc({REFUSE_FULL: "refused_capacity", REFUSE_SCOPES: "refused_capacity",
-                                  REFUSE_RATE: "refused_rate"}.get(e.code, "refused_differencing"))
+                                  REFUSE_RATE: "refused_rate", REFUSE_KEY: "refused_identity"}.get(
+                                      e.code, "refused_differencing"))
+                ctx = getattr(e, "rate_ctx", None)
+                if ctx is not None:      # a refused query is metered too (the transaction above was rolled back)
+                    self._meter_refused(ctx, cfg)
                 if e.code in (REFUSE_FULL, REFUSE_SCOPES):
                     log.error("event='disclosure_history_full' code=%s tenant=%r dataset=%r", e.code, scope.tenant,
                               dataset)
@@ -1021,39 +1254,111 @@ class HistoryStore:
                 self._auditors.pop(sid, None)
                 raise HistoryUnavailable(type(e).__name__) from None
             if out["new"] and self.state_dir and self.production and self.db_id:
-                try:
-                    write_hwm(self.state_dir, self.db_id, out["seq"])
-                except OSError as e:
-                    self.metrics.inc("store_unavailable")
-                    log.error("event='disclosure_history_hwm_write_failed' error_type=%s", type(e).__name__)
-                    raise HistoryUnavailable("hwm_write_failed") from None
+                self._publish_mark(out["seq"])
         self.metrics.inc("answered_repeat" if out["repeat"] else "answered")
         if out["suppress"]:
             self.metrics.inc("suppressed_more")
         return out
 
-    def _rate_check(self, sid: str, caller: bytes, cfg: Config, day: int) -> None:
-        r = self._db.execute("SELECT n FROM caller_day WHERE sid = ? AND caller = ? AND day = ?",
-                             (sid, caller, day)).fetchone()
-        if r is not None and r[0] >= cfg.per_day:
-            raise DisclosureRefused("query refused: this caller has asked its daily number of new questions about "
-                                    "this data (questions already answered are still answered)", code=REFUSE_RATE)
-        now = time.monotonic()
-        recent = [t for t in self._burst.get((sid, caller), ()) if now - t < 60.0]
-        if len(recent) >= cfg.per_minute:
-            raise DisclosureRefused("query refused: too many new questions about this data in the last minute "
-                                    "(questions already answered are still answered)", code=REFUSE_RATE)
-        self._burst[(sid, caller)] = recent
+    @contextlib.contextmanager
+    def _guard(self, timeout: float | None = None):
+        """The in-process store lock, with a bound: a thread stuck in the database cannot queue every other request."""
+        if not self._lock.acquire(timeout=self.timeout if timeout is None else timeout):
+            self.metrics.inc("store_unavailable")
+            raise HistoryUnavailable("timeout")
+        try:
+            yield
+        finally:
+            self._lock.release()
+
+    @staticmethod
+    def _callers(sub: bytes, scope: HistoryScope) -> tuple:
+        """(app subject, end-user subject or None, subject of the refused-query meter): keyed hashes, never the ids."""
+        def h(tail: bytes) -> bytes:
+            return hmac.digest(sub, _CALLER + scope.app.encode() + tail, "sha256")[:KEY_BYTES]
+        user = h(b"\x00" + scope.user.encode()) if scope.user else None
+        return h(b""), user, user or h(b"\x00\x00anon")
+
+    @staticmethod
+    def _win(per: str, now: float) -> tuple[int, int]:
+        """(window number, seconds left in it) of a fixed minute ('m') or UTC day ('d') window."""
+        size = 60 if per == "m" else 86400
+        return int(now // size), size - int(now % size)
+
+    def _rate_check(self, sid: str, subs: dict, cfg: Config, now: float, only: str | None = None) -> None:
+        """Refuse (429, Retry-After) a NEW question when any limit is used up: per (app, end user) -- the fair share,
+        not applied to an app that asserts no user -- per app and per scope; and when the caller has been REFUSED too
+        often (probing). Counters are rows of the shared database, read inside the check-and-record transaction."""
+        checks = [(subs["app"], "new", "m", cfg.per_minute, "this app"),
+                  (subs["app"], "new", "d", cfg.per_day, "this app"),
+                  (subs["scope"], "new", "m", cfg.scope_per_minute, "all users of this data"),
+                  (subs["scope"], "new", "d", cfg.scope_per_day, "all users of this data"),
+                  (subs["refused_user"], "refused", "m", cfg.refused_per_minute, "this user's refused questions"),
+                  (subs["refused_user"], "refused", "d", cfg.refused_per_day, "this user's refused questions"),
+                  (subs["app"], "refused", "m", cfg.refused_app_per_minute, "this app's refused questions"),
+                  (subs["app"], "refused", "d", cfg.refused_app_per_day, "this app's refused questions")]
+        if subs["user"] is not None:
+            checks += [(subs["user"], "new", "m", cfg.user_per_minute, "this user"),
+                       (subs["user"], "new", "d", cfg.user_per_day, "this user")]
+        for subject, kind, per, limit, who in checks:
+            if only is not None and kind != only:
+                continue
+            win, left = self._win(per, now)
+            r = self._db.execute("SELECT n FROM rate WHERE sid = ? AND subject = ? AND kind = ? AND per = ? AND win = ?",
+                                 (sid, subject, kind, per, win)).fetchone()
+            if r is not None and r[0] >= limit:
+                raise DisclosureRefused(
+                    f"query refused: too many {'refused' if kind == 'refused' else 'new'} questions about this data "
+                    f"from {who} {'in the last minute' if per == 'm' else 'today'} (questions already answered are "
+                    "still answered)", code=REFUSE_RATE, retry_after=left)
+
+    def _bump(self, sid: str, subjects: list, now: float) -> None:
+        """Atomic increments of (subject, kind) in the current minute and day windows (inside a transaction)."""
+        m, _ = self._win("m", now)
+        d, _ = self._win("d", now)
+        for subject, kind in subjects:
+            for per, win in (("m", m), ("d", d)):
+                self._db.execute("INSERT INTO rate (sid, subject, kind, per, win, n) VALUES (?, ?, ?, ?, ?, 1) "
+                                 "ON CONFLICT (sid, subject, kind, per, win) DO UPDATE SET n = n + 1",
+                                 (sid, subject, kind, per, win))
+        self._db.execute("DELETE FROM rate WHERE sid = ? AND ((per = 'm' AND win < ?) OR (per = 'd' AND win < ?))",
+                         (sid, m - 1, d - 1))
+
+    def _meter_refused(self, ctx: tuple, cfg: Config) -> None:
+        """A refused (not rate-limited) question counts against the caller's refused budget. Own short transaction;
+        a failure to meter is logged and does not change the refusal."""
+        sid, refused_user, app = ctx
+        try:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                self._bump(sid, [(refused_user, "refused"), (app, "refused")], time.time())
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
+        except self._sq.Error as e:
+            log.error("event='disclosure_history_refusal_not_metered' error_type=%s", type(e).__name__)
 
     def _check_and_record(self, scope, labels, sid, predicate, build_cells, k, cfg):
+        box: list = []
+        try:
+            return self._check_and_record_inner(scope, labels, sid, predicate, build_cells, k, cfg, box)
+        except DisclosureRefused as e:
+            if box and e.code != REFUSE_RATE:
+                e.rate_ctx = box[0]
+            raise
+
+    def _check_and_record_inner(self, scope, labels, sid, predicate, build_cells, k, cfg, box):
         db = self._db
         row = db.execute("SELECT key_id, kcv, gen, cells, stored_keys, queries FROM scope WHERE sid = ?",
                          (sid,)).fetchone()
         if row is None:
+            kid, sub, kcv = self._scope_key(scope.keyfn, sid, None)
+            app_s, user_s, refused_s = self._callers(sub, scope)
+            box.append((sid, refused_s, app_s))
             if db.execute("SELECT COUNT(*) FROM scope").fetchone()[0] >= cfg.max_scopes:
                 raise DisclosureRefused("query refused: the disclosure-control history has no room for another "
                                         "scope (an operator must review it)", code=REFUSE_SCOPES)
-            kid, sub, kcv = self._scope_key(scope.keyfn, sid, None)
             gen = ncells = stored = queries = 0
         else:
             kid, sub, kcv = self._scope_key(scope.keyfn, sid, row[0])
@@ -1061,17 +1366,26 @@ class HistoryStore:
                 log.error("event='disclosure_history_key_mismatch' tenant=%r dataset=%r", scope.tenant, labels[3])
                 raise HistoryUnavailable("key_mismatch")
             gen, ncells, stored, queries = row[2], row[3], row[4], row[5]
+            app_s, user_s, refused_s = self._callers(sub, scope)
+            box.append((sid, refused_s, app_s))
+        subs = {"app": app_s, "user": user_s, "scope": ANONYMOUS, "refused_user": refused_s}
         aud = self._auditor(sid, gen, k, cfg)
-        cells = [c for c in build_cells(sub) if c.keys]
+        try:
+            cells = [c for c in build_cells(sub) if c.keys]
+        except DisclosureRefused as e:
+            if e.code == REFUSE_KEY:       # refused before any audit work: still counts against the refused budget
+                self._rate_check(sid, subs, cfg, time.time(), only="refused")
+            raise
         digests = [_digest(c.keys) for c in cells]
-        caller = hmac.digest(sub, _CALLER + scope.app.encode(), "sha256")[:KEY_BYTES]
+        caller = app_s
         pred = hmac.digest(sub, _PRED + json.dumps(predicate, sort_keys=True).encode(), "sha256")[:KEY_BYTES]
-        day = _day()
+        now = time.time()
+        day = _day(now)
         repeat = all(aud.known(d, c.lo, c.hi) for d, c in zip(digests, cells, strict=True))
         suppress: set = set()
         pending = None
         if not repeat:
-            self._rate_check(sid, caller, cfg, day)
+            self._rate_check(sid, subs, cfg, now)
             bounds = {c.name: (c.lo, c.hi) for c in cells}
             fixed = {d for d, c in zip(digests, cells, strict=True) if c.alt is None and c.lo == c.hi}
 
@@ -1131,10 +1445,7 @@ class HistoryStore:
                                         "operator must review it)", code=REFUSE_FULL)
             stored += new_keys
             ncells += new_cells
-            db.execute("INSERT INTO caller_day (sid, caller, day, n) VALUES (?, ?, ?, 1) "
-                       "ON CONFLICT (sid, caller, day) DO UPDATE SET n = n + 1", (sid, caller, day))
-            db.execute("DELETE FROM caller_day WHERE sid = ? AND day < ?", (sid, day - 1))
-            self._burst.setdefault((sid, caller), []).append(time.monotonic())
+            self._bump(sid, [(app_s, "new"), (ANONYMOUS, "new")] + ([(user_s, "new")] if user_s else []), now)
             gen += 1
         if row is None:
             db.execute("INSERT INTO scope (sid, tenant, app, purpose, dataset, key_id, kcv, created_day, gen, cells, "
@@ -1148,7 +1459,7 @@ class HistoryStore:
         seq = self.seq()
         if not repeat:
             seq += 1
-            db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('seq', ?)", (str(seq),))
+            self._set_seq(seq)
         if pending is not None:
             self._auditors[sid] = (gen, aud)
         return ({"suppress": suppress, "repeat": repeat, "new": not repeat, "seq": seq, "cells_audited": len(cells),
@@ -1166,120 +1477,178 @@ class HistoryStore:
         return [dict(zip(("tenant", "app", "purpose", "dataset", "key_id", "created_day", "queries", "cells",
                           "stored_keys"), r, strict=True)) for r in rows]
 
-    def _admin(self, action: str, sid, tenant, dataset, detail: str, reason: str) -> None:
-        self._db.execute("INSERT INTO admin_log (day, action, sid, tenant, dataset, detail, reason) VALUES "
-                         "(?, ?, ?, ?, ?, ?, ?)", (_day(), action, sid, tenant, dataset, detail, reason))
+    def _admin(self, action: str, sid, tenant, dataset, detail: str, reason: str, operator: str | None = None) -> None:
+        self._db.execute("INSERT INTO admin_log (day, action, sid, tenant, dataset, detail, reason, operator) VALUES "
+                         "(?, ?, ?, ?, ?, ?, ?, ?)", (_day(), action, sid, tenant, dataset, detail, reason, operator))
 
-    def compact(self, tenant: str, dataset: str, reason: str, app: str = SHARED, purpose: str = SHARED) -> int:
+    def compact(self, tenant: str, dataset: str, reason: str, app: str = SHARED, purpose: str = SHARED,
+                operator: str | None = None) -> int:
         """Drop one scope's query log (predicate HMACs, day numbers, callers) and its callers' daily counters: a
         deliberate, logged admin action that frees the per-caller budget. Every revealed record set is KEPT, so no
         answer given before becomes comparable-free: compaction never reopens a differencing gap (unlike the
         former reset). Returns the number of query-log rows dropped."""
         if len(reason.strip()) < 20:
             raise ValueError("compaction needs a written reason (20+ characters)")
+        if operator is not None and not OPERATOR_RE.fullmatch(operator):
+            raise ValueError("operator: 2-64 characters of [A-Za-z0-9._@-]")
         sid = self.scope_id(tenant, app, purpose, dataset)
-        with self._lock:
+        with self._guard():
             try:
                 self._db.execute("BEGIN IMMEDIATE")
                 try:
                     n = self._db.execute("SELECT COUNT(*) FROM query WHERE sid = ?", (sid,)).fetchone()[0]
                     self._db.execute("DELETE FROM query WHERE sid = ?", (sid,))
-                    self._db.execute("DELETE FROM caller_day WHERE sid = ?", (sid,))
-                    self._admin("compact", sid, tenant, dataset, f"query_rows_dropped={n}", reason.strip())
+                    self._db.execute("DELETE FROM rate WHERE sid = ?", (sid,))
+                    self._admin("compact", sid, tenant, dataset, f"query_rows_dropped={n}", reason.strip(), operator)
                 except BaseException:
                     self._db.execute("ROLLBACK")
                     raise
                 self._db.execute("COMMIT")
             except self._sq.Error as e:
                 raise HistoryUnavailable(type(e).__name__) from None
-        self._burst = {key: v for key, v in self._burst.items() if key[0] != sid}
-        log.warning("event='disclosure_history_compacted' tenant=%r dataset=%r query_rows_dropped=%d", tenant,
-                    dataset, n)
+        log.warning("event='disclosure_history_compacted' tenant=%r dataset=%r query_rows_dropped=%d operator=%r",
+                    tenant, dataset, n, operator)
         return n
 
-    def recover(self, reason: str, new: bool = False) -> str:
-        """Re-bind the high-water mark to this database after an investigated restore (`new`: start an EMPTY history
-        under a new id -- every earlier answer stops being compared, a gap the operator accepts in writing)."""
+    def recover(self, reason: str, new: bool = False, operator: str | None = None) -> str:
+        """Re-bind the high-water mark (and the rollback copy) to this database after an investigated restore (`new`:
+        start an EMPTY history under a new id -- every earlier answer stops being compared, a gap the operator accepts in
+        writing). Needs an operator identity and a written reason (both in the admin log and the event log), and is
+        refused while any gateway process holds the store (shared lock on <db>.live): stop the gateway first."""
+        import fcntl
+        import os
+        if operator is None or not OPERATOR_RE.fullmatch(operator):
+            raise ValueError("recovery needs the operator's identity (--operator: 2-64 characters of [A-Za-z0-9._@-])")
         if len(reason.strip()) < 20:
             raise ValueError("recovery needs a written reason (20+ characters)")
         if not self.state_dir or not Path(self.state_dir).is_dir():
             raise ValueError("recovery needs the existing state directory (--state-dir)")
-        with self._lock:
-            self._db.execute("BEGIN IMMEDIATE")
+        lockfd = None
+        if self.path != ":memory:":
+            lockfd = os.open(self._live_path(), os.O_RDWR | os.O_CREAT, 0o600)
             try:
-                if new:
-                    for stmt in ("DELETE FROM scope", "DELETE FROM cell", "DELETE FROM query",
-                                 "DELETE FROM caller_day"):
-                        self._db.execute(stmt)
-                    self.db_id = None
-                if self.db_id is None:
-                    import os
-                    self.db_id = os.urandom(16).hex()
-                    self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('db_id', ?), ('seq', '0'), "
-                                     "('schema', ?)", (self.db_id, SCHEMA_VERSION))
-                seq = self.seq() + 1
-                self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('seq', ?)", (str(seq),))
-                self._admin("recover_new" if new else "recover", None, None, None, f"db_id={self.db_id}",
-                            reason.strip())
-            except BaseException:
-                self._db.execute("ROLLBACK")
-                raise
-            self._db.execute("COMMIT")
-            self._auditors.clear()
-        import os
-        p = Path(self.state_dir) / HWM_NAME
-        if p.exists():
-            os.replace(p, p.with_name(p.name + f".replaced-{_day()}"))
-        write_hwm(self.state_dir, self.db_id, seq)
-        log.warning("event='disclosure_history_recovered' new_history=%r", new)
+                fcntl.flock(lockfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(lockfd)
+                raise ValueError("a gateway process holds the history (live lock): stop every gateway process on "
+                                 "this host, then recover") from None
+        try:
+            with self._guard():
+                self._db.execute("BEGIN IMMEDIATE")
+                try:
+                    if new:
+                        for stmt in ("DELETE FROM scope", "DELETE FROM cell", "DELETE FROM query",
+                                     "DELETE FROM rate"):
+                            self._db.execute(stmt)
+                        self.db_id = None
+                    if self.db_id is None:
+                        self.db_id = os.urandom(16).hex()
+                        self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('db_id', ?), ('schema', ?)",
+                                         (self.db_id, SCHEMA_VERSION))
+                        self._set_seq(0)
+                    seq = self.seq() + 1
+                    self._set_seq(seq)
+                    self._admin("recover_new" if new else "recover", None, None, None, f"db_id={self.db_id}",
+                                reason.strip(), operator)
+                except BaseException:
+                    self._db.execute("ROLLBACK")
+                    raise
+                self._db.execute("COMMIT")
+                self._auditors.clear()
+            p = Path(self.state_dir) / HWM_NAME
+            if p.exists():
+                os.replace(p, p.with_name(p.name + f".replaced-{_day()}"))
+            self._publish_mark(seq, force=True)
+        finally:
+            if lockfd is not None:
+                os.close(lockfd)
+        log.warning("event='disclosure_history_recovered' new_history=%r operator=%r", new, operator)
         return self.db_id
 
     def admin_log(self) -> list[dict]:
-        rows = self._db.execute("SELECT day, action, tenant, dataset, detail, reason FROM admin_log "
+        rows = self._db.execute("SELECT day, action, tenant, dataset, detail, reason, operator FROM admin_log "
                                 "ORDER BY rowid").fetchall()
-        return [dict(zip(("day", "action", "tenant", "dataset", "detail", "reason"), r, strict=True)) for r in rows]
+        return [dict(zip(("day", "action", "tenant", "dataset", "detail", "reason", "operator"), r, strict=True))
+                for r in rows]
 
     def close(self) -> None:
         with self._lock:
             self._db.close()
+        if self._live_fd is not None:
+            import os
+            os.close(self._live_fd)
+            self._live_fd = None
+
+
+def _cli_mac_keyfn(keys_file: str | None):
+    """Key store of the operator's shell (same sources as the gateway): --keys-file / PGW_TENANT_KEYS_FILE, else
+    PGW_MASTER_KEY. None when neither is set."""
+    import os
+    path = keys_file or os.environ.get("PGW_TENANT_KEYS_FILE")
+    if path:
+        from ..keys import TenantKeyring
+        return mac_keyfn_for(TenantKeyring.load(path))
+    if os.environ.get("PGW_MASTER_KEY"):
+        from ..pipeline import Keys
+        return mac_keyfn_for(Keys.from_env())
+    return None
 
 
 def _main(argv: list[str]) -> int:
     """python -m pgw.product.disclosure history list    --db PATH
        python -m pgw.product.disclosure history log     --db PATH
        python -m pgw.product.disclosure history compact --db PATH --tenant T --dataset D [--app A --purpose P]
-                                                        --reason "ticket and why (20+ characters)"
-       python -m pgw.product.disclosure history recover --db PATH --state-dir DIR --reason "..." [--new]
-    compact keeps every record set (no gap reopens); recover re-binds the high-water mark after an investigated
-    restore, or with --new starts an empty history (logged; earlier answers are no longer compared). Prints counts
-    and labels only."""
+                                                        --operator ID --reason "ticket and why (20+ characters)"
+       python -m pgw.product.disclosure history recover --db PATH --state-dir DIR --operator ID --reason "..." [--new]
+                                                        [--keys-file F | PGW_TENANT_KEYS_FILE | PGW_MASTER_KEY]
+    compact keeps every record set (no gap reopens); recover re-binds the high-water mark and the rollback copy after
+    an investigated restore, or with --new starts an empty history (logged with the operator; earlier answers are no
+    longer compared). recover REFUSES while a gateway process holds the history: stop the gateway first. It needs
+    the platform key store (the marks are HMACed with it). Prints counts and labels only."""
     import argparse
     ap = argparse.ArgumentParser(prog="python -m pgw.product.disclosure")
     ap.add_argument("group", choices=["history"])
     ap.add_argument("command", choices=["list", "log", "compact", "recover"])
     ap.add_argument("--db", required=True)
     ap.add_argument("--state-dir")
+    ap.add_argument("--keys-file")
+    ap.add_argument("--no-mac", action="store_true", help="development only: write unauthenticated marks")
     ap.add_argument("--new", action="store_true")
-    for a in ("tenant", "app", "purpose", "dataset", "reason"):
+    for a in ("tenant", "app", "purpose", "dataset", "reason", "operator"):
         ap.add_argument(f"--{a}")
     a = ap.parse_args(argv)
     if a.command != "recover" and not Path(a.db).is_file():
         ap.error("--db: no such history file")
+    if a.command in ("recover", "compact") and not (a.operator and OPERATOR_RE.fullmatch(a.operator)):
+        ap.error(f"{a.command} needs --operator (your identity: 2-64 characters of [A-Za-z0-9._@-])")
     if a.command == "recover":
         if not (a.state_dir and a.reason):
             ap.error("recover needs --state-dir and --reason")
         if not a.new and not Path(a.db).is_file():
             ap.error("--db: no such history file (restore it from backup, or start an empty history with --new)")
-        hwm = read_hwm(a.state_dir) if Path(a.state_dir).is_dir() else None
-        store = HistoryStore(a.db)            # development-mode open: no integrity refusal while recovering
+        keyfn = None if a.no_mac else _cli_mac_keyfn(a.keys_file)
+        if keyfn is None and not a.no_mac:
+            ap.error("recover needs the platform key store (--keys-file, PGW_TENANT_KEYS_FILE or PGW_MASTER_KEY)")
+        hwm = None
+        try:
+            hwm = read_hwm(a.state_dir) if Path(a.state_dir).is_dir() else None
+        except HistoryIntegrityError:
+            pass
+        store = HistoryStore(a.db, mac_keyfn=keyfn)    # no state dir: no integrity refusal while recovering
         store.state_dir = a.state_dir
-        if hwm is not None and not a.new and store.db_id == hwm["db_id"] and store.seq() >= hwm["seq"]:
-            print("history and high-water mark agree; nothing to recover")
+        try:
+            if hwm is not None and not a.new and store.db_id == hwm["db_id"] and store.seq() >= hwm["seq"] \
+                    and "mac" in hwm and not store._bad_mac(hwm, "mark"):
+                print("history and high-water mark agree; nothing to recover")
+                return 0
+            try:
+                db_id = store.recover(a.reason, new=a.new, operator=a.operator)
+            except ValueError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+        finally:
             store.close()
-            return 0
-        db_id = store.recover(a.reason, new=a.new)
-        print(f"recovered db_id={db_id} new_history={a.new}")
-        store.close()
+        print(f"recovered db_id={db_id} new_history={a.new} operator={a.operator}")
         return 0
     store = HistoryStore(a.db)
     if a.command == "list":
@@ -1291,12 +1660,11 @@ def _main(argv: list[str]) -> int:
     else:
         if not all((a.tenant, a.dataset, a.reason)):
             ap.error("compact needs --tenant --dataset --reason")
-        n = store.compact(a.tenant, a.dataset, a.reason, a.app or SHARED, a.purpose or SHARED)
+        n = store.compact(a.tenant, a.dataset, a.reason, a.app or SHARED, a.purpose or SHARED, a.operator)
         print(f"compacted tenant={a.tenant} dataset={a.dataset} query_rows_dropped={n}")
     store.close()
     return 0
 
 
 if __name__ == "__main__":
-    import sys
     sys.exit(_main(sys.argv[1:]))

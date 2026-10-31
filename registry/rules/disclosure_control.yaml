@@ -25,9 +25,24 @@ differencing:
   scope:
     separate_apps: false             # true (with a justification) gives each app its own history: weaker
     separate_purposes: false         # true (with a justification) gives each purpose its own history: weaker
-  per_caller:                        # caller = the authenticated app (the gateway has no end-user identity)
-    new_queries_per_minute: 20       # per gateway process
-    new_queries_per_day: 500         # shared by every process (day counter in the history)
+  # Rate limits on NEW (information-adding) questions; all counters live in the history database, shared by every
+  # gateway process and incremented atomically. Fixed windows (calendar minute, UTC day). 429 + Retry-After.
+  # app = authenticated by its key; user = the end user the app ASSERTS (X-PGW-End-User, HMAC-bound with the app key;
+  # an app that asserts none is one bucket and only the per-app / per-scope limits apply). The per-user cap is a fair
+  # share, well below the app and scope capacity, so one user cannot use up the others' budget.
+  per_caller:
+    new_queries_per_user_per_minute: 5
+    new_queries_per_user_per_day: 100
+    new_queries_per_minute: 20       # per app
+    new_queries_per_day: 500
+    new_queries_per_scope_per_minute: 40   # all apps and users of the scope together
+    new_queries_per_scope_per_day: 1000
+    # REFUSED questions (differencing, capacity, invalid record key) are metered too, with their own cheaper limits,
+    # so probing is not free; a caller over them gets 429 for NEW questions until the window passes.
+    refused_per_user_per_minute: 10
+    refused_per_user_per_day: 100
+    refused_per_app_per_minute: 40
+    refused_per_app_per_day: 400
   max_stored_keys_per_scope: 2000000 # record hashes kept per scope (16 bytes each)
   max_cells_per_scope: 100000        # distinct revealed record sets per scope
   max_atoms_per_scope: 20000         # bounds the audit's cost

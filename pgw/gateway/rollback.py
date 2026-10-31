@@ -30,6 +30,24 @@ LOCK_NAME = "config_serial.lock"
 HWM_KIND = "pgw-config-high-water"
 
 
+LOCK_TIMEOUT_S = 5.0
+
+
+def flock_timeout(fd: int, timeout: float, mode: int = fcntl.LOCK_EX) -> None:
+    """flock with a deadline (polling LOCK_NB): a lock held by a stuck process fails closed instead of blocking
+    forever. Raises TimeoutError."""
+    import time
+    end = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(fd, mode | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= end:
+                raise TimeoutError("lock timeout") from None
+            time.sleep(0.01)
+
+
 class RollbackError(ValueError):
     """The configuration's serial is below a floor, or the high-water mark cannot be trusted. Startup stops."""
 
@@ -84,7 +102,7 @@ def _write_atomic(state_dir: Path, serial: int) -> None:
 def _locked(state_dir: Path):
     fd = os.open(state_dir / LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        flock_timeout(fd, LOCK_TIMEOUT_S)
         yield
     finally:
         os.close(fd)   # releases the lock
@@ -145,3 +163,77 @@ def record(serial: int, state_dir) -> bool:
         if hwm is None or serial > hwm:
             _write_atomic(d, serial)
         return hwm is None
+
+
+# --- disclosure-history sequence copy ---------------------------------------------------------------------------
+#
+# A second, independently written record of the disclosure-control history's (db_id, seq), kept here with the config
+# rollback state. The history keeps its own high-water mark (disclosure_history.hwm.json); an attacker who restores
+# BOTH the database and that mark to an older consistent pair is caught because this copy is newer. The copy carries the
+# same HMAC (key from the key store; verified by pgw.product.disclosure, which owns the key), so it cannot be forged
+# without the key either, and it is monotonic per database id. Residual: an attacker who can write the whole state
+# directory AND restore the database to one consistent older state replays old, validly MACed files; anchor
+# PGW_STATE_DIR backups / a remote copy of this file out of the gateway's reach to close that (OPERATIONS.md).
+
+DISC_NAME = "disclosure_seq.json"
+DISC_KIND = "pgw-disclosure-seq-copy"
+_DISC_KEYS = {"kind", "db_id", "seq", "key_id", "mac"}
+
+
+def _disc_valid(doc) -> bool:
+    import re
+    return (isinstance(doc, dict) and set(doc) == _DISC_KEYS and doc["kind"] == DISC_KIND
+            and isinstance(doc["db_id"], str) and re.fullmatch(r"[0-9a-f]{32}", doc["db_id"]) is not None
+            and isinstance(doc["seq"], int) and not isinstance(doc["seq"], bool) and doc["seq"] >= 0
+            and isinstance(doc["key_id"], str) and 1 <= len(doc["key_id"]) <= 32
+            and isinstance(doc["mac"], str) and re.fullmatch(r"[0-9a-f]{64}", doc["mac"]) is not None)
+
+
+def read_disclosure_copy(state_dir: str | Path) -> dict | None:
+    path = Path(state_dir) / DISC_NAME
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise RollbackError(f"{DISC_NAME} is unreadable; startup refused (not reset)") from None
+    try:
+        doc = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        doc = None
+    if not _disc_valid(doc):
+        raise RollbackError(f"{DISC_NAME} is corrupt; startup refused (not reset)")
+    return doc
+
+
+def record_disclosure(state_dir, doc: dict, force: bool = False) -> None:
+    """Raise the copy to `doc` ({kind, db_id, seq, key_id, mac}); never lowers it for the same database unless `force`
+    (the logged operator recovery)."""
+    if not _disc_valid(doc):
+        raise RollbackError("invalid disclosure sequence record")
+    d = _state_dir(state_dir)
+    with _locked(d):
+        try:
+            cur = read_disclosure_copy(d)
+        except RollbackError:
+            if not force:
+                raise
+            cur = None
+        if cur is not None and not force and cur["db_id"] == doc["db_id"] and cur["seq"] >= doc["seq"]:
+            return
+        path, tmp = d / DISC_NAME, d / f".{DISC_NAME}.{os.getpid()}.tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write((json.dumps(doc, sort_keys=True) + "\n").encode())
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp)
+        dfd = os.open(d, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)

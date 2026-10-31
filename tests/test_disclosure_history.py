@@ -24,7 +24,7 @@ from pgw.product import disclosure
 from tests import hrms_synth as S
 from tests.test_disclosure_control import (FIN, FIN_LEGAL, ROOT, _dc_variant, _fixed_settings, _pop12, _refused,
                                            gw, parse_roster, person, sent_since)
-from tests.test_hrms_records import TestClient, make, post
+from tests.test_hrms_records import MASTER, TestClient, make, post
 
 __all__ = ["gw"]   # the fixture, re-exported for this module
 
@@ -147,7 +147,9 @@ def test_normalise_identity_unit():
     assert disclosure.normalise_identity("000", z) == "0"
     # every option can be switched off in the sealed config (exact ids)
     off = dict.fromkeys(disclosure.NORM_OPTIONS, False)
-    assert disclosure.normalise_identity("CORP\\Asha", off) == "CORP\\Asha"
+    assert disclosure.normalise_identity("Asha", off) == "Asha"
+    with pytest.raises(disclosure.IdentityInvalid):       # a domain prefix is not in the allowed set when not stripped
+        disclosure.normalise_identity("CORP\\Asha", off)
 
 
 def test_record_key_config_is_checked():
@@ -216,7 +218,6 @@ def test_daily_limit_and_compaction_that_reopens_no_gap(tmp_path):
     (entry,) = store.admin_log()
     assert entry["action"] == "compact" and entry["reason"].startswith("CHG-1234")
     store.close()
-    app.state.pgw_disclosure_history._burst.clear()
     n0 = len(mock.received)
     _refused(post(client, "roster_question", sy.envelope(FIN)))          # 14 - 12 = 2: still refused
     assert len(mock.received) == n0
@@ -281,7 +282,8 @@ def _restart(tmp_path, cfg, master):
 
 def _setup(tmp_path):
     _c, _m, cfg = make(tmp_path, {"roster_question": str(ROOT / "contracts/roster_question.yaml")})
-    master = os.urandom(32).hex()
+    _c.app.state.pgw_disclosure_history.close()       # (a running gateway would hold the live lock)
+    master = MASTER
     app = _restart(tmp_path, cfg, master)
     assert post(TestClient(app), "roster_question", _pop12().envelope(FIN_LEGAL)).status_code == 200
     db = Path(cfg["state_dir"]) / disclosure.HISTORY_DB_NAME
@@ -296,7 +298,7 @@ def _drop(db: Path) -> None:
             p.unlink()
 
 
-def test_deleting_the_history_stops_startup_until_a_logged_recovery(tmp_path):
+def test_deleting_the_history_stops_startup_until_a_logged_recovery(tmp_path, monkeypatch):
     """Tester: deleting the database silently reset every history. Now the state directory's high-water mark
     records the database's id and commit sequence; a missing database stops startup; only the deliberate
     `history recover` (logged, written reason) starts again."""
@@ -309,13 +311,18 @@ def test_deleting_the_history_stops_startup_until_a_logged_recovery(tmp_path):
     db.write_bytes(b"")                          # replaced by an empty file: the same
     with pytest.raises(disclosure.HistoryIntegrityError, match="missing"):
         _restart(tmp_path, cfg, master)
+    monkeypatch.setenv("PGW_MASTER_KEY", master)
     with pytest.raises(SystemExit):
         disclosure._main(["history", "recover", "--db", str(db), "--state-dir", cfg["state_dir"]])  # no reason
+    with pytest.raises(SystemExit):                 # no operator identity
+        disclosure._main(["history", "recover", "--db", str(db), "--state-dir", cfg["state_dir"], "--new",
+                          "--reason", "INC-77: disk lost, no backup; DPO approved"])
     assert disclosure._main(["history", "recover", "--db", str(db), "--state-dir", cfg["state_dir"], "--new",
-                             "--reason", "INC-77: disk lost, no backup; DPO approved"]) == 0
+                             "--operator", "asha.r", "--reason", "INC-77: disk lost, no backup; DPO approved"]) == 0
     app2 = _restart(tmp_path, cfg, master)
     log = app2.state.pgw_disclosure_history.admin_log()
     assert log[-1]["action"] == "recover_new" and log[-1]["reason"].startswith("INC-77")
+    assert log[-1]["operator"] == "asha.r"
 
 
 def test_replaced_or_older_history_or_missing_mark_stops_startup(tmp_path):

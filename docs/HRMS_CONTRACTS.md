@@ -170,7 +170,11 @@ listing: coarsen           # coarsen | withhold | alias_only
 differencing:              # durable audit history per (tenant, dataset); see "Repeated queries" below
   enabled: true
   scope: {separate_apps: false, separate_purposes: false}   # true needs a justification: weaker
-  per_caller: {new_queries_per_minute: 20, new_queries_per_day: 500}   # caller = authenticated app
+  per_caller: {new_queries_per_user_per_minute: 5, new_queries_per_user_per_day: 100,   # (app, asserted end user)
+               new_queries_per_minute: 20, new_queries_per_day: 500,                     # per app
+               new_queries_per_scope_per_minute: 40, new_queries_per_scope_per_day: 1000,
+               refused_per_user_per_minute: 10, refused_per_user_per_day: 100,           # refused queries are metered
+               refused_per_app_per_minute: 40, refused_per_app_per_day: 400}
   max_stored_keys_per_scope: 2000000 # record hashes kept per scope (16 bytes each)
   max_cells_per_scope: 100000        # distinct revealed record sets per scope
   max_atoms_per_scope: 20000         # bounds the audit's cost
@@ -280,11 +284,19 @@ every gap. Now:
 
 - A question that adds no information (each of its cells is already stored with bounds at least as tight) is always
   answered and never counted (repeats, the same question on an unchanged export, questions whose sets are known).
-- Per-caller limits on **new** questions: `new_queries_per_minute` (in memory, per gateway process) and
-  `new_queries_per_day` (in the history, shared by every process); exceeding them refuses only that caller's new
-  questions (429 `rate_limited`). The caller is the authenticated app: the gateway has no end-user identity (the
-  workspace authenticates users by SSO but calls the gateway with its one app key), so all users of one app share
-  its budget. To exhaust a scope's `max_cells_per_scope` (100,000) at 500 new questions a day, one caller needs weeks.
+- Rate limits on **new** questions, all counters in the history database (atomic increments inside the check-and-record
+  transaction, so shared by every gateway process; fixed minute / UTC-day windows): per **(app, end user)** (the fair share,
+  default 5 a minute, well below the app and scope capacity), per **app**, and per **scope**. Refused questions (differencing,
+  capacity, invalid record key) are metered too, with their own cheaper limits (default 10 a minute per user), so probing is
+  not free; a caller over them gets 429 for new questions until the window passes. Exceeding any limit refuses only new
+  questions (429 `rate_limited`, `Retry-After` seconds; repeats are still answered). The **end user is asserted by the app**:
+  the gateway authenticates the app by its key, and an app that authenticates people (the HR Workspace, by trusted-proxy SSO)
+  sends `X-PGW-End-User` (an opaque id), `X-PGW-End-User-Ts` and `X-PGW-End-User-Sig` = HMAC-SHA256 with the app key over
+  purpose, timestamp, id and the body hash (`pgw/enduser.py`). The HMAC binds the identity to the request (no injection,
+  swap or replay on another body or purpose; 300 s window); it does not authenticate the person: the gateway trusts the id as
+  far as it trusts the app key. A present but invalid assertion is 401 `end_user_invalid`; an app registered with
+  `require_end_user: true` that sends none is 401 `end_user_required`; an app that sends none is one bucket under the per-app
+  and per-scope limits only. The workspace sends `sso-<hash of the SSO identity>`, never the address.
 - A full scope (stored keys, cells or atoms) refuses only new information (422 `history_full`, logged as
   `disclosure_history_full`, counted as `refused_capacity`).
 - Operator **compaction** (deliberate, logged, written reason) drops a scope's query log and its callers' daily
@@ -303,7 +315,7 @@ every gap. Now:
   suppressed_more, refused_differencing, refused_capacity, refused_rate, store_unavailable, scopes, queries, cells;
   counts only).
 
-**Deletion and replacement stop startup.** The database carries a random id and a commit sequence; after every
+**Deletion, replacement and rollback stop startup.** The database carries a random id and a commit sequence; after every
 commit that added information they are written to the high-water mark `<PGW_STATE_DIR>/disclosure_history.hwm.json`
 (atomic, fsync'd, under a lock; the pattern of the config high-water mark `config_serial.json`). Production refuses to
 start (`HistoryIntegrityError`, logged as `disclosure_history_integrity_failed`) when the database is missing or
@@ -311,14 +323,26 @@ empty, has another id (replaced), is older than the mark (restored from an older
 corrupt. A missing history is created silently only on the first production start of a fresh state directory (no
 config high-water mark yet). After investigating, an operator recovers deliberately (written reason, admin log):
 
-    python -m pgw.product.disclosure history recover --db ... --state-dir $PGW_STATE_DIR --reason "..."        # re-bind after a restore
-    python -m pgw.product.disclosure history recover --db ... --state-dir $PGW_STATE_DIR --reason "..." --new  # empty history
+    python -m pgw.product.disclosure history recover --db ... --state-dir $PGW_STATE_DIR --operator ID --reason "..."        # re-bind after a restore
+    python -m pgw.product.disclosure history recover --db ... --state-dir $PGW_STATE_DIR --operator ID --reason "..." --new  # empty history
+
+`recover` needs the operator's identity (`--operator`, recorded with the reason in the admin log and the event log), the
+platform key store (`--keys-file`, `PGW_TENANT_KEYS_FILE` or `PGW_MASTER_KEY`, the same as the gateway's) and a STOPPED
+gateway: it refuses while any gateway process on the host holds the shared lock `<db>.live`.
 
 `--new` is the only way to forget answers, and it is a gap the operator accepts in writing. (A state directory that
 has started production before without any RECORDS contract has no history yet: the first start with one is refused
-the same way; run `recover --new` once to create it.) The mark is not a MAC:
-whoever can write both files consistently can also edit the history itself; it stops deletion, replacement and
-rollback to an older copy, accidental or naive. Development only warns. Not for network filesystems.
+the same way; run `recover --new` once to create it.) The mark is `{db_id, seq, key_id, mac}` with
+mac = HMAC-SHA256(platform key "disclosure-hwm", db_id, seq, key_id); the database carries the same MAC over its own
+sequence, and `pgw/gateway/rollback.py` keeps an independent monotonic copy (`disclosure_seq.json`, written after the mark).
+So the mark and the database label cannot be forged without the key store, and restoring the database AND the mark to an
+older consistent pair is caught by the copy ("joint rollback"). Residuals: whoever holds the key store can forge all three;
+whoever restores the whole state directory together with the database to one older consistent state replays validly
+MACed files (keep an out-of-reach backup of `disclosure_seq.json`); the cell contents of the database are not themselves
+authenticated. A mark written by a version without MACs is refused: re-bind it once with `recover`. Retiring the platform
+key id that signed the mark needs `recover` as well. Every wait on the database, the store lock or the mark lock is bounded
+(3 s), then 503 `disclosure_store_unavailable`; store calls run in worker threads, never on the event loop. Development only
+warns. Not for network filesystems.
 
 **Consequence for refreshed exports.** A count printed for a group can be printed on a later export only if the
 change does not pin a small group: with 1..k-1 joiners or leavers in that group the question is refused; with
