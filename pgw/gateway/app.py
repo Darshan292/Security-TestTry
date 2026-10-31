@@ -399,6 +399,9 @@ def create_app(settings: Settings) -> Starlette:
     config_serial = profile_serial(profile_bytes)
     for event in rollback.check(config_serial, settings.min_config_serial, settings.state_dir, prod):
         _log(logging.WARNING, event=event)
+    # a state directory this gateway has never started production with (no config high-water mark yet): the only
+    # case in which a missing disclosure-control history may be created silently (pgw.product.disclosure)
+    fresh_state = bool(prod and settings.state_dir and rollback.read_high_water(settings.state_dir) is None)
 
     registry = load_registry(settings.registry_path, read(settings.registry_path))
     sealed = _sealed_paths(settings, [c for a in registry for _, c in a.tasks])
@@ -615,14 +618,20 @@ def create_app(settings: Settings) -> Starlette:
                              "PGW_DISCLOSURE_DB)")
         if dpath is None:
             _log(logging.WARNING, event="disclosure_history_in_memory_development_only")
-        disclosure_history = _records.disclosure.HistoryStore(dpath or ":memory:")
+        # integrity at startup: a missing, replaced or older history (vs the high-water mark in the state directory)
+        # stops startup in production (HistoryIntegrityError); recovery is the deliberate, logged
+        # `python -m pgw.product.disclosure history recover`
+        disclosure_history = _records.disclosure.HistoryStore(dpath or ":memory:", state_dir=settings.state_dir,
+                                                              production=prod, fresh=fresh_state)
         _sz = disclosure_history.sizes()
-        log.info("event='disclosure_history_opened' persistent=%r scopes=%d queries=%d", dpath is not None,
-                 _sz["scopes"], _sz["queries"])
+        log.info("event='disclosure_history_opened' persistent=%r scopes=%d cells=%d", dpath is not None,
+                 _sz["scopes"], _sz["cells"])
 
     def history_scope(app: AppEntry, purpose: str):
-        """The differencing scope of a RECORDS request: the authenticated app's tenant and id and the purpose (the
-        dataset is added from the payload's source schema). Never the conversation id: it is caller-chosen."""
+        """Who asks, for the differencing history of a RECORDS request: the authenticated app's tenant and id (the
+        rate-limited caller; the gateway has no end-user identity: the workspace authenticates users by SSO but calls
+        with one app key) and the purpose. The scope itself is (tenant, dataset) unless the sealed config separates
+        apps or purposes. Never the conversation id: it is caller-chosen."""
         if disclosure_history is None:
             return None
         tenant = app.tenant
@@ -924,7 +933,8 @@ def create_app(settings: Settings) -> Starlette:
                         rep.records = e.report
                     ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                                 "disclosure_control", contract)
-                    raise _Reject(422, "disclosure_control_refused", str(e), reason=e.code) from None
+                    raise _Reject(429 if e.code == _records.disclosure.REFUSE_RATE else 422,
+                                  "disclosure_control_refused", str(e), reason=e.code) from None
                 except _records.disclosure.HistoryUnavailable as e:
                     rep.end("compute", "failed")
                     _log(logging.ERROR, event="disclosure_history_unavailable", request_id=rid,
@@ -1432,8 +1442,8 @@ def create_app(settings: Settings) -> Starlette:
     # Plugin shadow/union counters (operator metrics, never in pgw_report): app.state.pgw_plugin_metrics.snapshot()
     app_.state.pgw_plugin_metrics = plugin_set.metrics if plugin_set is not None else None
     # Disclosure-control history counters (answered, refused_differencing, refused_capacity, store_unavailable, scopes,
-    # queries): app.state.pgw_disclosure_metrics.snapshot(); also on /healthz as counts. The store itself (operator
-    # reset: python -m pgw.product.disclosure history reset ...) is app.state.pgw_disclosure_history.
+    # cells): app.state.pgw_disclosure_metrics.snapshot(); also on /healthz as counts. The store itself (operator
+    # actions: python -m pgw.product.disclosure history list|log|compact|recover) is app.state.pgw_disclosure_history.
     app_.state.pgw_disclosure_history = disclosure_history
     app_.state.pgw_disclosure_metrics = disclosure_history.metrics if disclosure_history is not None else None
     return app_
