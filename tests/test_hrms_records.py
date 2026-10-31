@@ -29,6 +29,7 @@ from tests.sealed import attest, production, sha
 
 ROOT = Path(__file__).resolve().parents[1]
 KEY = "hrms-key"
+MASTER = os.urandom(32).hex()   # one key store per test run: the disclosure history's marks are HMACed with it
 SHIPPED = ("payroll_register_check", "timecard_exceptions", "contractor_budget", "roster_question")
 
 # roster_question over the other starter schemas: the shipped contract with another source and selection
@@ -72,7 +73,7 @@ def make(tmp: Path, tasks: dict | None = None, behaviour="summarise", deployment
     mock = MockLLMUpstream(behaviour)
     cfg = production(tmp, apps, deployment=deployment, **(prod_kwargs or {}))
     s = Settings(**cfg, ledger_db_path=str(tmp / "l.sqlite"), egress_ledger_path=str(tmp / "e.jsonl"),
-                 master_key=os.urandom(32).hex(), upstream=mock)
+                 master_key=MASTER, upstream=mock)
     return TestClient(create_app(s)), mock, cfg
 
 
@@ -454,7 +455,7 @@ def test_roster_params_are_validated_without_echo(params):
 
 def _settings(tmp, cfg, mock=None):
     return Settings(**cfg, ledger_db_path=str(tmp / "l2.sqlite"), egress_ledger_path=str(tmp / "e2.jsonl"),
-                    master_key=os.urandom(32).hex(), upstream=mock or MockLLMUpstream("summarise"))
+                    master_key=MASTER, upstream=mock or MockLLMUpstream("summarise"))
 
 
 def test_tampered_schema_stops_startup(tmp_path):

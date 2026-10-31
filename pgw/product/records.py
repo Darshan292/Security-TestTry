@@ -815,17 +815,16 @@ def record_key_fields(plan: Plan, schema_id: str | None = None) -> tuple:
 
 def _identity(rk: disclosure.RecordKey):
     """Row -> the bytes the record key is computed from (never stored): the key fields' NORMALISED values
-    (disclosure.normalise_identity: NFKC, invisible characters, casefold, DOMAIN\\ prefix, @UPN suffix, per the
-    sealed options), or one shared marker for a record without any (such records count with multiplicity,
-    see disclosure.keyset)."""
+    (disclosure.normalise_identity: NFKC, invisible characters, casefold, DOMAIN\\ and DOMAIN/ prefix, @UPN suffix,
+    trailing dots, per the sealed options), checked against the field's allowed character set. A row whose key is
+    missing, empty or invalid raises disclosure.IdentityInvalid (the caller refuses the whole dataset)."""
     def ident(row) -> bytes:
-        vals = [row.values.get(n) for n in rk.fields]
-        if all(v is None for v in vals):
-            return b'["#no-record-key"]'
-        norm = [None if v is None else disclosure.normalise_identity(v, rk.norm[n])
-                for n, v in zip(rk.fields, vals, strict=True)]
-        if all(not v for v in norm):
-            return b'["#no-record-key"]'
+        norm = []
+        for n in rk.fields:
+            v = row.values.get(n)
+            if v is None:
+                raise disclosure.IdentityInvalid("record key is missing")
+            norm.append(disclosure.normalise_identity(v, rk.norm[n]))
         return json.dumps(norm, ensure_ascii=False).encode("utf-8")
     return ident
 
@@ -860,9 +859,20 @@ def _history_check(plan: Plan, schema: FieldSchema, t, params: dict, rows: list,
 
     def build(subkey: bytes) -> list:
         cache: dict = {}
+        ids: dict = {}
+        bad = 0
+        for r in rows:        # ANY record with a missing, empty or invalid key refuses the whole dataset (no values)
+            try:
+                ids[r.index] = ident(r)
+            except disclosure.IdentityInvalid:
+                bad += 1
+        if bad:
+            raise disclosure.DisclosureRefused(
+                f"query refused: {bad} of {len(rows)} records have a missing, empty or invalid record key (identity "
+                "field); the export is not processed", code=disclosure.REFUSE_KEY)
 
         def ks(rs):
-            return disclosure.keyset(rs, subkey, ident, cache)
+            return disclosure.keyset(rs, subkey, lambda r: ids[r.index], cache)
         AC = disclosure.AuditCell
         out = []
         filtered = bool(flt)

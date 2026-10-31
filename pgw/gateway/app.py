@@ -26,6 +26,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
+from .. import enduser
 from ..detect import idshape, structure
 from ..detect.edm import RestoreLedger, RosterIndex
 from ..detect.recognizers import detect_d2
@@ -80,15 +81,19 @@ def _log(level: int, **fields) -> None:
     log.log(level, " ".join(parts))
 
 
-def _err(status: int, etype: str, message: str, rid: str | None = None, **extra) -> JSONResponse:
+def _err(status: int, etype: str, message: str, rid: str | None = None, retry_after: int | None = None,
+         **extra) -> JSONResponse:
     body: dict = {"error": {"type": etype, "message": message, **extra}}
     headers = {"X-PGW-Request-Id": rid} if rid else {}
+    if retry_after is not None:
+        headers["Retry-After"] = str(max(1, int(retry_after)))
     return JSONResponse(body, status_code=status, headers=headers)
 
 
 class _Reject(Exception):
-    def __init__(self, status: int, etype: str, message: str, **extra):
+    def __init__(self, status: int, etype: str, message: str, retry_after: int | None = None, **extra):
         self.status, self.etype, self.message, self.extra = status, etype, message, extra
+        self.retry_after = retry_after
 
 
 @dataclass(frozen=True)
@@ -101,6 +106,7 @@ class AppEntry:
     models: frozenset
     tasks: tuple = ()      # ((purpose, contract_path), ...): apps with tasks only use contracted purposes
     transparency: bool = False   # return the pgw_report to this app (docs/TRANSPARENCY_REPORT.md); signed opt-in
+    require_end_user: bool = False   # refuse requests that do not carry a signed end-user assertion (pgw.enduser)
 
 
 def load_registry(path: str, data: bytes | None = None) -> list[AppEntry]:
@@ -115,8 +121,12 @@ def load_registry(path: str, data: bytes | None = None) -> list[AppEntry]:
         transparency = a.get("transparency", False)
         if not isinstance(transparency, bool):   # a typo must not turn the report on (or silently off)
             raise ValueError(f"app {a['app_id']}: transparency must be true or false")
+        req_user = a.get("require_end_user", False)
+        if not isinstance(req_user, bool):
+            raise ValueError(f"app {a['app_id']}: require_end_user must be true or false")
         out.append(AppEntry(a["app_id"], a["tenant"], a["key_sha256"].lower(), frozenset(a["purposes"]),
-                            bool(a.get("restore_output", True)), frozenset(a["models"]), tasks, transparency))
+                            bool(a.get("restore_output", True)), frozenset(a["models"]), tasks, transparency,
+                            req_user))
     return out
 
 
@@ -626,13 +636,14 @@ def create_app(settings: Settings) -> Starlette:
         # integrity at startup: a missing, replaced or older history (vs the high-water mark in the state directory)
         # stops startup in production (HistoryIntegrityError); recovery is the deliberate, logged
         # `python -m pgw.product.disclosure history recover`
-        disclosure_history = _records.disclosure.HistoryStore(dpath or ":memory:", state_dir=settings.state_dir,
-                                                              production=prod, fresh=fresh_state)
+        disclosure_history = _records.disclosure.HistoryStore(
+            dpath or ":memory:", state_dir=settings.state_dir, production=prod, fresh=fresh_state,
+            mac_keyfn=_records.disclosure.mac_keyfn_for(keys), live=True)
         _sz = disclosure_history.sizes()
         log.info("event='disclosure_history_opened' persistent=%r scopes=%d cells=%d", dpath is not None,
                  _sz["scopes"], _sz["cells"])
 
-    def history_scope(app: AppEntry, purpose: str):
+    def history_scope(app: AppEntry, purpose: str, end_user: str | None = None):
         """Who asks, for the differencing history of a RECORDS request: the authenticated app's tenant and id (the
         rate-limited caller; the gateway has no end-user identity: the workspace authenticates users by SSO but calls
         with one app key) and the purpose. The scope itself is (tenant, dataset) unless the sealed config separates
@@ -644,7 +655,7 @@ def create_app(settings: Settings) -> Starlette:
         def keyfn(key_id):
             kid = key_id or keys.active_id(tenant)
             return kid, keys.derive(tenant, _records.disclosure.KEY_PURPOSE, kid)
-        return _records.disclosure.HistoryScope(disclosure_history, tenant, app.app_id, purpose, keyfn)
+        return _records.disclosure.HistoryScope(disclosure_history, tenant, app.app_id, purpose, keyfn, end_user)
 
     def report_of(rep, outcome: str, error: dict | None = None) -> dict | None:
         """The finished pgw_report, or None if building it failed (logged by type only; the response is not
@@ -675,7 +686,8 @@ def create_app(settings: Settings) -> Starlette:
         except _Reject as r:
             _log(logging.INFO, event="reject", request_id=rid, status=r.status, error_type=r.etype)
             _tr("error", status=r.status, error_type=r.etype, message=r.message)
-            return _err(r.status, r.etype, r.message, rid, **refused(box[0], r.status, r.etype, r.message, r.extra))
+            return _err(r.status, r.etype, r.message, rid, r.retry_after,
+                        **refused(box[0], r.status, r.etype, r.message, r.extra))
         except Exception as e:    # never include exception text: it may carry request data
             _log(logging.ERROR, event="internal_error", request_id=rid, error_type=type(e).__name__)
             _tr("error", status=500, error_type="internal_error", message="internal error")
@@ -717,6 +729,15 @@ def create_app(settings: Settings) -> Starlette:
         # replaces the profile's free-text limits for the body and the message content.
         plan = record_plans.get(purpose) if contract is not None else None
         raw_body = await read_body(request, plan.spec.max_bytes if plan is not None else None)
+        # End-user identity ASSERTED BY THE APP (pgw.enduser): HMAC-bound to this purpose and body with the app key.
+        # A present but invalid assertion is refused (never downgraded to anonymous, which would shed a limit).
+        try:
+            end_user = enduser.verify(request.headers, request.headers.get("authorization", "")[7:].strip(),
+                                      purpose, raw_body)
+        except enduser.EndUserError:
+            raise _Reject(401, "end_user_invalid", "end-user assertion invalid") from None
+        if end_user is None and app.require_end_user:
+            raise _Reject(401, "end_user_required", "this app must assert the end user (X-PGW-End-User)")
         try:
             body = json.loads(raw_body)
         except ValueError:
@@ -926,7 +947,7 @@ def create_app(settings: Settings) -> Starlette:
                 _tr("route", route="RECORDS", reason="field contract: computed results and aliases only")
                 rep.begin("compute")
                 try:
-                    rr = await bounded(_records.run, plan, messages, history_scope(app, purpose),
+                    rr = await bounded(_records.run, plan, messages, history_scope(app, purpose, end_user),
                                        timeout=plan.spec.timeout_s)
                 except _Reject:
                     rep.end("compute", "failed")
@@ -938,8 +959,9 @@ def create_app(settings: Settings) -> Starlette:
                         rep.records = e.report
                     ledger_line(rid, app, purpose, model, None, {}, "BLOCKED", (time.perf_counter() - t0) * 1000,
                                 "disclosure_control", contract)
-                    raise _Reject(429 if e.code == _records.disclosure.REFUSE_RATE else 422,
-                                  "disclosure_control_refused", str(e), reason=e.code) from None
+                    limited = e.code == _records.disclosure.REFUSE_RATE
+                    raise _Reject(429 if limited else 422, "disclosure_control_refused", str(e),
+                                  retry_after=(e.retry_after or 60) if limited else None, reason=e.code) from None
                 except _records.disclosure.HistoryUnavailable as e:
                     rep.end("compute", "failed")
                     _log(logging.ERROR, event="disclosure_history_unavailable", request_id=rid,

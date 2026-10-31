@@ -22,7 +22,7 @@ from pgw.product.contracts import ContractError, load_contract
 from pgw.product.fieldschema import SchemaError
 from tests import hrms_synth as S
 from tests.sealed import signing_key
-from tests.test_hrms_records import ROOT, _settings, make, post, upstream_text, variant
+from tests.test_hrms_records import MASTER, ROOT, _settings, make, post, upstream_text, variant
 
 K = 5
 DC = ROOT / "registry/rules/disclosure_control.yaml"
@@ -406,7 +406,7 @@ def test_bypass_b_history_survives_a_restart_and_a_wrong_key_fails_closed(tmp_pa
     from pgw.gateway.upstream import MockLLMUpstream
     from tests.test_hrms_records import TestClient as _TC
     _c, _m, cfg = make(tmp_path, {"roster_question": str(ROOT / "contracts/roster_question.yaml")})
-    master = os.urandom(32).hex()
+    master = MASTER
     sy = _pop12()
     mock1 = MockLLMUpstream("summarise")
     c1 = _TC(create_app(_fixed_settings(tmp_path, cfg, mock1, master)))
@@ -417,11 +417,9 @@ def test_bypass_b_history_survives_a_restart_and_a_wrong_key_fails_closed(tmp_pa
     c2 = _TC(create_app(_fixed_settings(tmp_path, cfg, mock2, master)))      # "restart": new process state
     _refused(post(c2, "roster_question", sy.envelope(FIN)))
     assert mock2.received == []
-    mock3 = MockLLMUpstream("summarise")
-    c3 = _TC(create_app(_fixed_settings(tmp_path, cfg, mock3, os.urandom(32).hex())))
-    r = post(c3, "roster_question", sy.envelope(FIN))
-    assert r.status_code == 503 and r.json()["error"]["type"] == "disclosure_store_unavailable"
-    assert mock3.received == []
+    # a different key store: the high-water mark's MAC fails at startup (it would otherwise be 503 on the first request)
+    with pytest.raises(disclosure.HistoryIntegrityError, match="failed authentication"):
+        create_app(_fixed_settings(tmp_path, cfg, MockLLMUpstream("summarise"), os.urandom(32).hex()))
 
 
 def test_bypass_c_history_is_never_evicted(gw):
