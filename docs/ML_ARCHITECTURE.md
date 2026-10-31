@@ -142,17 +142,27 @@ recall source. The gateway therefore treats address coverage as a startup requir
   Development starts with a warning.
 - The result is `coverage: {"ADDRESS": "pin_only" | "ml:<sha256[:12]>"}` on `/healthz` and in every `pgw_report`.
 - In `pin_only` mode only, a PIN accepted by the rules also masks the block it ends (`places.pin_block`): the
-  comma-separated segments to its left on the same line while each is a short run of capitalised or numeric words
-  (the first partly-prose segment contributes its trailing capitalised run), cut at a sentence boundary or a label
-  colon, and up to three preceding lines that end in a comma or dash or are short capitalised lines, stopping at a
-  house-number-led line. Structure only, no street-name lists. Measured on 120 generated home addresses (Indian
-  streets, localities, landmarks, one-line and multi-line, in prose and in forms; `tests/address_cases.py`): fully
-  covered 8 of 120 (7%) before, 90 of 120 (75%) after; capitalised comma- or line-separated forms 90 of 90, lower-case
-  or comma-less writing 0 of 30 (still PIN only). Over-masking: the 5 707 texts of dev and dev2 contain no address span and none changed; in dev3build 14 of 900
-  texts changed, all of them genuine address blocks (+919 characters in total; one block also took a date line above
-  a company address). Of 1 568 dev texts containing a six-digit number, only those 14 changed. Of 12 hand-written
-  benign texts with PINs and six-digit amounts, only a company address with a PIN is extended. The extension never replaces the ML label: with a
-  model address label it is off.
+  segments to its left on the same line, separated by a comma, `;`, `|`, a tab or a spaced `/` or `-`, while each is a
+  short run of capitalised or numeric words (the first partly-prose segment contributes its trailing capitalised
+  run), cut at a sentence boundary or a label colon, and up to four preceding lines that end in a separator or are
+  short capitalised lines, stopping at a house-number-led line. A PIN alone on its line is accepted when the line above
+  reads as address lines (short, capitalised, with a locality word, city, house marker or number), and a PIN after an
+  address cue ("the address 7 palm grove road whitefield 560066") when a locality word or number lies between. Lower-case
+  text has no capital to tell address from prose, so it is taken only from an ANCHOR (a house marker, or a number
+  followed by two words) to the PIN, inside the nearest five separated segments of at most four lower-case words each;
+  without an anchor nothing is extended (ordinary words are not swallowed). Structure only, no street-name lists. A
+  protected name inside or beside the block (declared subject, roster, conversation link, model span) is cut out of
+  it (`places.carve_blocks`, called by the Protector wherever it resolves overlaps); the pieces on both sides stay
+  masked. **Not covered by construction:** an address with no PIN and no house marker; lower-case text with no anchor;
+  lower-case prose without separators (the PIN only). Measured on 120 generated home addresses
+  (`tests/address_cases.py`): fully covered 90 of 120 before and after (capitalised comma- or line-separated forms 90
+  of 90; lower-case landmark-first forms 0 of 30, PIN only). Measured on 160 layout variants (`variant_cases`,
+  16 per category; fully covered street + PIN, round-8 code then now): pipe 0 -> 16, slash 0 -> 16, semicolon 0 -> 16,
+  tab 16 -> 16, spaced dash 0 -> 16, PIN on its own line 0 -> 16, lower-case with commas 0 -> 16, house marker without
+  PIN 16 -> 16, lower-case prose 16 -> 16 (PIN only required; 0 ordinary words masked), no PIN and no house marker
+  0 -> 0 (uncovered). Over-masking: the 6 607 texts of dev, dev2 and dev3build changed in 1 text (+6 characters: one
+  PIN of a genuine address); 12 hand-written benign texts with PINs or six-digit amounts and five with separators:
+  at most one short block extended. The extension never replaces the ML label: with a model address label it is off.
 
 **Enabling the ML address label.** In `registry/deployment.yaml`, `ml_detector.labels` maps each model label to a gateway
 type. openai/privacy-filter: `private_address: ADDRESS`; GLiNER: its `address` label (the span label you give the

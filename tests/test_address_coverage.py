@@ -203,3 +203,96 @@ def test_benign_text_with_pins_and_six_digit_numbers_is_barely_touched(text):
 def test_six_digit_numbers_without_address_context_are_not_addresses():
     for t in ("Invoice 560034 for 450000 rupees, batch 123456.", "Total: 560034\nRef 400001\n", "Order #654321 shipped"):
         assert spans(t, True) == spans(t, False) == []
+
+
+# --- round 9: separators, own-line PIN, lower case, no PIN; and the tab-row regression -------------------------------
+
+from tests.address_cases import RESIDUAL_CATEGORIES, TAB_ROWS, VARIANT_CATEGORIES, variant_cases  # noqa: E402
+
+
+def _pin_ok(c, sp):
+    return not c["pin"] or covered(c["text"], sp, c["pin"])
+
+
+def test_variant_layouts_are_covered_by_structure_alone():
+    cases = variant_cases()
+    assert len(cases) >= 150
+    by = {k: [c for c in cases if c["cat"] == k] for k in VARIANT_CATEGORIES}
+    for cat in ("pipe", "slash", "semi", "tab", "dash", "pin_own_line", "lower_comma", "nopin_house"):
+        for c in by[cat]:
+            sp = spans(c["text"], True)
+            assert _pin_ok(c, sp) and all(covered(c["text"], sp, p) for p in c["parts"]), (cat, c["text"], sp)
+    for c in by["lower_prose"]:                  # lower-case prose: the PIN only, and the words around it stay
+        sp = spans(c["text"], True)
+        assert _pin_ok(c, sp) and not any(covered(c["text"], sp, k) for k in c["keep"]), (c["text"], sp)
+    for c in by["nopin_nohouse"]:                # no PIN, no house marker: nothing structural; stated in the docs
+        assert spans(c["text"], True) == []
+    assert set(RESIDUAL_CATEGORIES) == {"nopin_nohouse", "lower_prose"}
+
+
+def test_ordinary_words_around_variant_addresses_are_not_swallowed():
+    for c in variant_cases():
+        sp = spans(c["text"], True)
+        assert not any(covered(c["text"], sp, k) for k in c["keep"]), (c["text"], sp)
+
+
+def test_a_pin_alone_on_a_line_needs_address_lines_above_it():
+    assert spans("Amount\n560034\n", True) == []
+    assert spans("Total payable\n560034\n", True) == []
+    t = "Flat 4, Rose Villa,\nAdyar\nChennai\n600020\nThanks"
+    sp = spans(t, True)
+    assert covered(t, sp, "Rose Villa") and covered(t, sp, "600020") and not covered(t, sp, "Thanks")
+
+
+def test_lower_case_text_is_taken_only_up_to_an_anchor():
+    t0 = "thanks, call me tomorrow, delhi 110001 is the office"
+    assert spans(t0, True) == [(t0.index("110001"), t0.index("110001") + 6)]
+    t = "my address is 7 palm grove road, whitefield, bangalore 560066 is correct"
+    sp = spans(t, True)
+    assert covered(t, sp, "7 palm grove road, whitefield") and not covered(t, sp, "my address")
+
+
+def _tab_wire(client, mock, row):
+    r = send(client, "\t".join(row))
+    assert r.status_code == 200, r.text
+    return mock.received[-1].decode().lower()
+
+
+@pytest.mark.parametrize("row", TAB_ROWS)
+def test_a_tab_row_led_by_a_protected_name_keeps_street_and_pin_masked_in_pin_only_mode(tmp_path, row):
+    """Round-9 regression: the PIN block ran left over the (tab-joined) name; the declared-name span overlapped it and
+    the resolver dropped the whole block, so street AND PIN reached the provider."""
+    client, mock = gateway(tmp_path, {"address_coverage": "pin_only"})
+    wire = _tab_wire(client, mock, row)
+    for part in (row[1].split(",")[0], row[3]):
+        assert part.lower() not in wire, part
+    assert "[address_" in wire and "[person_" in wire
+
+
+@pytest.mark.parametrize("row", TAB_ROWS)
+def test_a_tab_row_led_by_a_protected_name_keeps_the_street_masked_with_an_ml_address_label(tmp_path, tmp_path_factory, row):
+    F, d, sha = models(tmp_path_factory)
+    det = F.detector_profile(d, sha, labels={"PER": "PERSON", "LOC": "ADDRESS"})
+    client, mock = gateway(tmp_path, {"ml_detector": det, "ner_off_justification": None, "address_coverage": None})
+    wire = _tab_wire(client, mock, row)
+    assert row[1].split(",")[0].lower() not in wire
+    assert row[3] not in wire
+
+
+def test_carve_blocks_splits_around_a_stronger_span_instead_of_dropping_the_block():
+    from pgw.types import Detection, EntityType as T
+    t = "Flat 4, c/o Ritika Banerjee, Sector 9, Noida, 201301"
+    i = t.index("Ritika")
+    dets = [Detection(0, len(t), T.ADDRESS, places.SCORE, places.SOURCE), Detection(i, i + 15, T.PERSON, 1.0, "C:declared")]
+    with places.pin_block(True):
+        out = places.carve_blocks(t, dets)
+    pieces = sorted((d.start, d.end) for d in out if d.type is T.ADDRESS)
+    assert pieces[0][0] == 0 and pieces[-1][1] == len(t) and all(e <= i or s >= i + 15 for s, e in pieces)
+    assert places.carve_blocks(t, dets) is dets                      # no pin_block scope: unchanged
+
+
+def test_benign_texts_keep_their_over_masking_bound_with_the_new_separators():
+    for t in ["Q3 | Pune 411001 | 120000 units", "Status; Delhi 110001; approved", "Rows: a / b / Mumbai 400001",
+              "Item\tQty\tRef\nBolt\t12\t560034\n", "Name\tCity\tPIN\nMeera\tPune\t411038\n"]:
+        extra = sum(e - s for s, e in spans(t, True)) - sum(e - s for s, e in spans(t, False))
+        assert extra <= 40, (t, spans(t, True))

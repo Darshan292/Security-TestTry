@@ -757,7 +757,8 @@ class Protector:
         per_seg = [_outside(d, h) for d, h in zip(per_seg, headers, strict=True)]
 
         if not _abl.get().D5:   # ablation: no propagation step at all (still resolve overlaps)
-            return [_resolve(_drop_possessive(seg.text, d)) for seg, d in zip(segs, per_seg, strict=True)]
+            return [_resolve(self._carve(seg.text, _drop_possessive(seg.text, d)))
+                    for seg, d in zip(segs, per_seg, strict=True)]
 
         # 2. Known values: everything detected anywhere, plus D1 field values.
         known: dict[tuple[EntityType, str], float] = {}
@@ -779,7 +780,7 @@ class Protector:
             for (t, surface), sc in known.items():
                 per_seg[i] += [Detection(s, e, t, sc, "D5:propagation") for s, e in _occurrences(seg.text, t, surface)
                                if t is not EntityType.PERSON or not _overlaps_any(s, e, titles[i])]
-            per_seg[i] = _resolve(_drop_possessive(seg.text, per_seg[i]))
+            per_seg[i] = _resolve(self._carve(seg.text, _drop_possessive(seg.text, per_seg[i])))
         initials = _initials(s for t, s in known if t is EntityType.PERSON)
         if initials:
             per_seg = [_extend_initials(seg.text, dets, initials) for seg, dets in zip(segs, per_seg, strict=True)]
@@ -819,8 +820,13 @@ class Protector:
                    for s, e in _occurrences(seg.text, EntityType.PERSON, surface)
                    if not _overlaps_any(s, e, titles[i])]
             if add:
-                per_seg[i] = _resolve(_drop_possessive(seg.text, per_seg[i] + add))
+                per_seg[i] = _resolve(self._carve(seg.text, _drop_possessive(seg.text, per_seg[i] + add)))
         return per_seg
+
+    def _carve(self, text: str, dets: list[Detection]) -> list[Detection]:
+        """pin_only scope: an extended ADDRESS span is cut around stronger spans instead of being dropped by them."""
+        with places.pin_block(self.pin_block):
+            return places.carve_blocks(text, dets)
 
     def _alias_key_id(self, ctx: Context) -> str:
         """Active key id for new conversations; an existing conversation keeps the key id pinned in the

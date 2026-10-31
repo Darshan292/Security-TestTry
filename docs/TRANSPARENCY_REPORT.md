@@ -52,7 +52,8 @@ Tests: `tests/test_transparency_report.py`.
 
 Which detectors stand behind the types that have no complete rule-based recall. Today one entry: `ADDRESS`.
 `"pin_only"`: no ML detector label maps to ADDRESS, so only house-marked addresses, PIN codes and the structural block
-a masked PIN ends are protected (a profile can only run production this way by sealing `address_coverage: pin_only`).
+a masked PIN ends are protected (separators `,` `;` `|` tab, a PIN alone on a line; an address with no PIN and no house
+marker, and unanchored lower-case text, are NOT protected) (a profile can only run production this way by sealing `address_coverage: pin_only`).
 `"ml:<digest>"`: an ML detector maps a label to ADDRESS; the digest is the first 12 hex characters of the pinned
 model bundle sha256 in the signed profile. The same mapping is on `/healthz` as `coverage`. A fixed property of the
 running gateway, never request text. Added to `version: 1` as a new key (consumers that ignore unknown keys are unaffected).

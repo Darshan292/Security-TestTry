@@ -33,7 +33,7 @@ for EXT_PSEUDO and LOCAL_COMPUTE) therefore **refuses to start** unless one of t
    get code-owner review, re-seal, sign, redeploy.
 2. **Explicit opt-out.** Add the top-level key `address_coverage: pin_only` (beside `kind`, `version`; same reviewed,
    signed change). Only house-marked addresses, PIN codes and the structural block a masked PIN ends are then
-   protected; lower-case or comma-less addresses and landmark-only lines cross. Use it only with a written decision.
+   protected; an address with no PIN and no house marker, unanchored lower-case text and landmark-only lines cross. Use it only with a written decision.
 
 Check it after every deploy: `GET /healthz` returns `"coverage": {"ADDRESS": "ml:<digest prefix>"}` or `"pin_only"`,
 and each transparency report carries the same. Development mode starts without either and logs

@@ -351,6 +351,11 @@ above close the side channels the gateway itself was responsible for.
 
 ### ADDRESS coverage by mode
 
+Round 9 re-test (13 of 42 home addresses still leaked a street in `pin_only`): tab, `|`, `/`, `;` and a PIN on its own
+line are now covered (measured below, `docs/ML_ARCHITECTURE.md`, "Address coverage"), and a tab-separated row led by
+a protected name no longer loses its street and PIN (root cause there). What no structural rule can do stays stated in
+the `pin_only` row: an address with no PIN and no house marker needs the ML label.
+
 An external tester found that without an ML model 23 of 42 home addresses (55%) sent the street, locality or landmark
 in clear, and in 16 the PIN was masked while the street beside it stayed raw. Rule-based address recall is
 deliberately narrow (no new hand-written address grammar), so the gateway makes the dependency visible and refuses to
@@ -359,7 +364,7 @@ leave it silent:
 | Mode (how the profile is sealed) | What is protected as ADDRESS | Stated as |
 |---|---|---|
 | ML detector with a label mapped to `ADDRESS` (e.g. privacy-filter `private_address`, GLiNER `address`) | Whatever the model finds (free-form addresses, landmarks, localities) plus the rule-based house-marker/PIN spans | `ADDRESS: ml:<first 12 hex of the model bundle sha256>` |
-| No such label, profile seals `address_coverage: pin_only` | House-marked addresses, street/locality words, PIN codes, and the structural block a masked PIN ends (comma-separated capitalised/numeric segments on its line, up to three joined preceding lines; cut at a sentence boundary or a label colon). **Not** protected: lower-case or comma-less writing, a landmark or locality line with no PIN nearby | `ADDRESS: pin_only` |
+| No such label, profile seals `address_coverage: pin_only` | House-marked addresses (also without a PIN), street/locality words, PIN codes, and the structural block a masked PIN ends: segments to its left on the same line separated by `,` `;` `\|` a tab or a spaced `/` or `-`, each a short run of capitalised/numeric words, up to four joined preceding lines (a PIN alone on its line joins the address-like lines above it), cut at a sentence boundary or a label colon. Lower-case text is taken only from an anchor (a house marker or a number followed by two words) to the PIN, inside the nearest five separated segments. **Not protected, by construction:** (a) an address with **no PIN and no house marker** ("Lotus Heights, Sector 62, Noida", "Marine Drive, Ernakulam, Kerala"), a landmark-only or village line; nothing structural marks it as an address, so only an ML address label can cover it; (b) lower-case text without an anchor, and lower-case prose without separators (only its PIN is masked; ordinary words are deliberately never extended over); (c) a name written inside the street line (a protected name is cut out, the pieces left and right stay masked, but an undetected name is masked as part of the address) | `ADDRESS: pin_only` (`/healthz`, every `pgw_report`; the exact limit is in `docs/TRANSPARENCY_REPORT.md`, `coverage`) |
 | No such label, no acknowledgement | Production refuses to start for any contract whose `requires_detectors` includes ADDRESS (default for EXT_PSEUDO and LOCAL_COMPUTE; `requires_detectors: []` declares there is none). Development starts with a warning | (not running) |
 
 The state is on `/healthz` (`coverage`) and in every `pgw_report` (`coverage`), so operators and calling applications
