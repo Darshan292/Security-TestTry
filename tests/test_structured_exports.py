@@ -84,15 +84,19 @@ def private_gw(tmp_path_factory):
     return Gw(tmp, contract(tmp, structured_content={"action": "PRIVATE"}))
 
 
-def _appears(v: str, text: str) -> bool:
-    """True when the generated value `v` occurs in `text` as a whole token, not inside a longer alphanumeric run.
+_GATEWAY_RANDOM = re.compile(r"req_[0-9a-f]{24}|\b[0-9a-f]{32,}\b")   # request ids (uuid4 hex) and digests
 
-    The gateway writes random hex into its own output (request ids are `req_` + uuid4 hex, and error reports carry
-    hashes). A short numeric canary such as '45708' can then match a fragment of one of those hex runs by chance,
-    which made this assertion flaky. A real leak places the value as a field or a word, so it is delimited by JSON,
-    quotes, spaces or line breaks; a fragment of a hex run never is. See test_leak_matcher_is_exact_at_token_boundaries.
+
+def _appears(v: str, text: str) -> bool:
+    """True when the generated value `v` occurs anywhere in `text`, after removing only the gateway's own random
+    tokens (request ids `req_` + 24 hex, and hex digests of 32+ characters).
+
+    A short numeric canary such as '45708' could match a fragment of a request id by chance, which made this
+    assertion flaky. Only those gateway-generated random tokens are excluded; every other occurrence still counts,
+    including a value glued to other letters or digits ("INR41250.00", "EMP12345x"), so the check stays a plain
+    substring check everywhere else. See test_leak_matcher_ignores_only_gateway_random_tokens.
     """
-    return re.search(r"(?<![0-9A-Za-z])" + re.escape(v) + r"(?![0-9A-Za-z])", text) is not None
+    return v in _GATEWAY_RANDOM.sub(" ", text)
 
 
 def _no_leak(gw: Gw, values) -> None:
@@ -397,11 +401,12 @@ def test_json_report_never_echoes_content(refuse_gw):
         assert not _appears(v, body), f"{v!r} echoed in the report"
 
 
-def test_leak_matcher_is_exact_at_token_boundaries():
-    # the matcher still catches every real leak shape ...
+def test_leak_matcher_ignores_only_gateway_random_tokens():
+    # every real leak shape still counts, including values glued to other characters ...
     assert _appears("45708", '{"id":"45708"}') and _appears("45708", "x 45708.") and _appears("45708", "45708\nnext")
     assert _appears("EMP12345", 'Worker "EMP12345",') and _appears("41250.00", "Basic 41250.00 HRA")
     assert _appears("Meera Kulkarni", '"name": "Meera Kulkarni"')
-    # ... and ignores a fragment of a longer alphanumeric run, such as a request id (uuid4 hex) in the gateway output
-    assert not _appears("45708", '"request_id":"req_fafc73d6db45708e16b9f7"')
-    assert not _appears("45708", "fafc73d6db45708e16b9f7")
+    assert _appears("41250.00", "INR41250.00") and _appears("45708", "ref45708x")
+    # ... and only the gateway's own request id / digest hex is ignored
+    assert not _appears("45708", '"request_id":"req_fafc73d6db45708e16b9f7a1"')
+    assert not _appears("45708", "sha " + "ab" * 10 + "45708" + "cd" * 10)
