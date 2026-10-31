@@ -87,3 +87,14 @@ def test_plugins_extra_is_hashed_covers_every_adapter_and_matches_runtime_pins()
         v = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("plugins.txt"))
         w = re.search(rf"(?im)^{re.escape(n)}==(\S+)", text("runtime.txt"))
         assert v and w and v.group(1) == w.group(1), n
+
+
+def test_export_lock_is_fully_hashed_and_has_the_bundle_tools():
+    """requirements/export.txt: the bundle-building venv (repack, GLiNER export); torch from the +cpu index."""
+    path = ROOT / "requirements" / "export.txt"
+    locked = _locked(path)
+    assert locked and not [n for n, h in locked.items() if not h], "unhashed pins in requirements/export.txt"
+    assert {"torch", "gliner", "transformers", "onnx", "onnxruntime", "huggingface-hub"} <= set(locked)
+    text = path.read_text(encoding="utf-8")
+    assert re.search(r"(?m)^torch==2\.15\.0\+cpu\s", text), "torch must be the +cpu build"
+    assert "--extra-index-url https://download.pytorch.org/whl/cpu" in text
