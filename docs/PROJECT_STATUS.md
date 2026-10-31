@@ -40,6 +40,8 @@ The external tester's unseen sets (C, D, and a planned set E kept by the tester)
 
 1. `python -m venv .venv` and install every lock with hashes: `requirements/{runtime,ner(+ner-model),ml,plugins,eval,dev}.txt`
    (see INSTALL.md, "Running the full suite").
+   Bundle-building tools (repack, GLiNER export) use a separate venv from `requirements/export.txt` (hashed; torch +cpu
+   from download.pytorch.org): see docs/TESTER_RERUN.md section 0.
 2. Regenerate corpora (gitignored, hash-checked against their MANIFESTs):
    `python -m eval.synth.generate --out eval/data --seed 1337`, `python -m eval.synth2.generate --out eval/data2 --seed 20260930`,
    `gunzip -k eval/data3/dev3build.jsonl.gz`, `(cd eval/eutil && python build.py)`.
