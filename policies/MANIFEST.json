@@ -54,8 +54,8 @@
    "version": 4
   },
   "registry/deployment.yaml": {
-   "sha256": "8f6d5f46b989c57886b71cf5adb0dd4950bef1bc3ddefff1dd332baec6c2e820",
-   "version": 4
+   "sha256": "b3c6029170242e1cacd610f06758b838dbb526c54fcfe16bc325251bf50f6b59",
+   "version": 5
   },
   "registry/rules/contractor_budget_default.yaml": {
    "sha256": "9216d92f705b8e4aaf3c1a7d522547b3987274cffe48276cf98960501e742cc8",

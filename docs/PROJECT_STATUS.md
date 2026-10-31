@@ -57,15 +57,29 @@ The re-audit's 127-ticket sealed held-out set was gitignored and lived only in a
 aggregate results (SECURITY_BOUNDARY §8) survive. Held-out data is therefore kept by the external tester, never by the
 team or the agent; only hashes go into the repo.
 
+## Round 8 (2026-10-31)
+
+- Tester's set E (273 cases + 40 benign, fingerprint in eval/EXTERNAL_SETS.md) without a model: 38% of identifier
+  cases leak, 28/28 special-category cases cross (content gate untrained), 14/14 singling-out cases leak.
+- Small groups: answers are audited as set algebra over all answers in the (tenant, dataset) scope (pgw/product/
+  setaudit.py; brute-force verified): no group of 1..k-1 records is determinable by any linear combination of printed
+  counts; suppressed cells keep a verified alternative. Identity keys normalised (case, DOMAIN\, @UPN). Rate limits
+  per app (the gateway has no end-user identity), no reset (compaction keeps record sets), DB 0600 with HMACed
+  predicates and a high-water mark in PGW_STATE_DIR.
+- ADDRESS: production requires an ML ADDRESS label or a sealed `address_coverage: pin_only` (shipped profile v5 says
+  pin_only); /healthz and pgw_report state the coverage.
+- Tester runbook: requirements/export.txt (hashed), fail-fast blocks.
+
 ## Open items (in priority order)
 
-1. Tester reruns sets C and D with (A) stack + privacy-filter q4 and (B) stack + GLiNER fp32; tester builds set E
-   (200+ cases, kept by the tester, hash only in repo).
-2. 300–500 real tickets labelled in-house by HR reviewers (consent/DPO sign-off) — the only evidence that decides
+1. Tester reruns C, D and E with (A) stack + privacy-filter q4 and (B) stack + GLiNER fp32 (needs HF/PyTorch hosts
+   allowed in the tester's environment).
+2. Train the content gate (special-category text) on free Kaggle GPU: notebooks/kaggle 01 + 03, docs/ML_TRAINING.md.
+3. 300–500 real tickets labelled in-house by HR reviewers (consent/DPO sign-off) — the only evidence that decides
    which detector to trust.
-3. If C/D still show name leaks after GLiNER: fine-tune GLiNER on Indian HR text on free Kaggle GPU (notebooks in
-   notebooks/kaggle/, runbook docs/ML_TRAINING.md).
-4. Decisions pending: card issuer-range fix (JCB/UnionPay/Diners/Discover/Maestro currently typed IDENTIFIER, still
-   masked); city before PIN code stays unmasked; rounding of published counts (built, off).
-5. Not protected: differencing across different apps/purposes/datasets; ≥3-count combinations; LLM background
-   knowledge; l-diversity; free-text inline name–pay pairs without ML.
+4. If C/D/E still show name leaks after GLiNER: fine-tune GLiNER on Indian HR text on Kaggle.
+5. Decisions pending: card issuer-range fix (JCB/UnionPay/Diners/Discover/Maestro typed IDENTIFIER, still masked);
+   city before PIN stays unmasked; rounding of published counts (built, off); per-app rate limits are shared by all
+   users of an app (end-user identity is not propagated to the gateway).
+6. Not protected: background knowledge; l-diversity; inference from suppression choices; tenants/datasets
+   deliberately separated; free-text inline name–pay pairs without ML.

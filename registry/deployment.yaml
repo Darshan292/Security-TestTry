@@ -5,11 +5,16 @@
 # config_serial, have it reviewed by a code owner, re-seal and sign (OPERATIONS.md). In development the profile is
 # advisory (warnings).
 kind: pgw-deployment-profile
-version: 4
+version: 5
 # Monotonic rollback serial (pgw/gateway/rollback.py). Raise it in EVERY signed configuration change, including a
 # deliberate rollback (old content, new higher serial). Production refuses a serial below PGW_MIN_CONFIG_SERIAL or
 # below the high-water mark recorded in PGW_STATE_DIR.
-config_serial: 3
+config_serial: 4
+# Address coverage (SECURITY_BOUNDARY "ADDRESS coverage by mode"). No ML detector maps a label to ADDRESS in this
+# shipped profile, so the honest statement is pin_only: PIN codes and comma/line-structured address blocks around them
+# are masked; lower-case or comma-less addresses are not. Configure an ml_detector with an ADDRESS label to get
+# ml coverage, and remove this line.
+address_coverage: pin_only
 settings:
   # Sealed configuration files (paths relative to the sealed tree; the roster is optional).
   registry_path: registry/apps.yaml
