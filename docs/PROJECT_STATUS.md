@@ -70,6 +70,23 @@ team or the agent; only hashes go into the repo.
   pin_only); /healthz and pgw_report state the coverage.
 - Tester runbook: requirements/export.txt (hashed), fail-fast blocks.
 
+## Round 9 (2026-10-31)
+
+- Listings: every count a listing lets the reader count (listed rows, rows not listed, each attribute class incl.
+  "attributes withheld") is a history cell audited by setaudit R1/R2; the tester's listing-then-Sales attack is refused.
+- Audit budget is wall-clock (sealed `audit_max_ms`, default 1500 ms) plus the step cap; 422 `audit_budget` is a
+  separate, honest refusal. Our own workload (1,500 users, random roster questions, 4 parallel runs): p95 ~1.1 s,
+  max 1.56 s; budget refusals ~0.7%; BUT 23–40% of questions are refused because they would reveal a small group
+  given earlier answers (fine-grained filters over a growing history). Usability cost to be judged with HR users.
+- Identity keys: strict sealed charset after normalisation; any missing/invalid key refuses the dataset.
+- Rate limits per (app, end user), per app and per scope, shared across processes in SQLite; refused queries metered;
+  end user asserted by the app via HMAC-bound headers (pgw/enduser.py); 429 with Retry-After.
+- History mark MACed with a key-store key plus a monotonic copy in the rollback state; recover needs an operator and a
+  stopped gateway; all store waits bounded (3 s, 503).
+- ADDRESS pin_only: tab-row regression fixed (root cause: block overlapping an already protected name was dropped);
+  `| / ; tab`, own-line PIN, anchored lower-case covered; no-PIN/no-house-marker addresses need ML.
+- Flaky test: request-id hex collided with short canaries; matcher now removes only gateway random tokens.
+
 ## Open items (in priority order)
 
 1. Tester reruns C, D and E with (A) stack + privacy-filter q4 and (B) stack + GLiNER fp32 (needs HF/PyTorch hosts
