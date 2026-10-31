@@ -123,11 +123,42 @@ production CPU class before setting `timeout_s` and `workers`.
    `version` and `config_serial`; review; re-seal and sign. The model directory itself is copied to the hosts out of
    band (read-only); the signed pin is what makes it trusted. A model's address label (e.g. `private_address`) maps
    to the gateway type `ADDRESS` (class C1: aliased and restored like a name); `IGNORE` leaves addresses to the
-   rule-based detector (`pgw/detect/places.py`: house marker + street words, PIN codes) alone.
+   rule-based detector (`pgw/detect/places.py`: house marker + street words, PIN codes) alone; production then
+   needs the sealed `address_coverage: pin_only` (see "Address coverage").
 5. **Evaluate**: dev set for selection and thresholds; then the release gate (external tester's sets + the
    human-labelled real sample), once, with thresholds set beforehand ([ML_EVALUATION.md](ML_EVALUATION.md)).
 6. **Release** only on a PASS verdict; keep the previous artefact and profile for rollback (a rollback is a new
    signed profile with a higher `config_serial`).
+
+### Address coverage
+
+`ADDRESS` has no complete rule-based recall (`pgw/detect/places.py` is deliberately narrow), so the ML detector is its
+recall source. The gateway therefore treats address coverage as a startup requirement (`pgw/gateway/coverage.py`):
+
+- A contract may declare `requires_detectors: [ADDRESS]`; absent, it defaults to that for EXT_PSEUDO and LOCAL_COMPUTE
+  (free text reaches a model), and to none for RECORDS. `requires_detectors: []` declares there is none.
+- If a served contract requires ADDRESS and no `ml_detector.labels` entry maps to `ADDRESS`, production refuses to
+  start, unless the signed profile carries the top-level key `address_coverage: pin_only` (explicit, reviewed opt-out).
+  Development starts with a warning.
+- The result is `coverage: {"ADDRESS": "pin_only" | "ml:<sha256[:12]>"}` on `/healthz` and in every `pgw_report`.
+- In `pin_only` mode only, a PIN accepted by the rules also masks the block it ends (`places.pin_block`): the
+  comma-separated segments to its left on the same line while each is a short run of capitalised or numeric words
+  (the first partly-prose segment contributes its trailing capitalised run), cut at a sentence boundary or a label
+  colon, and up to three preceding lines that end in a comma or dash or are short capitalised lines, stopping at a
+  house-number-led line. Structure only, no street-name lists. Measured on 120 generated home addresses (Indian
+  streets, localities, landmarks, one-line and multi-line, in prose and in forms; `tests/address_cases.py`): fully
+  covered 8 of 120 (7%) before, 90 of 120 (75%) after; capitalised comma- or line-separated forms 90 of 90, lower-case
+  or comma-less writing 0 of 30 (still PIN only). Over-masking: the 5 707 texts of dev and dev2 contain no address span and none changed; in dev3build 14 of 900
+  texts changed, all of them genuine address blocks (+919 characters in total; one block also took a date line above
+  a company address). Of 1 568 dev texts containing a six-digit number, only those 14 changed. Of 12 hand-written
+  benign texts with PINs and six-digit amounts, only a company address with a PIN is extended. The extension never replaces the ML label: with a
+  model address label it is off.
+
+**Enabling the ML address label.** In `registry/deployment.yaml`, `ml_detector.labels` maps each model label to a gateway
+type. openai/privacy-filter: `private_address: ADDRESS`; GLiNER: its `address` label (the span label you give the
+model) `: ADDRESS`. Set a score in `min_score_by_type` (or `DEFAULT`), pin the repacked bundle's sha256, bump `version`
+and `config_serial`, review, re-seal and sign; then remove `address_coverage: pin_only` if present. `/healthz` then
+shows `ml:<digest prefix>`.
 
 ## 8. Threat model of the ML parts
 

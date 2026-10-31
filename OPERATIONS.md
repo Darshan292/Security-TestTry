@@ -21,6 +21,26 @@ Operational controls around the privacy gateway that code alone does not enforce
 - **One purpose, one contract.** Contracts are resolved globally by purpose. Two registry entries that bind one purpose to files with different content stop startup, even when the name and version strings match. Tenant-specific contracts are not supported.
 - **Source-side input boundary.** Each contract lists the source-side sanitizers or exports (`external_input`) whose free text it accepts. The app team that owns the sanitizer is responsible for it removing NOT_EXPECTED attributes. The gateway records the attestation; it does not verify it (SECURITY_BOUNDARY.md §4).
 
+## Address coverage
+
+Postal addresses have no complete rule-based detector; free-form addresses (landmarks, localities, no house number) are
+found only by an ML detector. A production gateway serving any contract with `requires_detectors: [ADDRESS]` (default
+for EXT_PSEUDO and LOCAL_COMPUTE) therefore **refuses to start** unless one of these holds in the signed profile:
+
+1. **Enable the ML address label (default).** In `registry/deployment.yaml` set `ml_detector` and map the model's
+   address label to `ADDRESS` in `labels`: openai/privacy-filter `private_address: ADDRESS`, GLiNER `address: ADDRESS`
+   (use the label names in your bundle's `labels.json`). Pin the bundle sha256, bump `version` and `config_serial`,
+   get code-owner review, re-seal, sign, redeploy.
+2. **Explicit opt-out.** Add the top-level key `address_coverage: pin_only` (beside `kind`, `version`; same reviewed,
+   signed change). Only house-marked addresses, PIN codes and the structural block a masked PIN ends are then
+   protected; lower-case or comma-less addresses and landmark-only lines cross. Use it only with a written decision.
+
+Check it after every deploy: `GET /healthz` returns `"coverage": {"ADDRESS": "ml:<digest prefix>"}` or `"pin_only"`,
+and each transparency report carries the same. Development mode starts without either and logs
+`address_coverage_pin_only_development`. Integrators: the same two lines are a precondition for adopting a gateway
+release that includes this rule; an existing production profile with no ML address label must add option 2 (or 1)
+before it will start.
+
 ## Source signing keys (input attestation)
 
 Free text reaches an external model only when the source system that produced it signs it (SECURITY_BOUNDARY.md §4).

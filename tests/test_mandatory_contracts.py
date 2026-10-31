@@ -299,7 +299,8 @@ def test_every_shipped_contract_declares_its_input_boundary():
 
 def test_health_reports_mode(tmp_path):
     client, _ = ticket_client(tmp_path)
-    assert client.get("/healthz").json() == {"status": "ok", "mode": "production"}
+    assert client.get("/healthz").json() == {"status": "ok", "mode": "production",
+                                                       "coverage": {"ADDRESS": "pin_only"}}
 
 
 # --- development mode is isolated: unsigned config never reaches a real provider unless set in code --------------

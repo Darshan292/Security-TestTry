@@ -38,7 +38,7 @@ ON, OFF = "transparent-app-key", "plain-app-key"
 PURPOSES = ("ticket_summary", "salary_comparison", "hr_email_draft", "ticket_summary_any_script")
 REQUESTER = {"requester": {"name": "Imran Ansari"}}
 TOP_KEYS = ["version", "request_id", "purpose", "contract", "route", "outcome", "input_source", "stages", "detected",
-            "truncated", "counts", "outbound", "restore", "checks", "error"]
+            "truncated", "counts", "outbound", "restore", "checks", "coverage", "error"]
 STAGE_IDS = ["received", "verify_source", "structure_check", "compute", "protect", "egress_check", "provider", "restore"]
 CHECK_IDS = ["egress_clean", "declared_absent", "source_verified", "structure_check", "c3_not_returned"]
 LABELS = list(LABELS_BY_ID.values())
@@ -554,7 +554,7 @@ def test_multi_turn_report_holds_no_value_from_earlier_turns_or_other_conversati
         allowed = ({d["placeholder"] for d in rep["detected"]} | set(STAGE_IDS) | set(CHECK_IDS) | set(LABELS)
                    | {t.value for t in EntityType} | {c.value for c in DataClass} | set(ACTION.values())
                    | {"declared", "detected", "done", "skipped", "failed", "pass", "fail", "n/a", "sent",
-                      "EXT_PSEUDO", "ticket_summary", "ticket_summary@9", "helpdesk-ticket-export@1",
+                      "pin_only", "EXT_PSEUDO", "ticket_summary", "ticket_summary@9", "helpdesk-ticket-export@1",
                       rep["request_id"]})
         for s in strings({k: v for k, v in rep.items() if k != "outbound"}):
             assert s in allowed, s

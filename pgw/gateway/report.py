@@ -76,8 +76,9 @@ NULL = _Null()
 class Report:
     enabled = True
 
-    def __init__(self, rid: str, t_start: float):
+    def __init__(self, rid: str, t_start: float, coverage: dict | None = None):
         self.rid = rid
+        self.coverage = dict(coverage or {})
         self.purpose: str | None = None
         self.contract = None
         self.route: str | None = None
@@ -243,6 +244,7 @@ class Report:
                         if self.restore_done else None),
             "checks": [{"id": k, "status": v, "label": CHECKS[k]} for k, v in self.checks.items()
                        if not (k in OPTIONAL_CHECKS and v == "n/a")],
+            "coverage": self.coverage,
             "error": error,
             **({"records": self.records} if self.records is not None else {}),
         }
