@@ -55,7 +55,7 @@ Which detectors stand behind the types that have no complete rule-based recall. 
 a masked PIN ends are protected (separators `,` `;` `|` tab, a PIN alone on a line; an address with no PIN and no house
 marker, and unanchored lower-case text, are NOT protected) (a profile can only run production this way by sealing `address_coverage: pin_only`).
 `"ml:<digest>"`: an ML detector maps a label to ADDRESS; the digest is the first 12 hex characters of the pinned
-model bundle sha256 in the signed profile. The same mapping is on `/healthz` as `coverage`. A fixed property of the
+model bundle sha256 in the signed profile. The same mapping is on `/healthz` as `coverage`. Where it is visible: in every `pgw_report` (only for apps with `transparency: true`; the report is opt-in) and on `/healthz`. It is NOT on a 401 (no app resolved, so no report) or on responses to apps without transparency; operators read it from `/healthz`. A fixed property of the
 running gateway, never request text. Added to `version: 1` as a new key (consumers that ignore unknown keys are unaffected).
 
 ### `outcome`
