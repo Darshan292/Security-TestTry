@@ -84,11 +84,22 @@ def private_gw(tmp_path_factory):
     return Gw(tmp, contract(tmp, structured_content={"action": "PRIVATE"}))
 
 
+def _appears(v: str, text: str) -> bool:
+    """True when the generated value `v` occurs in `text` as a whole token, not inside a longer alphanumeric run.
+
+    The gateway writes random hex into its own output (request ids are `req_` + uuid4 hex, and error reports carry
+    hashes). A short numeric canary such as '45708' can then match a fragment of one of those hex runs by chance,
+    which made this assertion flaky. A real leak places the value as a field or a word, so it is delimited by JSON,
+    quotes, spaces or line breaks; a fragment of a hex run never is. See test_leak_matcher_is_exact_at_token_boundaries.
+    """
+    return re.search(r"(?<![0-9A-Za-z])" + re.escape(v) + r"(?![0-9A-Za-z])", text) is not None
+
+
 def _no_leak(gw: Gw, values) -> None:
     sent = gw.external_bytes()
     unescaped = sent.encode().decode("unicode_escape", "replace") if "\\u" in sent else sent
     for v in values:
-        assert v not in sent and v not in unescaped, f"{v!r} reached the external provider"
+        assert not _appears(v, sent) and not _appears(v, unescaped), f"{v!r} reached the external provider"
 
 
 # --- the generator covers what it claims ---------------------------------------------------------------------------
@@ -122,7 +133,7 @@ def test_signed_export_is_refused_and_nothing_is_sent(refuse_gw, i):
     assert err["type"] == "structured_data_in_free_text" and "field-contract" in err["message"]
     assert err["regions"] and all(set(x) == {"format", "records", "fields"} for x in err["regions"])
     for v in c.values:                                         # the error never echoes content
-        assert v not in r.text
+        assert not _appears(v, r.text), f"{v!r} echoed in the refusal"
     rep = err["pgw_report"]
     assert {s["id"]: s["status"] for s in rep["stages"]}["structure_check"] == "failed"
     assert {c_["id"]: c_["status"] for c_ in rep["checks"]}["structure_check"] == "fail"
@@ -383,4 +394,14 @@ def test_json_report_never_echoes_content(refuse_gw):
     assert r.status_code == 422
     body = json.dumps(r.json())
     for v in c.values:
-        assert v not in body
+        assert not _appears(v, body), f"{v!r} echoed in the report"
+
+
+def test_leak_matcher_is_exact_at_token_boundaries():
+    # the matcher still catches every real leak shape ...
+    assert _appears("45708", '{"id":"45708"}') and _appears("45708", "x 45708.") and _appears("45708", "45708\nnext")
+    assert _appears("EMP12345", 'Worker "EMP12345",') and _appears("41250.00", "Basic 41250.00 HRA")
+    assert _appears("Meera Kulkarni", '"name": "Meera Kulkarni"')
+    # ... and ignores a fragment of a longer alphanumeric run, such as a request id (uuid4 hex) in the gateway output
+    assert not _appears("45708", '"request_id":"req_fafc73d6db45708e16b9f7"')
+    assert not _appears("45708", "fafc73d6db45708e16b9f7")
