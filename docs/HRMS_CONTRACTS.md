@@ -278,7 +278,7 @@ created_month, `list: true` in 0 % or 30 % of questions; per-caller rate limits 
 4-core host. Default `audit_max_ms` 1500: audit time per question (whole check-and-record) p50 40-210 ms, p95
 1.05-1.2 s, max 1.56 s, against p95 12 s and max 90 s before (the old search on the same workload without
 listings). Refusals for an exhausted audit budget: 0 of 400 questions without listings, 7 of 600 with listings
-(about 1 in 140 over all 1,000); before, 42-53 of 300 (1 in 6) on this workload. Refusals because the answer itself
+(about 1 in 140 over all 1,000); the old search with only the 1.5 s bound added refused 42-53 of 300 (1 in 6) this way. Refusals because the answer itself
 would determine a small group: 23-28 % of questions without listings, 40 % with (fine-grained month filters over a
 growing history; a 60 s budget refuses as many). The speed-up comes from a complete branching R1 search, R1
 searched only for sums containing rows a step changed, R2 moves verified once per trial, and a suppression search
