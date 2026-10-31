@@ -220,10 +220,10 @@ def test_audit_max_ms_is_sealed_config():
     assert cfg.audit_max_ms == setaudit.DEFAULT_MAX_MS
     raw = (plan_for.__globals__["ROOT"] / "registry/rules/disclosure_control.yaml").read_bytes()
     c2 = disclosure.load_config("disclosure_control.yaml",
-                                raw.replace(b"audit_max_ms: 1500", b"audit_max_ms: 800"))
+                                raw.replace(b"audit_budget: 400000", b"audit_budget: 400000\n  audit_max_ms: 800"))
     assert c2.audit_max_ms == 800
     import pytest
     with pytest.raises(disclosure.SchemaError):
         disclosure.load_config("disclosure_control.yaml",
-                               raw.replace(b"audit_max_ms: 1500", b"audit_max_ms: 5"))
+                               raw.replace(b"audit_budget: 400000", b"audit_budget: 400000\n  audit_max_ms: 5"))
     assert dataclasses.replace(cfg, audit_max_ms=100).audit_max_ms == 100
