@@ -1,0 +1,17 @@
+# Bundle-building venv (docs/TESTER_RERUN.md, Parts 2-4): the GLiNER export (torch CPU, gliner, transformers, onnx,
+# onnxruntime, huggingface_hub) and the privacy-filter repack (onnx). Standalone: not layered on runtime.txt.
+# Versions are the ones installed in the export venv used for the tester rerun (pip freeze).
+# torch is the CPU build from the PyTorch index; the option line below makes `pip install -r export.txt` find it.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
+gliner==0.2.29
+transformers==5.16.1
+onnx==1.23.2
+onnxruntime==1.31.1
+huggingface_hub==1.33.0
+# Transitive pins where the export venv differs from a fresh resolution (kept at the installed versions, pip freeze).
+certifi==2026.7.22
+filelock==4.2.4
+hf-xet==1.7.0
+markupsafe==3.0.3
+typer==0.27.2

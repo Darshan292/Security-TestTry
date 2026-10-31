@@ -21,20 +21,39 @@ ticket with HTTP 200 and all checks passing; the placeholders that left the gate
 Shell variables used by every block (set them once; nothing here is secret):
 
 ```bash
+set -euo pipefail
 export RUN=${RUN:-$HOME/rerun}            # scratch root, outside the repository
 export WT=${WT:-/home/user/wt/runbook}    # your checkout at the runbook's commit (or later)
 export MODELS=${MODELS:-/home/user/models}
 export PY=${PY:-/home/user/security-testtry/.venv/bin/python}     # gateway + runtime venv (see INSTALL.md)
-export EXPORT_PY=${EXPORT_PY:-/home/user/venv-export/bin/python} # torch CPU + gliner 0.2.29 (export only)
+export EXPORT_VENV=${EXPORT_VENV:-/home/user/venv-export}
+export EXPORT_PY=${EXPORT_PY:-$EXPORT_VENV/bin/python}   # torch CPU + gliner 0.2.29 (export only; requirements/export.txt)
 export HF_HUB_DISABLE_XET=1               # the xet transfer failed with a CAS error here; plain HTTPS works
 export PGW_PORT=${PGW_PORT:-8081}         # the gateway listens here; change it if the port is taken
 mkdir -p "$RUN/keys" "$RUN/src" "$MODELS" && chmod 700 "$RUN/keys"
+# fail-fast helpers: every step that consumes an artifact calls one of these first (a mismatch returns 1 and stops the block)
+check_sha() {   # check_sha FILE SHA256: FILE exists, is non-empty, and its sha256 is SHA256
+  test -s "$1" || { echo "missing or empty: $1" >&2; return 1; }
+  printf '%s  %s\n' "$2" "$1" | sha256sum -c --status - || { echo "sha256 mismatch: $1" >&2; return 1; }
+}
+check_bundle() {   # check_bundle DIR SHA256: DIR exists and its manifest digest (python -m pgw.ml.artifact) is SHA256
+  test -d "$1" || { echo "missing bundle: $1" >&2; return 1; }
+  local got
+  got=$(cd "$WT" && "$PY" -m pgw.ml.artifact "$1" | "$PY" -c 'import sys,json; print(json.load(sys.stdin)["sha256"])')
+  test "$got" = "$2" || { echo "bundle digest mismatch for $1: got $got, pinned $2" >&2; return 1; }
+  echo "bundle digest ok: $1"
+}
 ```
 
-- The runtime venv needs `requirements/runtime.txt`, `requirements/ml.txt`, `requirements/ner.txt` and
-  `requirements/ner-model.txt` (spaCy `en_core_web_lg` 3.8.0 is used alongside in both configurations). Install them with
-  `--require-hashes` as in INSTALL.md.
-- The export venv needs `gliner==0.2.29`, `torch 2.15.0+cpu`, `transformers 5.16.1`, `onnx`. Only used in Part 3.
+- The runtime venv (`$PY`) needs `requirements/runtime.txt`, `requirements/ner.txt`, `requirements/ner-model.txt`,
+  `requirements/ml.txt` and `requirements/dev.txt`. spaCy `en_core_web_lg` 3.8.0 is used alongside in both configurations,
+  and `dev.txt` provides `onnx`, which the privacy-filter repack in Part 2 imports. Install with `--require-hashes`, as in
+  INSTALL.md (block below).
+- The export venv (`$EXPORT_PY`) is built from `requirements/export.txt` only (block below): torch CPU 2.15.0+cpu,
+  `gliner==0.2.29`, `transformers==5.16.1`, `onnx`, `onnxruntime`, `huggingface_hub`. Used in Part 3 only.
+- **Fail fast.** Every block starts with `set -euo pipefail`, and every step that uses an artifact checks it first with
+  `check_sha FILE SHA256` or `check_bundle DIR SHA256` (defined above). A failed step stops the block. In an interactive
+  shell that means the shell exits, so run the blocks from a script or a subshell if you do not want that.
 - Every repository used here is public. You do not need `HF_TOKEN`. If you set one for rate limits, do not echo it.
 - **Disk.** Have about 3.5 GB free before Part 2 (the peak is the GLiNER export plus the first bundle plus the second bundle
   copy). Each block below removes its intermediate copies as soon as they are no longer needed, so the peak stays there.
@@ -42,6 +61,25 @@ mkdir -p "$RUN/keys" "$RUN/src" "$MODELS" && chmod 700 "$RUN/keys"
   (`rm -rf "$MODELS/rerun_A"`; the build script refuses an existing directory).
 - **RAM.** Each gateway worker holds its own model copy (see section 8). Plan for the spaCy workers as well:
   `ner_workers: 4` in the current profile.
+
+**Venvs (hashed; re-running these is a check).** The export venv is created from `requirements/export.txt`, using the
+option line in that file for the PyTorch CPU index:
+
+```bash
+set -euo pipefail
+[ -x "$EXPORT_PY" ] || python3 -m venv "$EXPORT_VENV"
+"$EXPORT_PY" -m pip install --require-hashes -r "$WT/requirements/export.txt"
+"$EXPORT_PY" -c "import torch, gliner, transformers, onnx, onnxruntime, huggingface_hub; print('export venv ok, torch', torch.__version__)"
+```
+
+The runtime venv (`$PY`):
+
+```bash
+set -euo pipefail
+"$PY" -m pip install --require-hashes -r "$WT/requirements/runtime.txt" -r "$WT/requirements/ner.txt" \
+  -r "$WT/requirements/ner-model.txt" -r "$WT/requirements/ml.txt" -r "$WT/requirements/dev.txt"
+"$PY" -c "import onnx, onnxruntime, numpy, tokenizers; print('runtime venv ok')"
+```
 
 ## 1. Pins
 
@@ -63,6 +101,7 @@ The label maps below are the reviewed maps of the bundles. Two points for the pr
 ## 2. Part 1: fetch the pinned sources and check every file
 
 ```bash
+set -euo pipefail
 cd "$RUN/src"
 "$PY" - <<'EOF'
 import os, shutil
@@ -94,6 +133,7 @@ EOF
 GLiNER (the export reads the cache by repo and revision):
 
 ```bash
+set -euo pipefail
 cd "$RUN/src"
 "$PY" - <<'EOF'
 from huggingface_hub import snapshot_download
@@ -122,17 +162,20 @@ Repack the two external-data files into one inline `model.onnx`. The script pins
 checks parity against onnxruntime's own load of the source, and refuses to overwrite:
 
 ```bash
+set -euo pipefail
 cd "$WT"
 "$PY" scripts/ml/repack_onnx.py "$RUN/src/pfq4" model_q4.onnx "$RUN/src/pfq4/model.onnx" \
   --expect model_q4.onnx=8f7dee8b46d096f052b359375dfba5d983cc4d18c44a783bf548615c472f8dea \
   --expect model_q4.onnx_data=f30998e28c71c5374cc7e8b7de8f0f83e981592c0c2d652d2ad4928454dbb496 --parity
 # expected: parity max abs diff: 0.000e+00 and sha256 00f41770f92f275b9bd056ce434763856ce3191ce5eaaa4c81b8ab29908d054d
-rm -f "$RUN/src/pfq4/model_q4.onnx" "$RUN/src/pfq4/model_q4.onnx_data"   # the repacked model.onnx is what gets built
+check_sha "$RUN/src/pfq4/model.onnx" 00f41770f92f275b9bd056ce434763856ce3191ce5eaaa4c81b8ab29908d054d   # the repacked file is what gets built; it must match
+rm -f "$RUN/src/pfq4/model_q4.onnx" "$RUN/src/pfq4/model_q4.onnx_data"
 ```
 
 The export note is copied from the existing bench card, so the card (which is inside the digest) reproduces:
 
 ```bash
+set -euo pipefail
 cat > "$RUN/src/export_pf_q4.txt" <<'EOF'
 Official ONNX from openai/privacy-filter@7ffa9a043d54d1be65afb281eddf0ffbe629385b, repacked to one inline file with scripts/ml/repack_onnx.py (parity max abs diff 0). Source files (sha256): onnx/model_q4.onnx 8f7dee8b46d096f052b359375dfba5d983cc4d18c44a783bf548615c472f8dea, onnx/model_q4.onnx_data f30998e28c71c5374cc7e8b7de8f0f83e981592c0c2d652d2ad4928454dbb496; tokenizer.json 0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3; config.json b2b26a4a4a000639ad30b0c264adbefe365bdb567fbd7bb27303b8c438375bd1; viterbi_calibration.json bbc8611ef08a55ed72d64856cbbbb9a91db8dfa881f0a92e2afbad6e4bbc775a. Repacked model.onnx sha256 00f41770f92f275b9bd056ce434763856ce3191ce5eaaa4c81b8ab29908d054d. Decoding: BIOES constrained Viterbi, default operating point (all biases 0). max_length 512, stride 64, aggregation token. Label map: private_address->ADDRESS, private_date/private_url->IGNORE.
 EOF
@@ -142,32 +185,39 @@ Build the bundle (the script writes `labels.json`, `MODEL_CARD.md`, `metrics.jso
 verifies the result with `scripts/ml/import_artifacts.py`; it refuses an existing output directory):
 
 ```bash
+set -euo pipefail
 cd "$WT"
+# every input must be the pinned file before the build reads it
+check_sha "$RUN/src/pfq4/model.onnx" 00f41770f92f275b9bd056ce434763856ce3191ce5eaaa4c81b8ab29908d054d
+check_sha "$RUN/src/pfq4/tokenizer.json" 0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3
+check_sha "$RUN/src/pfq4/config.json" b2b26a4a4a000639ad30b0c264adbefe365bdb567fbd7bb27303b8c438375bd1
+check_sha "$RUN/src/pfq4/viterbi_calibration.json" bbc8611ef08a55ed72d64856cbbbb9a91db8dfa881f0a92e2afbad6e4bbc775a
 "$PY" scripts/ml/build_external_bundle.py "$MODELS/rerun_A" \
   --model "$RUN/src/pfq4/model.onnx" --tokenizer "$RUN/src/pfq4/tokenizer.json" \
   --config "$RUN/src/pfq4/config.json" --viterbi "$RUN/src/pfq4/viterbi_calibration.json" \
   --repo openai/privacy-filter --revision 7ffa9a043d54d1be65afb281eddf0ffbe629385b \
   --licence apache-2.0 --table privacy_filter --max-length 512 --stride 64 --aggregation token \
-  --precision q4 --export-note "$(cat "$RUN/src/export_pf_q4.txt")" > "$RUN/build_A.log" 2>&1
-echo "build A exit $?"
+  --precision q4 --export-note "$(cat "$RUN/src/export_pf_q4.txt")" > "$RUN/build_A.log" 2>&1 \
+  || { echo "build A failed, log: $RUN/build_A.log"; tail -5 "$RUN/build_A.log"; exit 1; }
+echo "build A done"
 ```
 
 Verify the digest against the pin, and compare the bundle with the reference bench bundle if you have one:
 
 ```bash
+set -euo pipefail
 cd "$WT"
-DIG_A=$("$PY" -m pgw.ml.artifact "$MODELS/rerun_A" | "$PY" -c 'import sys,json; print(json.load(sys.stdin)["sha256"])')
-echo "A digest: $DIG_A"
-test "$DIG_A" = cbabf1f661ea8180a48690ae4c341a38f2ea260b0ebae88ef55770258fe46b28 && echo "A digest matches the doc pin"
+check_bundle "$MODELS/rerun_A" cbabf1f661ea8180a48690ae4c341a38f2ea260b0ebae88ef55770258fe46b28
 ```
 
 Free the intermediate copies (the bundle has its own copy of `model.onnx`):
 
 ```bash
+set -euo pipefail
 rm -f "$RUN/src/pfq4/model_q4.onnx" "$RUN/src/pfq4/model_q4.onnx_data" "$RUN/src/pfq4/model.onnx"
 ```
 
-If `DIG_A` differs, do not edit the profile. Compare `MODEL_CARD.md`, `labels.json`, `train_meta.json` and
+If `check_bundle` reports a digest mismatch, do not edit the profile. Compare `MODEL_CARD.md`, `labels.json`, `train_meta.json` and
 `sha256sums` with the reference, then the repacked `model.onnx` sha256 (00f41770...). Record what differs in your report.
 
 ## 4. Part 3: configuration B, bundle `rerun_B` (GLiNER multi PII v1, fp32)
@@ -176,6 +226,7 @@ Export with the pinned gliner (torch CPU venv). This is the only step that needs
 sha256 of the export in the card before the bundle is built:
 
 ```bash
+set -euo pipefail
 cat > "$RUN/src/export_gliner.py" <<'EOF'
 import hashlib, sys
 from pathlib import Path
@@ -189,35 +240,44 @@ tok.backend_tokenizer.save(str(stage / "tokenizer.json"))
 for n in ("model.onnx", "tokenizer.json"):
     print(n, hashlib.sha256((stage / n).read_bytes()).hexdigest())
 EOF
-cd "$RUN/src" && "$EXPORT_PY" "$RUN/src/export_gliner.py" "$RUN/src/gliner_fp32" 2>&1 | grep -v -i "warn" | tail -3
-# expected: model.onnx b0d9c9fba42ef290523cd7b71d96b45cd9f1e8d94eb7db0f4287940bdecf1e4b
-#           tokenizer.json c5b8041501fcdee792b9b112dd592861f04391a24633a73fd9f05aaaf6e8eff1
+cd "$RUN/src"
+rm -rf "$RUN/src/gliner_fp32"
+"$EXPORT_PY" "$RUN/src/export_gliner.py" "$RUN/src/gliner_fp32" > "$RUN/export_gliner.log" 2>&1 \
+  || { echo "GLiNER export failed, log: $RUN/export_gliner.log"; tail -5 "$RUN/export_gliner.log"; exit 1; }
+# the export must match the card before the bundle is built
+check_sha "$RUN/src/gliner_fp32/model.onnx" b0d9c9fba42ef290523cd7b71d96b45cd9f1e8d94eb7db0f4287940bdecf1e4b
+check_sha "$RUN/src/gliner_fp32/tokenizer.json" c5b8041501fcdee792b9b112dd592861f04391a24633a73fd9f05aaaf6e8eff1
 ```
 
 The export is done, so remove the GLiNER weights from the HF cache before the bundle copy (the disk needs the room):
 
 ```bash
+set -euo pipefail
 PT=$("$PY" -c "import os; from huggingface_hub import snapshot_download as s; p = s(repo_id='urchade/gliner_multi_pii-v1', revision='1fcf13e85f4eef5394e1fcd406cf2ca9ea82351d', local_files_only=True); print(os.path.realpath(os.path.join(p, 'pytorch_model.bin')))")
-rm -f "$PT" && echo "removed the cached GLiNER weights (re-download with snapshot_download if you need them again)"
+test -n "$PT" || { echo "cached GLiNER weights not found" >&2; exit 1; }
+rm -f "$PT"
+echo "removed the cached GLiNER weights (re-download with snapshot_download if you need them again)"
 ```
 
 The export is inline (1.16 GB, under the protobuf limit), so it goes straight into the build; fp32 cannot be repacked and
 does not need to be:
 
 ```bash
+set -euo pipefail
 cat > "$RUN/src/export_gliner_note.txt" <<'EOF'
 gliner 0.2.29 export_to_onnx (opset 19, torch 2.15 cpu) from pytorch_model.bin sha256 3003753fba99e40645cf088c7367a2c6211fc174897dc64f1f9c147c29d18d2d, gliner_config.json 2088bee85f50849dea2ab4cf411ab5cf3aaaf7c8a45c23412035978b2bc02801 at revision 1fcf13e85f4eef5394e1fcd406cf2ca9ea82351d; encoder tokenizer from microsoft/mdeberta-v3-base@a0484667b22365f84929a935b5e50a51f71f159d (MIT). Exported model.onnx sha256 b0d9c9fba42ef290523cd7b71d96b45cd9f1e8d94eb7db0f4287940bdecf1e4b, tokenizer.json sha256 c5b8041501fcdee792b9b112dd592861f04391a24633a73fd9f05aaaf6e8eff1. fp32, no quantisation.
 EOF
 cd "$WT"
+# inputs: the exported model and tokenizer, checked above
+check_sha "$RUN/src/gliner_fp32/model.onnx" b0d9c9fba42ef290523cd7b71d96b45cd9f1e8d94eb7db0f4287940bdecf1e4b
+check_sha "$RUN/src/gliner_fp32/tokenizer.json" c5b8041501fcdee792b9b112dd592861f04391a24633a73fd9f05aaaf6e8eff1
 "$PY" scripts/ml/build_external_bundle.py "$MODELS/rerun_B" \
   --model "$RUN/src/gliner_fp32/model.onnx" --tokenizer "$RUN/src/gliner_fp32/tokenizer.json" \
   --repo urchade/gliner_multi_pii-v1 --revision 1fcf13e85f4eef5394e1fcd406cf2ca9ea82351d \
   --licence apache-2.0 --table gliner_pii --max-length 384 --precision fp32 --threshold 0.5 \
-  --export-note "$(cat "$RUN/src/export_gliner_note.txt")" > "$RUN/build_B.log" 2>&1
-echo "build B exit $?"
-DIG_B=$("$PY" -m pgw.ml.artifact "$MODELS/rerun_B" | "$PY" -c 'import sys,json; print(json.load(sys.stdin)["sha256"])')
-echo "B digest: $DIG_B"
-test "$DIG_B" = 1222c2e7e822bd9d3a569780e804798b3f6434863e9e24819ac26276ad4bd1c3 && echo "B digest matches the doc pin"
+  --export-note "$(cat "$RUN/src/export_gliner_note.txt")" > "$RUN/build_B.log" 2>&1 \
+  || { echo "build B failed, log: $RUN/build_B.log"; tail -5 "$RUN/build_B.log"; exit 1; }
+check_bundle "$MODELS/rerun_B" 1222c2e7e822bd9d3a569780e804798b3f6434863e9e24819ac26276ad4bd1c3
 ```
 
 Free the copies once the bundle exists: `rm -rf "$RUN/src/gliner_fp32"` (the bundle keeps its own `model.onnx`).
@@ -232,6 +292,7 @@ default 0.5 for every type; `intra_op_threads: 4` is the 4-thread latency row of
 Config A:
 
 ```bash
+set -euo pipefail
 cat > "$RUN/profile_A.yaml" <<EOF
   ml_detector:
     path: $MODELS/rerun_A
@@ -259,6 +320,7 @@ EOF
 Config B:
 
 ```bash
+set -euo pipefail
 cat > "$RUN/profile_B.yaml" <<EOF
   ml_detector:
     path: $MODELS/rerun_B
@@ -308,6 +370,7 @@ Two different keys. Do not mix them up:
 For this test both are dev keys in `$RUN/keys` (mode 0600). They are created once and never overwritten.
 
 ```bash
+set -euo pipefail
 cd "$WT"
 # the keygen commands write the private key file (mode 0600, never overwritten)
 [ -f "$RUN/keys/source.key" ] || "$PY" -m pgw.product.attest keygen "$RUN/keys/source.key" >/dev/null
@@ -328,6 +391,8 @@ print(k.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex())" > "$RU
 [ -f "$RUN/keys/app_key.txt" ] || "$PY" -c "import secrets; print(secrets.token_hex(16))" > "$RUN/keys/app_key.txt"
 [ -f "$RUN/keys/master.hex" ] || "$PY" -c "import secrets; print(secrets.token_hex(32))" > "$RUN/keys/master.hex"
 chmod 600 "$RUN/keys/"*.key "$RUN/keys/app_key.txt" "$RUN/keys/master.hex"
+test -s "$RUN/keys/source.pub"
+test -s "$RUN/keys/config.pub"
 echo "keys ready (values not printed)"
 ```
 
@@ -335,6 +400,7 @@ Stage a sealed tree per configuration. The staging script is the only place wher
 to `$RUN`, not into the repository:
 
 ```bash
+set -euo pipefail
 cat > "$RUN/stage.py" <<'EOF'
 """Stage and seal a test configuration. Usage: stage.py A|B (or 0 for no ML detector, baseline)."""
 import hashlib, os, shutil, sys
@@ -380,13 +446,16 @@ key = bytes.fromhex((run / "keys/config.key").read_text().strip())
 integrity.seal(stage / "policies/MANIFEST.json", sign_key=key)
 print("staged", stage, "ml_detector:", "none" if not block else cfg)
 EOF
-cd "$WT" && "$PY" "$RUN/stage.py" A
+cd "$WT"
+"$PY" "$RUN/stage.py" A
+test -f "$RUN/stage_A/policies/MANIFEST.json"
 echo "staged A"
 ```
 
 `stage.py` replaces the line `  ml_detector: null` with the block. Check the result:
 
 ```bash
+set -euo pipefail
 grep -n "ml_detector:" -A3 "$RUN/stage_A/registry/deployment.yaml" | head -6
 grep -n "^version:\|^config_serial:" "$RUN/stage_A/registry/deployment.yaml"
 ```
@@ -398,6 +467,7 @@ verifies under `PGW_TRUSTED_CONFIG_PUBKEY`, the rollback floor passes, every con
 Write the environment (secrets are read from files, never printed):
 
 ```bash
+set -euo pipefail
 CFG=A
 cat > "$RUN/gateway_env.sh" <<EOF
 export PGW_MODE=production
@@ -419,10 +489,11 @@ Start it (one configuration at a time: they share the port and the ledgers are p
 helper, in the same shell you use for the rest of the runbook; it stops the gateway of `$CFG` and waits until the port is free:
 
 ```bash
+set -euo pipefail
 stop_gateway() {
   local pid
   pid=$(cat "$RUN/gateway_$CFG.pid" 2>/dev/null) || { echo "no gateway_$CFG.pid"; return 0; }
-  kill "$pid" 2>/dev/null
+  kill "$pid" 2>/dev/null || true
   for i in $(seq 1 60); do curl -s -m 1 "http://127.0.0.1:$PGW_PORT/healthz" >/dev/null || break; sleep 1; done
   if curl -s -m 1 "http://127.0.0.1:$PGW_PORT/healthz" >/dev/null; then
     echo "port $PGW_PORT still answers: another gateway runs there; stop it before continuing"; return 1
@@ -434,17 +505,21 @@ stop_gateway() {
 Then start, unless the port already answers (an old gateway would otherwise pass the health check for the new one):
 
 ```bash
+set -euo pipefail
 if curl -s -m 1 "http://127.0.0.1:$PGW_PORT/healthz" >/dev/null; then
-  echo "port $PGW_PORT already answers: stop that gateway first (stop_gateway)"
-else
-  cd "$WT" && ( set -a; . "$RUN/gateway_env.sh"; set +a; exec "$PY" -m pgw.gateway ) > "$RUN/gateway_$CFG.log" 2>&1 &
-  echo $! > "$RUN/gateway_$CFG.pid"
-  for i in $(seq 1 180); do
-    curl -sf http://127.0.0.1:$PGW_PORT/healthz && break
-    kill -0 "$(cat "$RUN/gateway_$CFG.pid")" 2>/dev/null || { echo "gateway exited:"; tail -3 "$RUN/gateway_$CFG.log"; break; }
-    sleep 1
-  done; echo
+  echo "port $PGW_PORT already answers: stop that gateway first (stop_gateway)"; exit 1
 fi
+case "$CFG" in A) PIN=cbabf1f661ea8180a48690ae4c341a38f2ea260b0ebae88ef55770258fe46b28 ;; B) PIN=1222c2e7e822bd9d3a569780e804798b3f6434863e9e24819ac26276ad4bd1c3 ;; *) echo "CFG must be A or B"; exit 1 ;; esac
+check_bundle "$MODELS/rerun_$CFG" "$PIN"
+( cd "$WT"; set -a; . "$RUN/gateway_env.sh"; set +a; exec "$PY" -m pgw.gateway ) > "$RUN/gateway_$CFG.log" 2>&1 &
+echo $! > "$RUN/gateway_$CFG.pid"
+for i in $(seq 1 180); do
+  curl -sf http://127.0.0.1:$PGW_PORT/healthz >/dev/null && break
+  kill -0 "$(cat "$RUN/gateway_$CFG.pid")" 2>/dev/null || { echo "gateway exited:"; tail -3 "$RUN/gateway_$CFG.log"; exit 1; }
+  sleep 1
+done
+curl -sf http://127.0.0.1:$PGW_PORT/healthz || { echo "gateway not healthy after 180 s"; tail -3 "$RUN/gateway_$CFG.log"; exit 1; }
+echo
 ```
 
 Expected: `{"status":"ok","mode":"production"}` (the healthz body is counts and status only; it does not say which
@@ -457,7 +532,8 @@ Three checks, in this order:
 1. **Worker processes are loaded.** The detector runs in its own worker process(es), each with its model:
 
    ```bash
-   ps -eo pid,ppid,rss,args | grep -E "pgw.gateway|multiprocessing|spawn_main" | grep -v grep
+   set -euo pipefail
+   ps -eo pid,ppid,rss,args | grep -E "pgw.gateway|multiprocessing|spawn_main" | grep -v grep || true
    ```
 
    Expect one extra child process beyond the spaCy workers. Its RSS is the model: about 2.7 GB for privacy-filter q4 (A), about
@@ -466,6 +542,7 @@ Three checks, in this order:
 2. **The smoke ticket over HTTP** (the real server, the attested ticket, the same path as production traffic):
 
    ```bash
+   set -euo pipefail
    cat > "$RUN/smoke_http.py" <<'EOF'
    import json, os, sys, urllib.request
    from pathlib import Path
@@ -496,6 +573,7 @@ Three checks, in this order:
    else:
        out["error"] = raw[:300].decode("utf-8", "replace")
    print(json.dumps(out, indent=1, ensure_ascii=False))
+   sys.exit(0 if out["status"] == 200 and all(v == "pass" for v in out.get("checks", {}).values()) else 1)
    EOF
    "$PY" "$RUN/smoke_http.py"
    ```
@@ -507,6 +585,7 @@ Three checks, in this order:
    against the same stage, after the server is stopped (the two share the ledgers, and the ledger is single-writer):
 
    ```bash
+   set -euo pipefail
    stop_gateway
    cat > "$RUN/smoke_inproc.py" <<'EOF'
    import dataclasses, json, os, sys
@@ -533,13 +612,15 @@ Three checks, in this order:
        h.update(attest.sign_body(priv, "ticket_summary", "helpdesk-ticket-export@1", body, app_id="pilot"))
        with TestClient(create_app(s)) as client:
            r = client.post("/v1/chat/completions", json=body, headers=h)
+       if r.status_code != 200:
+           sys.exit(f"in-process request failed: HTTP {r.status_code}")
        print(json.dumps({"config": stage_cfg, "status": r.status_code,
                          "LEFT_THE_GATEWAY": ext.received[-1].decode("utf-8") if ext.received else None},
                         indent=1, ensure_ascii=False))
    if __name__ == "__main__":
        main()
    EOF
-   CFG=$CFG; ( set -a; . "$RUN/gateway_env.sh"; set +a; CFG=$CFG "$PY" "$RUN/smoke_inproc.py" ) 2>/dev/null
+   CFG=$CFG; ( set -a; . "$RUN/gateway_env.sh"; set +a; CFG=$CFG "$PY" "$RUN/smoke_inproc.py" )
    ```
 
    Expected for A (observed, clean run): the name, the whole street address and the phone are placeholders; the postal code
@@ -549,6 +630,7 @@ Three checks, in this order:
 Stop A before B:
 
 ```bash
+set -euo pipefail
 stop_gateway
 ```
 
@@ -557,20 +639,32 @@ stop_gateway
 Stage and start the same way with `CFG=B`. The stage and env files are per configuration.
 
 ```bash
-cd "$WT" && "$PY" "$RUN/stage.py" B
+set -euo pipefail
+cd "$WT"
+"$PY" "$RUN/stage.py" B
+test -f "$RUN/stage_B/policies/MANIFEST.json"
 CFG=B
+if curl -s -m 1 "http://127.0.0.1:$PGW_PORT/healthz" >/dev/null; then echo "port $PGW_PORT already answers: stop_gateway first"; exit 1; fi
+check_bundle "$MODELS/rerun_B" 1222c2e7e822bd9d3a569780e804798b3f6434863e9e24819ac26276ad4bd1c3
 sed -e "s#stage_A#stage_B#g" -e "s#^export PGW_PORT=.*#export PGW_PORT=$PGW_PORT#" "$RUN/gateway_env.sh" > "$RUN/gateway_env_B.sh"
-cd "$WT" && ( set -a; . "$RUN/gateway_env_B.sh"; set +a; exec "$PY" -m pgw.gateway ) > "$RUN/gateway_$CFG.log" 2>&1 &
+( cd "$WT"; set -a; . "$RUN/gateway_env_B.sh"; set +a; exec "$PY" -m pgw.gateway ) > "$RUN/gateway_$CFG.log" 2>&1 &
 echo $! > "$RUN/gateway_$CFG.pid"
-for i in $(seq 1 180); do curl -sf http://127.0.0.1:$PGW_PORT/healthz && break; sleep 1; done; echo
+for i in $(seq 1 180); do
+  curl -sf http://127.0.0.1:$PGW_PORT/healthz >/dev/null && break
+  kill -0 "$(cat "$RUN/gateway_$CFG.pid")" 2>/dev/null || { echo "gateway exited:"; tail -3 "$RUN/gateway_$CFG.log"; exit 1; }
+  sleep 1
+done
+curl -sf http://127.0.0.1:$PGW_PORT/healthz || { echo "gateway not healthy after 180 s"; tail -3 "$RUN/gateway_$CFG.log"; exit 1; }
+echo
 "$PY" "$RUN/smoke_http.py"
 ```
 
 Then stop it and run the in-process check with B's environment:
 
 ```bash
+set -euo pipefail
 stop_gateway
-( set -a; . "$RUN/gateway_env_B.sh"; set +a; CFG=$CFG "$PY" "$RUN/smoke_inproc.py" ) 2>/dev/null
+( set -a; . "$RUN/gateway_env_B.sh"; set +a; CFG=$CFG "$PY" "$RUN/smoke_inproc.py" )
 stop_gateway
 ```
 
@@ -597,6 +691,7 @@ sections 3 and 4). The harness prints aggregates only and appends to `eval/ml/re
 Write the detector mapping as a standalone file (the same keys as in the profile, without the `ml_detector:` key):
 
 ```bash
+set -euo pipefail
 cd "$WT"
 "$PY" - <<'EOF'
 import os, yaml
@@ -650,10 +745,13 @@ section 5, de-indented.
   gateway and in-process run before starting another.
 - **Disk full during export or build**: see the disk note in section 0.
 - **HF CAS error when downloading**: set `HF_HUB_DISABLE_XET=1` (section 0).
+- **`missing or empty`, `sha256 mismatch`, `bundle digest mismatch`**: a helper from section 0 stopped the block because an
+  artifact is absent or differs from its pin. The step did not continue; find out which input changed before you retry.
 
 ## 13. Cleanup
 
 ```bash
+set -euo pipefail
 kill "$(cat "$RUN/gateway_A.pid" 2>/dev/null)" "$(cat "$RUN/gateway_B.pid" 2>/dev/null)" 2>/dev/null; true
 rm -rf "$RUN/stage_0" "$RUN/src/gliner_fp32" "$RUN/src/pfq4/model.onnx"
 ```
@@ -680,5 +778,9 @@ them. Keys stay in `$RUN` (mode 0600), not in the repository.
   the old process and the new one failed to bind; `stop_gateway` now waits for the port, and the start refuses a port that
   already answers. (4) An unset release-set variable: now a guard with a message.
 - **Environment.** HF xet transfers failed with a CAS error here; `HF_HUB_DISABLE_XET=1` was used throughout.
+- **Bundle-building lock.** `requirements/export.txt` installed with `--require-hashes` into a fresh Python 3.11.17 venv, with
+  torch `2.15.0+cpu` from the PyTorch CPU index and no fallback. Bundle digests A and B were re-checked with the section 0
+  `check_bundle` helper against `$MODELS`. The raw privacy-filter inputs were not on disk, so the repack was not re-run there;
+  only `scripts/ml/repack_onnx.py --help` and the imports (`onnx`, `onnxruntime`, `gliner`, `torch`) were checked.
 - **Layout decision.** No `deploy/profiles/` files were added: the repository's profile convention is the sealed
   `registry/deployment.yaml`, and the blocks in section 5 are its `ml_detector` entries.
