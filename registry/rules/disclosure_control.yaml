@@ -3,7 +3,7 @@
 # file stops startup. A change needs review, a version bump and a re-seal (OPERATIONS.md).
 kind: pgw-disclosure-control
 config: disclosure_control
-version: 2
+version: 3
 # k: no count of 1..k-1 people defined by quasi-identifiers leaves, and every listed alias's leaving attributes are
 # shared by at least k people. Below 3 only with `min_group_size_override: {justification: "..."}` (reviewed).
 # A contract may raise it (records.min_group_size), never lower it.
@@ -12,27 +12,47 @@ min_group_size: 5
 # then drop the column; rows that still fail show "attributes withheld") | withhold (no coarsening) | alias_only
 # (no attributes next to aliases at all).
 listing: coarsen
-# Durable query history per (tenant, app, purpose, dataset) -- not per conversation (the provider sees every
-# conversation; conversation ids are caller-chosen). Keeps each answered roster query's predicate and the keyed
-# record hashes behind every count it revealed; refuses a query any of whose counts differs from any earlier one by
-# 1..k-1 records (also across gateway restarts and refreshed exports). Full history REFUSES (never evicts); an
-# operator resets it deliberately (python -m pgw.product.disclosure history reset ..., logged). SECURITY_BOUNDARY.md §12.
+# Durable audit history per (tenant, dataset): shared by every app and every RECORDS purpose of the tenant over the
+# same dataset (the provider sees all of them), not per conversation (conversation ids are caller-chosen). Keeps
+# every cell any answer revealed -- printed counts AND suppression markers -- as keyed record hashes, and audits the
+# whole scope as linear constraints over record sets (pgw/product/setaudit.py): no group of 1..k-1 records may have
+# its size determined by any combination of answers. A response that would break this has more secondary cells
+# suppressed, or is refused. Capacity: when a scope is full, or a caller has used its budget, only NEW information is
+# refused (questions already answered are still answered). Operator compaction keeps every record set (never
+# reopens a gap): python -m pgw.product.disclosure history compact ... SECURITY_BOUNDARY.md §12.
 differencing:
   enabled: true
-  max_queries_per_scope: 1000        # answered queries kept per scope
-  max_stored_keys_per_scope: 5000000 # record hashes kept per scope (16 bytes each)
+  scope:
+    separate_apps: false             # true (with a justification) gives each app its own history: weaker
+    separate_purposes: false         # true (with a justification) gives each purpose its own history: weaker
+  per_caller:                        # caller = the authenticated app (the gateway has no end-user identity)
+    new_queries_per_minute: 20       # per gateway process
+    new_queries_per_day: 500         # shared by every process (day counter in the history)
+  max_stored_keys_per_scope: 2000000 # record hashes kept per scope (16 bytes each)
+  max_cells_per_scope: 100000        # distinct revealed record sets per scope
+  max_atoms_per_scope: 20000         # bounds the audit's cost
+  query_log_per_scope: 10000         # metadata rows kept (predicate HMACs, day numbers); older rows compacted
   max_scopes: 10000
-# Deterministic rounding of published roster counts to a base ("about 15"). Off: the set-difference check above is
-# the control; rounding does not stop differencing at rounding boundaries and listings print every matching alias
-# anyway (docs/HRMS_CONTRACTS.md "Small groups").
+  audit_budget: 400000               # search steps per audit; exhausted -> the response is refused (fail closed)
+# Deterministic rounding of published roster counts to a base ("about 15"). Off: the audit above is the control (it
+# treats rounded counts as intervals when on); listings print every matching alias anyway (docs/HRMS_CONTRACTS.md
+# "Small groups").
 rounding:
   enabled: false
   base: 5
 # Quasi-identifiers: by default every KEEP and GENERALIZE field of a schema (every field whose value can leave).
 # A schema block may only ADD names. Hierarchies: roll-ups of a KEEP enumeration, finest first (STARTER mapping:
 # replace with your organisation's reference table and re-seal).
+# record_key (per schema): the dataset-level record identity of the history (the same for every contract over the
+# schema) and its normalisation. Default: the schema's first employee-identifier field with NFKC, whitespace and
+# invisible characters removed, casefold, DOMAIN\ prefix and @UPN suffix stripped; leading zeros of an all-digit id
+# are stripped only if configured (strip_leading_zeros: true).
 schemas:
   ad_user:
+    record_key:
+      fields: [username]
+      normalise:
+        username: {casefold: true, strip_domain: true, strip_upn_suffix: true, strip_leading_zeros: false}
     quasi_identifiers: []
     hierarchies:
       department:

@@ -163,18 +163,26 @@ response therefore passes `pgw/product/disclosure.py` before it is rendered. The
 ```yaml
 kind: pgw-disclosure-control
 config: disclosure_control
-version: 2
+version: 3
 min_group_size: 5          # k. Below 3 only with min_group_size_override: {justification: "..."} (20+ chars);
                            # never below 2. A contract's records.min_group_size may raise it, never lower it.
 listing: coarsen           # coarsen | withhold | alias_only
-differencing:              # durable history per (tenant, app, purpose, dataset); see "Repeated queries" below
+differencing:              # durable audit history per (tenant, dataset); see "Repeated queries" below
   enabled: true
-  max_queries_per_scope: 1000        # answered queries kept per scope (1..20000); full -> refuse, never evict
-  max_stored_keys_per_scope: 5000000 # record hashes kept per scope (16 bytes each, ~80 MB); full -> refuse
+  scope: {separate_apps: false, separate_purposes: false}   # true needs a justification: weaker
+  per_caller: {new_queries_per_minute: 20, new_queries_per_day: 500}   # caller = authenticated app
+  max_stored_keys_per_scope: 2000000 # record hashes kept per scope (16 bytes each)
+  max_cells_per_scope: 100000        # distinct revealed record sets per scope
+  max_atoms_per_scope: 20000         # bounds the audit's cost
+  query_log_per_scope: 10000         # metadata rows (predicate HMACs, day numbers); older rows compacted
   max_scopes: 10000
+  audit_budget: 400000               # search steps per audit; exhausted -> refused (fail closed)
 rounding: {enabled: false, base: 5}  # deterministic rounding of roster counts ("about 15"); off, see below
 schemas:
   ad_user:
+    record_key:            # the dataset's record identity for the history (every contract over the schema)
+      fields: [username]
+      normalise: {username: {casefold: true, strip_domain: true, strip_upn_suffix: true, strip_leading_zeros: false}}
     quasi_identifiers: []  # ADDED to the default: every KEEP and GENERALIZE field (every field whose value can leave)
     hierarchies:           # roll-ups of a KEEP enumeration, finest first (department -> function, title -> family)
       department: [{Finance: Corporate functions, Legal: Corporate functions, Sales: Customer-facing, ...}]
@@ -189,97 +197,142 @@ The gateway enforces these rules on what leaves:
 | Grouped bands (`contractor_budget` per cost centre) | A cost centre with fewer than k people (distinct workers, not work orders) is merged into `other cost centres`. That merged line is printed only if it has at least k people; otherwise it shows `suppressed`. |
 | Listings with attributes (`show` fields, in any computation) | Each listed alias's printed attribute combination must be shared by at least k people of the population the listing is drawn from: the matched records for a roster query, the whole input for an exception list. First comes full-domain coarsening, one level per field for the whole listing, starting with the field that has the most distinct values: month -> year -> 5-year range, PIN `560xxx` -> `56xxxx`, sealed enumeration roll-ups, and finally dropping the column. Coarsening continues while more than k rows fail. Rows that still fail print `attributes withheld (fewer than k share them)`. The withheld rows must themselves be indistinguishable among at least k people; if they are not, more classes are withheld. A `group_by` value whose count was suppressed is withheld in the listing of the same response, and that field is not coarsened, so the listing cannot re-print a suppressed count. With `withhold`, coarsening is skipped. With `alias_only`, attributes are never printed next to aliases. |
 | Exception lists (payroll, timecard, contractor) | A row describes the listed person by design. It carries the alias and codes or bands only, with no quasi-identifier, unless the contract selects `show` fields; then the listing rule above applies. Code counts over the whole export are not conditioned on any quasi-identifier and are already contained in the per-person list, so they are printed. |
-| Repeated queries (differencing) | A durable query history per **tenant, app, purpose and dataset**, not per conversation (see "Repeated queries" below). For each answered roster query it keeps the filter predicate and, for every count printed as a number (record total, matched count, its complement, records missing a filtered field, did-not-match, each group count), the set of keyed record hashes behind it. A query is refused (422 `disclosure_control_refused`, `reason: differencing`, nothing sent) when any of its printed counts covers a record set whose symmetric difference with any earlier printed count's set in the scope has 1..k-1 records: in any conversation, after a restart, on a refreshed export. A full history refuses (`reason: history_full`); a store failure is 503 `disclosure_store_unavailable`. |
+| Repeated queries (differencing) | A durable audit history per **tenant and dataset** -- shared by every app and every RECORDS purpose of the tenant, not per conversation (see "Repeated queries" below). It keeps every cell any answer revealed, printed numbers and suppression markers alike, as the set of keyed record hashes behind it, and audits the whole scope as linear constraints over record sets before anything is sent: no group of 1..k-1 records may have its size determined by any combination of answers, and no suppressed cell may be pinned by the markers' bounds. A response that would break this has its secondary cells (record total, missing count, group counts) suppressed as well; if its answer (the matched count) would break it, it is refused (422 `disclosure_control_refused`, `reason: differencing`, nothing sent). Per-caller rate limits apply to new questions only (429 `rate_limited`); a full scope refuses only new information (`history_full`); a store failure is 503 `disclosure_store_unavailable`. |
 
 ### Repeated queries: the differencing history
 
 **Threat model.** The adversary is the external LLM provider. It sees every outbound request of the tenant: from
-every conversation, every user and every day, and it keeps them. `X-PGW-Conversation-Id` is chosen by the caller and
-is therefore not a security boundary. Two answers that differ by one person give that person away, whichever
-conversations, processes or exports they came from ("Finance or Legal: 14" on Monday, "Finance: 12" on Tuesday
-gives "Legal: 2"; "Finance: 6" on Monday's export and "Finance: 7" on Tuesday's gives the new joiner's department).
+every conversation, user, app, purpose and day, and it keeps them. `X-PGW-Conversation-Id` is chosen by the caller
+and is therefore not a security boundary. Answers that together pin a small group give it away, whichever
+conversations, processes, contracts or exports they came from: "(Finance, Legal, Sales) by department: 22, Finance
+12, Legal and Sales suppressed" and later "Sales: 8" give Legal = 2; "(Legal, Sales) 5", "(Sales, Support) 6",
+"(Legal, Support) 5" give Legal = 2 although no two of them differ by fewer than k; "Finance: 6" on Monday's export
+and "Finance: 7" on Tuesday's give the new joiner's department.
 
-**Scope.** One history per (tenant, app, purpose, dataset). The tenant and app come from the authenticated app
-entry, the purpose from the contract, never from a header. The dataset identity is the payload's source schema id
-plus the contract's optional sealed label `records.dataset` (`[a-z][a-z0-9_.-]`, up to 64 characters; e.g. one label
-per legal entity whose exports must not share a history). It is deliberately **not** the export's content hash: a
-refreshed export (Tuesday's file) must share Monday's history.
+**Scope.** One history per (tenant, dataset). The tenant comes from the authenticated app entry, never from a header.
+The dataset identity is the payload's source schema id plus the contract's optional sealed label `records.dataset`
+(`[a-z][a-z0-9_.-]`, up to 64 characters; e.g. one label per legal entity whose exports must not share a history).
+It is deliberately **not** the export's content hash (a refreshed export shares Monday's history), and by default it
+does **not** include the app or the purpose: a second contract over the same data (`roster_pin` next to
+`roster_question`) shares the history. `differencing.scope.separate_apps` / `separate_purposes` (sealed, with a
+written justification) separate them; that is weaker, because the provider sees all of them.
 
-**What is stored** (`pgw/product/disclosure.py` `HistoryStore`; SQLite, WAL, `synchronous=FULL`, one IMMEDIATE
-transaction per check-and-record so several gateway processes on a host cannot both answer a differencing pair):
-- per scope: tenant, app, purpose, dataset labels, the pinned key id and a key-check value, counters;
-- per answered query: a sequence number, a timestamp, the filter predicate (field names, operators and sealed filter
-  values: enumeration members and generalised formats, as in the request) and which record sets it printed;
-- per distinct printed record set: its size and its members as 16-byte keyed hashes. A member is
-  `HMAC-SHA256(scope key, record identity)` truncated to 16 bytes. The record identity is the value of the contract's
-  `label` fields that are employee identifiers in every source schema (username / employee id: stable across
-  exports), else the label fields that name people, else all label fields (`records.record_key_fields`). A repeated
-  identity in one set, or a record with no identity, counts with multiplicity (`HMAC(scope key, first || n)`). The
-  scope key is `HMAC(K, scope id)`, where K is derived from the gateway key store for the tenant
-  (`keys.derive(tenant, "disclosure-history", key id)`; per-tenant HKDF, pgw/keys.py). **Why this key:** it is
-  secret material the gateway already holds and protects, per tenant, with key ids that survive rotation; the store
-  on disk therefore holds no name, username or identifier in clear, its hashes cannot be recomputed by whoever reads
-  the file without the key, and they cannot be linked across scopes or tenants. The key id is pinned per scope at its
-  first query (with a key-check value), so a tenant key rotation keeps the history comparable; a retired pinned key
-  id or a different master key fails closed (503) until an operator resets that scope. `tests/test_disclosure_control.py`
-  `test_history_store_holds_no_personal_data_in_clear` scans the SQLite bytes (and its WAL) for every synthetic name,
-  username, employee id and date.
+**Record identity.** A record key is `HMAC-SHA256(scope key, normalised identity)` truncated to 16 bytes. The
+identity is the schema's sealed `record_key` (default: its first employee-identifier field, `username` for
+`ad_user`), the same for every contract over the schema; a roster contract that does not select it does not bind.
+Before hashing each value is normalised (`disclosure.normalise_identity`): Unicode NFKC; every whitespace, control
+and format character (zero-width space, BOM) removed; then, per the sealed options of the field (all on by default
+except the last): casefold, a Windows domain prefix stripped (`CORP\asha` -> `asha`), a UPN suffix stripped
+(`asha@corp.example` -> `asha`), leading zeros of an all-digit id stripped (`strip_leading_zeros`, off by default:
+`00123` and `123` are different people unless the organisation says otherwise). Upper-casing the usernames or adding
+a domain prefix in the next export therefore no longer makes the same people look new. A repeated identity in one
+set, or a record with no identity, counts with multiplicity. The scope key is `HMAC(K, scope id)`, where K is
+derived from the gateway key store for the tenant (`keys.derive(tenant, "disclosure-history", key id)`); the key id
+is pinned per scope with a key-check value (rotation keeps the history comparable; a retired pinned key id or a
+different master key fails closed, 503).
 
-**The check.** For each count the new response prints as a number, the set of record hashes behind it is compared
-with every stored set of the scope: refuse when the symmetric difference has 1..k-1 members. Measured on records,
-not on predicates, so the same question on a refreshed export is caught (Monday's {A..F} vs Tuesday's {A..G}: 1),
-and so is a joiner in another department (the total and the matched count print the complement, which changed by
-one). Not compared: a count printed as a suppression marker (its value is an interval, never pinned by one
-subtraction; the within-response audit covers it), and two whole-export sets (record totals or unfiltered matches,
-whose difference is only "who joined or left", characterised by no quasi-identifier). Identical sets are fine.
-Every check happens before anything is sent; a query is recorded only when it passes, in the same transaction.
-A query that passed but later failed (egress check, provider error) stays recorded (conservative).
+**The audit** (`pgw/product/setaudit.py`). Every cell of every answer is stored with what the reader learned about
+its size: an exact number, or an interval -- `suppressed` is [1, inf) because zeros are printed, `fewer than k` is
+[1, k-1], `withheld` is [k, inf), a rounded count is the range that rounds to it. The keys seen so far are
+partitioned into **atoms** (records with the same membership in every cell); every cell is a union of atoms. The
+exact counts span a linear space L over the atoms, kept in reduced row echelon form modulo 2^61-1 (sparse rows,
+pivots preferably on atoms of at least k records). The reader is assumed to know every set relation between its
+answers (which atoms exist) and to use linear algebra, integrality and the intervals. After every answered query:
 
-**Cost.** A new set of size n is compared only with stored sets of size n-k+1..n+k-1 (index on (scope, size); a set
-outside that window cannot be within k-1), and a stored set with the same digest is skipped without being loaded.
-Each comparison is a hash-set intersection, O(stored set size). Worst case per query: (sets the query prints) x
-(stored sets in the size window) x (set size), bounded by the sealed `max_queries_per_scope` (default 1000) and
-`max_stored_keys_per_scope` (default 5,000,000 = about 80 MB per scope). Storage is deduplicated per scope: printing
-the same set again (the same export's total, an unchanged group) stores nothing new.
+- **R1 (exhaustive).** No union W of atoms with 1 <= |W| <= k-1 has its size determined by the exact counts
+  (1_W in L), except an export's own record total. Such a W lies in L n span(small atoms); once no row with a small
+  pivot has an entry on a large atom, those rows are a basis of it and W is a 0/1 sum of at most k-1 of them; the
+  search is exhaustive per connected component of rows.
+- **R2 (certified).** Every suppressed cell of 1..k-1 records and every atom of 1..k-1 records has a verified
+  alternative: an integer atom-count vector, different on it, that satisfies every exact count exactly, every
+  interval and non-negativity (a kernel vector of L, or the sum or difference of two, checked in integer
+  arithmetic). Five suppressed singletons whose union is later printed as 5 have none: refused.
 
-**Full history, reset and rotation.** History is never evicted (eviction is how bypass "70 harmless questions, then
-the pair" worked). When a scope has `max_queries_per_scope` answered queries or `max_stored_keys_per_scope` hashes,
-every further query of that scope is refused: 422 `disclosure_control_refused` with `reason: history_full`
-(`history_scopes_full` when there is no room for a new scope). It is logged as `disclosure_history_full` (ERROR) and
-counted in the operator metric `app.state.pgw_disclosure_metrics.snapshot()` and on `/healthz`
-(`disclosure_history`: answered, refused_differencing, refused_capacity, store_unavailable, scopes, queries;
-counts only). Reset is a deliberate admin action:
+Both fail closed (an exhausted `audit_budget` refuses). **History-aware complementary suppression:** when a
+response would break R1 or R2, the gateway suppresses secondary cells of that response -- first the one whose
+suppression alone suffices, preferring cells that touch the problem; never one the reader already knows exactly --
+and audits again. "Sales: 8" first, then the grouped question, prints Finance as `suppressed`; after
+"(Finance, Sales): 20", "Finance" prints `Records: suppressed`. If even that is not enough, or the answer itself (the
+matched count) would pin a small group, the query is refused. **Tests:** `tests/test_disclosure_audit.py` checks
+every accepted step of random set families and of random roster query sequences against two independent brute-force
+adversaries (exact rational span over every set of 1..k-1 records; exhaustive enumeration of every integer
+assignment consistent with every count and bound); `tests/test_disclosure_history.py` reproduces each bypass.
 
-    python -m pgw.product.disclosure history list  --db $PGW_STATE_DIR/disclosure_history.sqlite
-    python -m pgw.product.disclosure history reset --db ... --tenant T --app A --purpose P --dataset D \
-        --reason "CHG-1234: quarterly review approved by the DPO"
-    python -m pgw.product.disclosure history log   --db ...
+**Cost.** Refinement is O(|S|) per new cell; one exact cell is one sparse row reduction. Measured on a synthetic
+5,000-person export with 300 random filtered / grouped questions (about 2,000 atoms, 500 cells): 0.1 s per audit on
+average, 0.35 s at most; rebuilding a scope's audit state from the database (another process wrote, or a restart)
+0.5 s. Bounded by the sealed caps on stored keys, cells and atoms per scope and the per-audit `audit_budget`.
 
-It needs a written reason (20+ characters), runs as one transaction, writes an `admin_log` row (labels, number of
-queries dropped, reason; no value) and a `disclosure_history_reset` log line. **Consequence:** answers given before
-the reset are no longer compared, so a differencing pair split across the reset is answered. Reset only together
-with a change that makes the old answers useless to the provider (a new k, a new dataset label, a long gap agreed
-with the DPO), and prefer raising `max_queries_per_scope` (a sealed change) for a scope that is merely busy. Key
-rotation needs no reset; retiring the key id a scope is pinned to does (503 until reset).
+**What is stored** (`HistoryStore`; SQLite, WAL, `synchronous=FULL`, one IMMEDIATE transaction per
+check-and-record, so several gateway processes on a host cannot both answer a differencing pair; file mode 0600,
+its WAL / shm sidecars too, directory tightened to 0700): per scope the labels (tenant, dataset; `*` for app and
+purpose when shared), the pinned key id and key-check value, counters, the creation **day**; per distinct revealed
+record set its size, bounds and members as 16-byte keyed hashes; a bounded query log (`query_log_per_scope` rows:
+sequence, **day number**, a 16-byte keyed HMAC of the predicate, a keyed HMAC of the caller, whether it added
+information); per caller and day the number of new questions. **No filter value, field name, operator or timestamp
+is stored in clear** (`test_history_file_modes_and_no_clear_filter_values_or_timestamps` scans the file and WAL).
+Every check happens before anything is sent; a query is recorded only when it passes, in the same transaction. A
+query that passed but later failed (egress check, provider error) stays recorded (conservative).
 
-**Storage location.** `<PGW_STATE_DIR>/disclosure_history.sqlite` (production already requires the state
-directory), or `PGW_DISCLOSURE_DB`. Production refuses to start without one when a RECORDS contract runs;
-development without a state directory keeps the history in memory (warned). The path is an operational setting like
-`PGW_REPLAY_DB`: pointing it at an empty file resets every history silently except for the startup log line
-`disclosure_history_opened` with its scope and query counts, so keep the state directory under the same custody as
-the config high-water mark. Not for network filesystems.
+**Capacity, rate limits and compaction -- no lockout, no reset.** Last round a scope refused everything after 1,000
+answered questions (about 17 s of scripting), locking the whole tenant out until a reset, and the reset reopened
+every gap. Now:
 
-**Consequence for refreshed exports.** Once a count was printed for a group, the same count on a later export with
-1..k-1 joiners or leavers in that group (or its complement) is refused until the change reaches k records. This is
-the price of printing exact counts; it is what the provider would otherwise learn.
+- A question that adds no information (each of its cells is already stored with bounds at least as tight) is always
+  answered and never counted (repeats, the same question on an unchanged export, questions whose sets are known).
+- Per-caller limits on **new** questions: `new_queries_per_minute` (in memory, per gateway process) and
+  `new_queries_per_day` (in the history, shared by every process); exceeding them refuses only that caller's new
+  questions (429 `rate_limited`). The caller is the authenticated app: the gateway has no end-user identity (the
+  workspace authenticates users by SSO but calls the gateway with its one app key), so all users of one app share
+  its budget. To exhaust a scope's `max_cells_per_scope` (100,000) at 500 new questions a day, one caller needs weeks.
+- A full scope (stored keys, cells or atoms) refuses only new information (422 `history_full`, logged as
+  `disclosure_history_full`, counted as `refused_capacity`).
+- Operator **compaction** (deliberate, logged, written reason) drops a scope's query log and its callers' daily
+  counters and KEEPS every record set, so no earlier answer stops being compared:
+
+      python -m pgw.product.disclosure history list    --db $PGW_STATE_DIR/disclosure_history.sqlite
+      python -m pgw.product.disclosure history compact --db ... --tenant T --dataset D \
+          --reason "CHG-1234: caller budget review approved by the DPO"
+      python -m pgw.product.disclosure history log     --db ...
+
+  There is no reset. Trade-offs: the record sets are never forgotten, so storage grows with distinct information
+  (bounded by the caps; raise them in a sealed change for a busy scope); an epoch rotation was considered and not
+  built, because forgetting exact answers is only safe together with coarsening that makes the old answers useless,
+  which rounding is not (it does not stop differencing at rounding boundaries). Operator metrics:
+  `app.state.pgw_disclosure_metrics.snapshot()` and `/healthz` (`disclosure_history`: answered, answered_repeat,
+  suppressed_more, refused_differencing, refused_capacity, refused_rate, store_unavailable, scopes, queries, cells;
+  counts only).
+
+**Deletion and replacement stop startup.** The database carries a random id and a commit sequence; after every
+commit that added information they are written to the high-water mark `<PGW_STATE_DIR>/disclosure_history.hwm.json`
+(atomic, fsync'd, under a lock; the pattern of the config high-water mark `config_serial.json`). Production refuses to
+start (`HistoryIntegrityError`, logged as `disclosure_history_integrity_failed`) when the database is missing or
+empty, has another id (replaced), is older than the mark (restored from an older copy), or the mark is missing or
+corrupt. A missing history is created silently only on the first production start of a fresh state directory (no
+config high-water mark yet). After investigating, an operator recovers deliberately (written reason, admin log):
+
+    python -m pgw.product.disclosure history recover --db ... --state-dir $PGW_STATE_DIR --reason "..."        # re-bind after a restore
+    python -m pgw.product.disclosure history recover --db ... --state-dir $PGW_STATE_DIR --reason "..." --new  # empty history
+
+`--new` is the only way to forget answers, and it is a gap the operator accepts in writing. (A state directory that
+has started production before without any RECORDS contract has no history yet: the first start with one is refused
+the same way; run `recover --new` once to create it.) The mark is not a MAC:
+whoever can write both files consistently can also edit the history itself; it stops deletion, replacement and
+rollback to an older copy, accidental or naive. Development only warns. Not for network filesystems.
+
+**Consequence for refreshed exports.** A count printed for a group can be printed on a later export only if the
+change does not pin a small group: with 1..k-1 joiners or leavers in that group the question is refused; with
+1..k-1 joiners elsewhere the record total prints `suppressed` (the joiner count is a small group); an unfiltered
+question on such an export is refused. This is the price of printing exact counts; it is what the provider would
+otherwise learn.
 
 **Rounding (evaluated, shipped off).** `rounding: {enabled: true, base: B}` prints every roster count (total,
 matched, missing, groups) as `about B*round(n/B)` (half up; never below B for a non-zero count; 0 stays 0;
 suppression markers are unchanged), deterministically: the same true count prints the same text in every cell and
 response (`test_rounding_is_deterministic_and_consistent`). Default base 5. It is **off by default** because:
 (1) it does not stop differencing at rounding boundaries (12 -> "about 10", 13 -> "about 15": a one-person change
-across a boundary still shows), so the set-difference check stays the control; (2) within a scope that check
-already refuses every difference below k, so rounding adds nothing there; (3) a roster listing prints every matching
+across a boundary still shows), so the audit stays the control (it treats rounded counts as intervals); (2) within a
+scope the audit already refuses every determined small group, so rounding adds little there; (3) a roster listing prints every matching
 alias, so the exact count is recoverable by counting lines; (4) these counts are read and acted on by HR staff, who
 need exact numbers. Its real benefit is outside the history's reach (differencing across different purposes, apps
 or tenants, where a one-person change stays hidden unless it crosses a boundary, i.e. in (B-1)/B of cases) for
@@ -299,15 +352,15 @@ option for statistics that are released rather than acted on. It is not built.
 - Inference from the provider's background knowledge.
 - Attribute disclosure when all k people of a group share the same value. Example: "all 6 people matching
   `department = Legal` are disabled". l-diversity is not enforced.
-- Differencing across different tenants, apps, purposes (including two roster contracts over the same export) or
-  dataset identities (another schema, another dataset label): each has its own history.
-- Combinations of three or more printed counts where no single pair differs by 1..k-1 (pairs are compared, plus the
-  complement and did-not-match sets the response itself prints); intervals from suppression markers combined across
-  responses.
-- A stable record identity is assumed: if the label values used as the record key change between exports (renamed
-  usernames), those records count as a leaver plus a joiner, which enlarges differences.
-- Answers given before an operator reset of the history, or outside the history (a deployment pointed at another
-  store file).
+- Differencing across different tenants or dataset identities (another schema, another dataset label), or across
+  apps / purposes the sealed config separates: each has its own history.
+- A small union of atoms that is neither an answered cell nor linearly determined, pinned only through marker
+  bounds (R2 certifies cells and atoms); the response pattern itself (which cells were suppressed).
+- Records whose identity changes between exports beyond what normalisation absorbs count as a leaver plus a joiner.
+- Answers recorded outside the history (a deployment pointed at another store file), or forgotten by an operator's
+  `history recover --new`.
+- Listings: per-attribute counts of listed rows are not part of the audit (each row is k-anonymous in its
+  population).
 - Exception lists and code counts of payroll, timecard and contractor contracts are not part of the history (they
   describe the listed people by design).
 - Reasoning about the suppression algorithm itself.

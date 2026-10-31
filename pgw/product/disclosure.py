@@ -20,11 +20,14 @@ registry/rules/disclosure_control.yaml) on what leaves:
     function) and, for the rows that still fail, withheld with a marker. Withheld rows must themselves be
     indistinguishable among at least k people;
   * a roster filter matching 1..k-1 people says "fewer than k" and lists nobody;
-  * differencing: a durable query history per (tenant, app, purpose, dataset) -- NOT per conversation: the adversary
-    is the external provider, who sees every request of the tenant, and conversation ids are caller-chosen. It keeps
-    each answered query's filter predicate and, for each count it revealed, the set of keyed record hashes behind it
-    (no personal data in clear), and refuses a query any of whose counts differs from any earlier one of the scope
-    by 1..k-1 records (HistoryStore below). Full history refuses; store failure fails closed (503).
+  * differencing: a durable audit history per (tenant, dataset) -- NOT per conversation, app or purpose: the
+    adversary is the external provider, who sees every request of the tenant, and conversation ids are caller-chosen.
+    It keeps every cell any answer revealed (printed numbers and suppression markers) as the set of keyed record
+    hashes behind it and audits the whole scope as linear constraints over record sets (pgw.product.setaudit): no
+    group of 1..k-1 records may have its size determined by any combination of answers, and no suppressed cell may be
+    pinned by the markers' bounds. A response that would break this has more secondary cells suppressed, or is
+    refused (HistoryStore below). Per-caller rate limits on new questions; full capacity refuses only new
+    information; store failure fails closed (503); a missing or replaced history stops startup.
   * optional deterministic rounding of published roster counts to a sealed base (off by default).
 
 Deterministic thresholds, not differential privacy: these outputs are counts and lists a human reads and acts on
@@ -34,8 +37,8 @@ ARX-style optimal anonymisation were considered and are not built; DP remains an
 
 What this does NOT protect against is stated in SECURITY_BOUNDARY.md §12: the provider's background knowledge,
 attribute disclosure when all k people in a group share the same value (homogeneity; l-diversity is not enforced),
-differencing across different tenants, apps, purposes or datasets, combinations of three or more counts that no
-pair reveals, and reasoning about the suppression algorithm itself.
+differencing across different tenants or datasets (or apps / purposes a sealed config separates), and reasoning about
+the suppression algorithm itself.
 """
 from __future__ import annotations
 
@@ -46,12 +49,14 @@ import logging
 import re
 import threading
 import time
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
+from . import setaudit
 from .fieldschema import SchemaError, special_hint
 
 CONFIG_ID = "disclosure_control"
@@ -64,10 +69,13 @@ LISTING_POLICIES = ("coarsen", "withhold", "alias_only")
 MARK_SUPPRESSED = "suppressed"
 MARK_WITHHELD = "withheld"
 BIG = 10 ** 15            # "unbounded" in the table audit
-DEFAULT_MAX_QUERIES = 1000          # answered queries kept per history scope (sealed; full -> refuse)
-MAX_QUERIES_CEILING = 20_000
-DEFAULT_MAX_KEYS = 5_000_000        # stored record hashes per scope (16 bytes each: ~80 MB)
+DEFAULT_MAX_KEYS = 2_000_000        # stored record hashes per scope (16 bytes each: ~32 MB on disk)
 MAX_KEYS_CEILING = 50_000_000
+DEFAULT_MAX_CELLS = 100_000         # distinct revealed record sets per scope
+DEFAULT_MAX_ATOMS = 20_000          # atoms of the audit partition per scope (bounds the audit's cost)
+DEFAULT_QUERY_LOG = 10_000          # query-log rows kept per scope (metadata only; older rows are compacted)
+DEFAULT_PER_MINUTE = 20             # new (information-adding) queries per caller per minute (per process)
+DEFAULT_PER_DAY = 500               # new queries per caller per day (shared by every process)
 DEFAULT_ROUNDING_BASE = 5
 _LABEL_BAD = re.compile(r"[\x00-\x1f\x7f]")
 log = logging.getLogger("pgw.disclosure")
@@ -105,10 +113,17 @@ class Config:
     listing: str
     differencing: bool
     max_scopes: int
-    max_queries: int              # answered queries per history scope; full -> refuse (never evict)
-    max_keys: int                 # stored record hashes per history scope; full -> refuse
+    max_keys: int                 # stored record hashes per history scope; full -> new information refused
     rounding: int                 # 0: published counts exact; else the sealed rounding base
     schemas: dict                 # schema id -> raw block (checked against the schema at bind time)
+    max_cells: int = DEFAULT_MAX_CELLS
+    max_atoms: int = DEFAULT_MAX_ATOMS
+    query_log: int = DEFAULT_QUERY_LOG
+    per_minute: int = DEFAULT_PER_MINUTE
+    per_day: int = DEFAULT_PER_DAY
+    audit_budget: int = setaudit.DEFAULT_BUDGET
+    separate_apps: bool = False   # history scope per app (default: shared by every app of the tenant)
+    separate_purposes: bool = False   # history scope per purpose (default: shared by every RECORDS purpose)
 
     @property
     def ref(self) -> str:
@@ -164,11 +179,21 @@ def load_config(path: str | Path, data: bytes | None = None) -> Config:
     if listing not in LISTING_POLICIES:
         raise SchemaError(f"{name}.listing: one of {LISTING_POLICIES}")
     dif = raw.get("differencing") or {}
-    _keys(dif, {"enabled", "max_queries_per_scope", "max_stored_keys_per_scope", "max_scopes"},
-          f"{name}.differencing")
+    _keys(dif, {"enabled", "scope", "max_scopes", "max_stored_keys_per_scope", "max_cells_per_scope",
+                "max_atoms_per_scope", "query_log_per_scope", "per_caller", "audit_budget"}, f"{name}.differencing")
     enabled = dif.get("enabled", True)
     if not isinstance(enabled, bool):
         raise SchemaError(f"{name}.differencing.enabled: true or false")
+    sc = dif.get("scope") or {}
+    _keys(sc, {"separate_apps", "separate_purposes", "justification"}, f"{name}.differencing.scope")
+    for flag in ("separate_apps", "separate_purposes"):
+        if not isinstance(sc.get(flag, False), bool):
+            raise SchemaError(f"{name}.differencing.scope.{flag}: true or false")
+    if (sc.get("separate_apps") or sc.get("separate_purposes")) and len(str(sc.get("justification", "")).strip()) < 20:
+        raise SchemaError(f"{name}.differencing.scope: separating histories needs a written justification "
+                          "(20+ characters): the provider sees every app and purpose of the tenant")
+    pc = dif.get("per_caller") or {}
+    _keys(pc, {"new_queries_per_minute", "new_queries_per_day"}, f"{name}.differencing.per_caller")
     rnd = raw.get("rounding") or {}
     _keys(rnd, {"enabled", "base"}, f"{name}.rounding")
     if not isinstance(rnd.get("enabled", False), bool):
@@ -177,20 +202,98 @@ def load_config(path: str | Path, data: bytes | None = None) -> Config:
     schemas = raw.get("schemas") or {}
     _keys(schemas, set(schemas), f"{name}.schemas")
     for sid, block in schemas.items():
-        _keys(block, {"quasi_identifiers", "hierarchies", "note"}, f"{name}.schemas.{sid}")
+        _keys(block, {"quasi_identifiers", "hierarchies", "record_key", "note"}, f"{name}.schemas.{sid}")
+    w = f"{name}.differencing"
     return Config(version=version, k=k, override=just, listing=listing, differencing=enabled,
-                  max_scopes=_posint(dif.get("max_scopes", 10_000), f"{name}.differencing.max_scopes", 1, 10 ** 6),
-                  max_queries=_posint(dif.get("max_queries_per_scope", DEFAULT_MAX_QUERIES),
-                                      f"{name}.differencing.max_queries_per_scope", 1, MAX_QUERIES_CEILING),
+                  max_scopes=_posint(dif.get("max_scopes", 10_000), f"{w}.max_scopes", 1, 10 ** 6),
                   max_keys=_posint(dif.get("max_stored_keys_per_scope", DEFAULT_MAX_KEYS),
-                                   f"{name}.differencing.max_stored_keys_per_scope", 1, MAX_KEYS_CEILING),
-                  rounding=base if rnd.get("enabled", False) else 0, schemas=dict(schemas))
+                                   f"{w}.max_stored_keys_per_scope", 1, MAX_KEYS_CEILING),
+                  rounding=base if rnd.get("enabled", False) else 0, schemas=dict(schemas),
+                  max_cells=_posint(dif.get("max_cells_per_scope", DEFAULT_MAX_CELLS), f"{w}.max_cells_per_scope",
+                                    1, 10 ** 7),
+                  max_atoms=_posint(dif.get("max_atoms_per_scope", DEFAULT_MAX_ATOMS), f"{w}.max_atoms_per_scope",
+                                    1, 200_000),
+                  query_log=_posint(dif.get("query_log_per_scope", DEFAULT_QUERY_LOG), f"{w}.query_log_per_scope",
+                                    1, 10 ** 7),
+                  per_minute=_posint(pc.get("new_queries_per_minute", DEFAULT_PER_MINUTE),
+                                     f"{w}.per_caller.new_queries_per_minute", 1, 10_000),
+                  per_day=_posint(pc.get("new_queries_per_day", DEFAULT_PER_DAY),
+                                  f"{w}.per_caller.new_queries_per_day", 1, 10 ** 6),
+                  audit_budget=_posint(dif.get("audit_budget", setaudit.DEFAULT_BUDGET), f"{w}.audit_budget",
+                                       1000, 100_000_000),
+                  separate_apps=bool(sc.get("separate_apps", False)),
+                  separate_purposes=bool(sc.get("separate_purposes", False)))
+
+
+NORM_OPTIONS = ("casefold", "strip_domain", "strip_upn_suffix", "strip_leading_zeros")
+DEFAULT_NORM = {"casefold": True, "strip_domain": True, "strip_upn_suffix": True, "strip_leading_zeros": False}
+_INVISIBLE = {"Cc", "Cf", "Zs", "Zl", "Zp"}
+
+
+@dataclass(frozen=True)
+class RecordKey:
+    """The dataset-level record identity of a schema (the differencing history's record key): the fields whose
+    normalised values identify a person across exports and across contracts, and per field the normalisation."""
+    fields: tuple
+    norm: dict                    # field -> {option: bool} (NORM_OPTIONS)
+
+
+def normalise_identity(value, opts: dict) -> str:
+    """One identity value as the record key sees it: Unicode NFKC, every whitespace / control / format character
+    (zero-width joiners, BOM) removed, then per the sealed options: casefold, a Windows domain prefix stripped
+    (CORP\\asha -> asha), a UPN suffix stripped (asha@corp.example -> asha), leading zeros stripped from an
+    all-digit value (only if configured: 00123 and 123 are then one person). NFKC is applied again after casefolding
+    (casefolding can leave a non-normalised string). Lists are normalised element-wise and sorted."""
+    if isinstance(value, (list, tuple)):
+        return json.dumps(sorted(normalise_identity(v, opts) for v in value), ensure_ascii=False)
+    t = unicodedata.normalize("NFKC", str(value))
+    t = "".join(ch for ch in t if not ch.isspace() and unicodedata.category(ch) not in _INVISIBLE)
+    if opts.get("casefold"):
+        t = unicodedata.normalize("NFKC", t.casefold())
+    if opts.get("strip_domain") and "\\" in t:
+        t = t.rsplit("\\", 1)[1]
+    if opts.get("strip_upn_suffix") and "@" in t:
+        t = t.split("@", 1)[0]
+    if opts.get("strip_leading_zeros") and t.isdigit():
+        t = t.lstrip("0") or "0"
+    return t
 
 
 @dataclass(frozen=True)
 class SchemaControl:
     qis: tuple                    # quasi-identifier field names (default: every KEEP and GENERALIZE field) + additions
     hierarchies: dict             # field name -> tuple of {value: label} levels (KEEP enumerations)
+    record_key: RecordKey | None = None   # None: the schema has no employee identifier (contract label fallback)
+
+
+def _record_key(block, schema, where: str) -> RecordKey | None:
+    """record_key: {fields: [..], normalise: {field: {casefold, strip_domain, strip_upn_suffix,
+    strip_leading_zeros}}}. Default: the schema's first employee-identifier field, default normalisation (every
+    option on except strip_leading_zeros)."""
+    from ..types import EntityType
+    raw = block.get("record_key")
+    if raw is None:
+        ids = [f.name for f in schema.fields if f.entity is EntityType.EMPLOYEE_ID]
+        return RecordKey((ids[0],), {ids[0]: dict(DEFAULT_NORM)}) if ids else None
+    _keys(raw, {"fields", "normalise", "note"}, f"{where}.record_key")
+    fields = raw.get("fields")
+    if not isinstance(fields, list) or not fields or not all(isinstance(x, str) for x in fields):
+        raise SchemaError(f"{where}.record_key.fields: a non-empty list of field names")
+    for n in fields:
+        sp = schema.spec(n)
+        if sp is None or sp.disposition != "ALIAS":
+            raise SchemaError(f"{where}.record_key.fields: {n!r} is not an identity (ALIAS) field of the schema")
+    norm_raw = raw.get("normalise") or {}
+    _keys(norm_raw, set(fields), f"{where}.record_key.normalise")
+    norm = {}
+    for n in fields:
+        o = norm_raw.get(n) or {}
+        _keys(o, set(NORM_OPTIONS), f"{where}.record_key.normalise.{n}")
+        for opt, v in o.items():
+            if not isinstance(v, bool):
+                raise SchemaError(f"{where}.record_key.normalise.{n}.{opt}: true or false")
+        norm[n] = {**DEFAULT_NORM, **o}
+    return RecordKey(tuple(dict.fromkeys(fields)), norm)
 
 
 def schema_control(cfg: Config, schema) -> SchemaControl:
@@ -229,7 +332,7 @@ def schema_control(cfg: Config, schema) -> SchemaControl:
             out.append(dict(m))
         hier[n] = tuple(out)
     qis = tuple(dict.fromkeys([*default, *extra]))
-    return SchemaControl(qis=qis, hierarchies=hier)
+    return SchemaControl(qis=qis, hierarchies=hier, record_key=_record_key(block, schema, where))
 
 
 @dataclass
@@ -494,40 +597,52 @@ def rounded(n: int, base: int) -> str:
     return f"about {max(r, base)}"
 
 
+
+
+def rounding_interval(n: int, base: int) -> tuple:
+    """The counts a reader cannot tell apart from `n` once it is printed rounded: every m >= 1 with the same text."""
+    t = rounded(n, base)
+    vals = [m for m in range(max(1, n - 2 * base), n + 2 * base + 1) if rounded(m, base) == t]
+    return min(vals), max(vals)
+
+
 # =============================================================================================================
-# differencing: durable query history per (tenant, app, purpose, dataset)
+# differencing: durable audit history per (tenant, dataset)
 # =============================================================================================================
 #
 # Threat model: the adversary is the external LLM provider. It sees every outbound request of the tenant, from every
-# conversation, user and day. Conversation ids are chosen by the caller and are therefore NOT a security boundary.
-# The history scope is (tenant, app, purpose, dataset identity); the dataset identity is the source schema id plus
-# the contract's optional sealed `records.dataset` label, never the export's content hash, so a refreshed export
-# shares the history of the export it refreshes.
+# conversation, user, app, purpose and day. Conversation ids are chosen by the caller and are NOT a security boundary.
+# The history scope is therefore (tenant, dataset identity): shared by every app and every RECORDS purpose of the
+# tenant over the same dataset (a second contract over the same data shares it), unless the sealed config separates
+# apps or purposes (with a written justification). The dataset identity is the source schema id plus the contract's
+# optional sealed `records.dataset` label, never the export's content hash, so a refreshed export shares the history.
 #
-# For every answered roster query the store keeps the filter predicate and, for every count the response revealed
-# (matched set, record total, its complement, missing / did-not-match, each group), the SET OF RECORD KEYS behind
-# that count. A record key is a keyed hash: HMAC-SHA256(scope key, stable record identity), truncated to 16 bytes.
-# The scope key is HMAC(tenant key "disclosure-history" from the gateway key store, scope id); the key id is pinned
-# per scope with a key-check value, so a rotation keeps history comparable and a wrong or retired key fails closed.
-# The store therefore holds no name, username or identifier in clear, and its hashes cannot be linked across scopes
-# or tenants, or recomputed without the tenant key.
-#
-# A new query is refused when one of its exactly printed counts covers a set of records that differs from ANY
-# earlier exactly printed count's set of the scope (any conversation, any day, any export) by 1..k-1 record keys
-# (symmetric difference): subtracting the two numbers would give the count of 1..k-1 identifiable records. Not
-# compared: a count printed as a suppression marker (its value is an interval, never pinned by one subtraction; the
-# within-response audit covers it), and a pair of two whole-export sets (record totals / unfiltered matches: no
-# quasi-identifier predicate characterises their difference, which is only "who joined or left"). Full history ->
-# refuse (never evict). Store errors -> HistoryUnavailable (503, nothing sent).
+# For every answered roster query the store keeps EVERY cell the response revealed -- printed numbers AND suppression
+# markers -- as the set of keyed record hashes behind it with what the reader learned about its size (exact, or an
+# interval), and audits the whole scope with pgw.product.setaudit before anything is sent: no union of record sets of
+# 1..k-1 records may have its size determined by the exact counts of the scope (any number of answers, any
+# combination), and every suppressed cell and every small atom keeps a verified alternative consistent with every
+# interval. A response that would break this first has more of its secondary cells suppressed (record total, missing
+# count, group counts: complementary suppression that considers the scope history); if its answer itself (the matched
+# count) would break it, it is refused. A record hash is HMAC-SHA256(scope key, normalised record identity)[:16];
+# the scope key is HMAC(tenant key "disclosure-history" from the gateway key store, scope id), pinned per scope with a
+# key-check value. Predicates are stored only as keyed HMACs and dates only as day numbers.
 
 KEY_BYTES = 16
 HISTORY_DB_NAME = "disclosure_history.sqlite"
+HWM_NAME = "disclosure_history.hwm.json"
+HWM_KIND = "pgw-disclosure-history-high-water"
 KEY_PURPOSE = "disclosure-history"           # key store purpose label of the history key (pgw.keys)
+SCHEMA_VERSION = "2"
 _KCV = b"pgw-disclosure-history/kcv/v1"
-_SCOPE = b"pgw-disclosure-history/scope/v1\x00"
+_SCOPE = b"pgw-disclosure-history/scope/v2\x00"
+_PRED = b"pgw-disclosure-history/predicate/v1\x00"
+_CALLER = b"pgw-disclosure-history/caller/v1\x00"
 REFUSE_DIFFERENCING = "differencing"
 REFUSE_FULL = "history_full"
 REFUSE_SCOPES = "history_scopes_full"
+REFUSE_RATE = "rate_limited"
+SHARED = "*"
 DATASET_RE = re.compile(r"[a-z][a-z0-9_.-]{0,63}")
 
 
@@ -536,21 +651,29 @@ class HistoryUnavailable(Exception):
     refused (503) and nothing is sent. The message is a content-free reason."""
 
 
+class HistoryIntegrityError(ValueError):
+    """At startup: the history database is missing, replaced, older than its recorded high-water mark, or has no
+    high-water mark. The gateway does not start; an operator runs `history recover` deliberately (logged)."""
+
+
 @dataclass(frozen=True)
-class RevealedSet:
-    """The record keys behind one count a response reveals. exact: the count is printed as a number (False: a
-    suppression marker; such sets are neither compared nor stored). whole: the set is a whole export (the record
-    total, or an unfiltered match)."""
-    kind: str
+class AuditCell:
+    """One count a response would reveal: its record keys, what the reader learns about its size as the response
+    stands (lo == hi: printed exactly; hi None: unbounded), whether it is a whole export, and `alt`: the bounds if
+    the history suppresses it as well ((1, None): "suppressed"), or None if it may not be suppressed (the answer)."""
+    name: str
     keys: frozenset
-    exact: bool
+    lo: int
+    hi: int | None
     whole: bool = False
+    alt: tuple | None = None
+    priority: int = 0
 
 
 @dataclass(frozen=True)
 class HistoryScope:
     """Who asks (bound by the gateway from the authenticated app, never from a request header): the store, tenant,
-    app, purpose and `keyfn(key_id or None) -> (key_id, key bytes)` over the gateway key store."""
+    app (also the rate-limited caller), purpose and `keyfn(key_id or None) -> (key_id, key bytes)`."""
     store: "HistoryStore"
     tenant: str
     app: str
@@ -583,27 +706,32 @@ def _digest(keys: frozenset) -> bytes:
     return hashlib.sha256(b"".join(sorted(keys))).digest()
 
 
-def _unpack(blob: bytes) -> set:
-    return {blob[i:i + KEY_BYTES] for i in range(0, len(blob), KEY_BYTES)}
+def _unpack(blob: bytes) -> list:
+    return [blob[i:i + KEY_BYTES] for i in range(0, len(blob), KEY_BYTES)]
+
+
+def _day(t: float | None = None) -> int:
+    return int((time.time() if t is None else t) // 86400)
 
 
 class HistoryMetrics:
-    """Operator counters (never in pgw_report, never a value): answered, refused (differencing / capacity) and store
-    failures since start. `snapshot()` adds the stored scopes and queries."""
+    """Operator counters (never in pgw_report, never a value) since start. `snapshot()` adds the stored sizes."""
+
+    NAMES = ("answered", "answered_repeat", "suppressed_more", "refused_differencing", "refused_capacity",
+             "refused_rate", "store_unavailable")
 
     def __init__(self, store: "HistoryStore"):
         self._store = store
         self._lock = threading.Lock()
         self.c = Counter()
 
-    def inc(self, name: str) -> None:
+    def inc(self, name: str, n: int = 1) -> None:
         with self._lock:
-            self.c[name] += 1
+            self.c[name] += n
 
     def snapshot(self) -> dict:
         with self._lock:
-            out = {n: self.c.get(n, 0) for n in ("answered", "refused_differencing", "refused_capacity",
-                                                 "store_unavailable")}
+            out = {n: self.c.get(n, 0) for n in self.NAMES}
         try:
             out.update(self._store.sizes())
         except HistoryUnavailable:
@@ -611,55 +739,217 @@ class HistoryMetrics:
         return out
 
 
+# --- high-water mark (PGW_STATE_DIR; the pattern of pgw.gateway.rollback) -------------------------------------------
+
+def read_hwm(state_dir) -> dict | None:
+    path = Path(state_dir) / HWM_NAME
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise HistoryIntegrityError(f"{HWM_NAME} is unreadable; startup refused") from None
+    try:
+        doc = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        doc = None
+    if not (isinstance(doc, dict) and set(doc) == {"kind", "db_id", "seq"} and doc["kind"] == HWM_KIND
+            and isinstance(doc["db_id"], str) and re.fullmatch(r"[0-9a-f]{32}", doc["db_id"])
+            and isinstance(doc["seq"], int) and not isinstance(doc["seq"], bool) and doc["seq"] >= 0):
+        raise HistoryIntegrityError(f"{HWM_NAME} is corrupt; startup refused (investigate, then run "
+                                    "`python -m pgw.product.disclosure history recover`)")
+    return doc
+
+
+def write_hwm(state_dir, db_id: str, seq: int) -> None:
+    """Atomically raise the mark (temp file, fsync, rename, directory fsync) under an exclusive lock; never lowered
+    for the same database."""
+    import contextlib
+    import fcntl
+    import os
+    d = Path(state_dir)
+    lock = os.open(d / (HWM_NAME + ".lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            cur = read_hwm(d)
+        except HistoryIntegrityError:
+            cur = None
+        if cur is not None and cur["db_id"] == db_id and cur["seq"] >= seq:
+            return
+        tmp = d / f".{HWM_NAME}.{os.getpid()}.tmp"
+        data = (json.dumps({"kind": HWM_KIND, "db_id": db_id, "seq": seq}, sort_keys=True) + "\n").encode()
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, d / HWM_NAME)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp)
+        dfd = os.open(d, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    finally:
+        os.close(lock)
+
+
+def _secure_file(path: str) -> None:
+    """The history file (and its WAL / shared-memory sidecars) 0600, its directory not group/world accessible."""
+    import os
+    import stat
+    p = Path(path)
+    d = p.parent
+    try:
+        st = d.stat()
+        if st.st_mode & 0o077 and st.st_uid == os.getuid():
+            os.chmod(d, stat.S_IMODE(st.st_mode) & 0o700)
+            log.warning("event='disclosure_history_directory_permissions_tightened' mode=0700")
+        if d.stat().st_mode & 0o077:
+            raise HistoryIntegrityError("the history directory is group- or world-accessible and not owned by the "
+                                        "gateway user; startup refused")
+        if not p.exists():
+            os.close(os.open(p, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600))
+        for f in (p, Path(str(p) + "-wal"), Path(str(p) + "-shm")):
+            if f.exists() and f.stat().st_mode & 0o077:
+                os.chmod(f, 0o600)
+    except OSError as e:
+        raise HistoryUnavailable(type(e).__name__) from None
+
+
 class HistoryStore:
-    """Durable query history (one SQLite file, WAL, synchronous=FULL; the pattern of attest.SqliteReplayStore).
-    Shared by every gateway process on a host; check-and-record is one IMMEDIATE transaction, so two processes cannot
-    both answer a differencing pair. Any database error raises HistoryUnavailable. Not for network filesystems.
+    """Durable audit history (one SQLite file, WAL, synchronous=FULL, mode 0600). Shared by every gateway process on
+    a host; check-and-record is one IMMEDIATE transaction, so two processes cannot both answer a differencing pair.
+    Any database error raises HistoryUnavailable. Not for network filesystems.
 
-    Complexity of one check: a new revealed set of size n is compared only with stored sets whose size lies in
-    [n-k+1, n+k-1] (index on (scope, size); a smaller window cannot hold a symmetric difference below k) and whose
-    digest differs (identical sets are skipped without loading them). Each comparison is a set intersection,
-    O(|stored set|). Worst case per query: O(sets of the query x stored sets in the window x set size), bounded by the
-    sealed max_queries_per_scope and max_stored_keys_per_scope."""
+    Startup integrity (state_dir given): the database carries a random id and a commit sequence; the high-water
+    mark <state_dir>/disclosure_history.hwm.json records both. Production refuses to start when the database is
+    missing, replaced (other id), older than the mark, or has no mark -- except on the first start of a fresh state
+    directory (`fresh`: no config high-water mark yet), where both are created (logged). Development only warns.
 
-    def __init__(self, path: str):
+    Per scope, an in-memory pgw.product.setaudit.Auditor is kept and rebuilt from the stored cells when another
+    process has written (scope generation counter)."""
+
+    def __init__(self, path: str, state_dir: str | None = None, production: bool = False, fresh: bool = False):
         import sqlite3
         self._sq = sqlite3
         self.path = path
+        self.state_dir = state_dir
+        self.production = production
         self._lock = threading.Lock()
         self.metrics = HistoryMetrics(self)
+        self._auditors: dict = {}          # sid -> (generation, Auditor)
+        self._burst: dict = {}             # (sid, caller) -> [monotonic times of new queries in the last minute]
+        persistent = path != ":memory:"
+        existed = persistent and Path(path).is_file() and Path(path).stat().st_size > 0
+        if persistent:
+            _secure_file(path)
         try:
             self._db = sqlite3.connect(path, timeout=10.0, isolation_level=None, check_same_thread=False)
-            if path != ":memory:":
+            if persistent:
                 self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=FULL")
+            old = self._db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rset'").fetchone()
+            if old is not None:
+                raise HistoryIntegrityError("the history file has the pre-v2 format (filter values and timestamps in "
+                                            "clear); archive it securely and run `history recover --new`")
             self._db.executescript("""
+                CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS scope (sid TEXT PRIMARY KEY, tenant TEXT NOT NULL, app TEXT NOT NULL,
                     purpose TEXT NOT NULL, dataset TEXT NOT NULL, key_id TEXT NOT NULL, kcv BLOB NOT NULL,
-                    created REAL NOT NULL, queries INTEGER NOT NULL, stored_keys INTEGER NOT NULL);
-                CREATE TABLE IF NOT EXISTS query (sid TEXT NOT NULL, seq INTEGER NOT NULL, ts REAL NOT NULL,
-                    predicate TEXT NOT NULL, sets TEXT NOT NULL, PRIMARY KEY (sid, seq));
-                CREATE TABLE IF NOT EXISTS rset (sid TEXT NOT NULL, digest BLOB NOT NULL, n INTEGER NOT NULL,
-                    whole INTEGER NOT NULL, keys BLOB NOT NULL, PRIMARY KEY (sid, digest));
-                CREATE INDEX IF NOT EXISTS rset_size ON rset(sid, n);
-                CREATE TABLE IF NOT EXISTS admin_log (ts REAL NOT NULL, action TEXT NOT NULL, sid TEXT,
-                    tenant TEXT, app TEXT, purpose TEXT, dataset TEXT, queries INTEGER, reason TEXT NOT NULL);
+                    created_day INTEGER NOT NULL, gen INTEGER NOT NULL, cells INTEGER NOT NULL,
+                    stored_keys INTEGER NOT NULL, queries INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS cell (ord INTEGER PRIMARY KEY AUTOINCREMENT, sid TEXT NOT NULL,
+                    digest BLOB NOT NULL, n INTEGER NOT NULL, lo INTEGER NOT NULL, hi INTEGER, whole INTEGER NOT NULL,
+                    keys BLOB NOT NULL, UNIQUE (sid, digest));
+                CREATE TABLE IF NOT EXISTS query (sid TEXT NOT NULL, seq INTEGER NOT NULL, day INTEGER NOT NULL,
+                    predicate BLOB NOT NULL, caller BLOB NOT NULL, new INTEGER NOT NULL, PRIMARY KEY (sid, seq));
+                CREATE TABLE IF NOT EXISTS caller_day (sid TEXT NOT NULL, caller BLOB NOT NULL, day INTEGER NOT NULL,
+                    n INTEGER NOT NULL, PRIMARY KEY (sid, caller, day));
+                CREATE TABLE IF NOT EXISTS admin_log (day INTEGER NOT NULL, action TEXT NOT NULL, sid TEXT,
+                    tenant TEXT, dataset TEXT, detail TEXT NOT NULL, reason TEXT NOT NULL);
             """)
+            meta = dict(self._db.execute("SELECT k, v FROM meta").fetchall())
         except sqlite3.Error as e:
             raise HistoryUnavailable(type(e).__name__) from None
+        if persistent:
+            _secure_file(path)
+        self.db_id = meta.get("db_id")
+        self._check_integrity(existed and self.db_id is not None, fresh)
+
+    # --- startup integrity ------------------------------------------------------------------------------------------
+
+    def _init_meta(self) -> None:
+        import os
+        self.db_id = os.urandom(16).hex()
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('db_id', ?), ('seq', '0'), ('schema', ?)",
+                             (self.db_id, SCHEMA_VERSION))
+
+    def seq(self) -> int:
+        r = self._db.execute("SELECT v FROM meta WHERE k = 'seq'").fetchone()
+        return int(r[0]) if r else 0
+
+    def _check_integrity(self, had_db: bool, fresh: bool) -> None:
+        if not self.state_dir or not Path(self.state_dir).is_dir() or self.path == ":memory:":
+            if self.db_id is None:
+                self._init_meta()
+            if self.production:
+                raise HistoryIntegrityError("production requires the history high-water mark in an existing state "
+                                            "directory (PGW_STATE_DIR) and a persistent history file")
+            return
+        hwm = read_hwm(self.state_dir)
+        problem = None
+        if hwm is None and not had_db:
+            if fresh or not self.production:
+                self._init_meta()
+                if self.production:
+                    write_hwm(self.state_dir, self.db_id, 0)
+                    log.warning("event='disclosure_history_initialised' first_start_of_state_dir=True")
+                return
+            problem = ("no disclosure-control history and no high-water mark, but this state directory has started "
+                       "before: the history was deleted or never initialised")
+        elif hwm is None:
+            problem = f"the history database has no high-water mark ({HWM_NAME} deleted)"
+        elif not had_db:
+            problem = "the history database is missing or empty while its high-water mark exists (deleted or replaced)"
+        elif hwm["db_id"] != self.db_id:
+            problem = "the history database is not the one the high-water mark records (replaced)"
+        elif self.seq() < hwm["seq"]:
+            problem = "the history database is older than its high-water mark (restored from an older copy)"
+        if problem is None:
+            return
+        if self.production:
+            log.error("event='disclosure_history_integrity_failed' reason=%r", problem)
+            raise HistoryIntegrityError(f"disclosure-control history: {problem}; startup refused. Investigate, then "
+                                        "run `python -m pgw.product.disclosure history recover` (logged)")
+        log.warning("event='disclosure_history_integrity_failed_development_only' reason=%r", problem)
+        if self.db_id is None:
+            self._init_meta()
+
+    # --- scope ------------------------------------------------------------------------------------------------------
 
     @staticmethod
     def scope_id(tenant: str, app: str, purpose: str, dataset: str) -> str:
         return hashlib.sha256(json.dumps([tenant, app, purpose, dataset]).encode()).hexdigest()
 
+    @staticmethod
+    def scope_labels(scope: HistoryScope, dataset: str, cfg: Config) -> tuple:
+        return (scope.tenant, scope.app if cfg.separate_apps else SHARED,
+                scope.purpose if cfg.separate_purposes else SHARED, dataset)
+
     def sizes(self) -> dict:
         try:
             with self._lock:
-                r = self._db.execute("SELECT COUNT(*), COALESCE(SUM(queries), 0), COALESCE(MAX(queries), 0) "
-                                     "FROM scope").fetchone()
+                r = self._db.execute("SELECT COUNT(*), COALESCE(SUM(queries), 0), COALESCE(SUM(cells), 0), "
+                                     "COALESCE(MAX(cells), 0) FROM scope").fetchone()
         except self._sq.Error as e:
             raise HistoryUnavailable(type(e).__name__) from None
-        return {"scopes": r[0], "queries": r[1], "max_queries_in_a_scope": r[2]}
+        return {"scopes": r[0], "queries": r[1], "cells": r[2], "max_cells_in_a_scope": r[3]}
 
     def _scope_key(self, keyfn, sid: str, key_id: str | None) -> tuple[str, bytes, bytes]:
         try:
@@ -669,154 +959,285 @@ class HistoryStore:
         sub = hmac.digest(master, _SCOPE + sid.encode(), "sha256")
         return kid, sub, hmac.digest(sub, _KCV, "sha256")[:KEY_BYTES]
 
-    def check_and_record(self, scope: HistoryScope, dataset: str, predicate: dict, build_sets, k: int,
+    def _auditor(self, sid: str, gen: int, k: int, cfg: Config) -> setaudit.Auditor:
+        hit = self._auditors.get(sid)
+        if hit is not None and hit[0] == gen and hit[1].k == k:
+            hit[1].budget = cfg.audit_budget
+            return hit[1]
+        # (contracts sharing a scope with different k rebuild on alternation: correct, only slower)
+        a = setaudit.Auditor(k, cfg.audit_budget)
+        for digest, lo, hi, whole, blob in self._db.execute(
+                "SELECT digest, lo, hi, whole, keys FROM cell WHERE sid = ? ORDER BY ord", (sid,)):
+            a.add(digest, _unpack(blob), lo, hi, bool(whole))
+        a._normalise()
+        self._auditors[sid] = (gen, a)
+        return a
+
+    # --- check and record -------------------------------------------------------------------------------------------
+
+    def check_and_record(self, scope: HistoryScope, dataset: str, predicate: dict, build_cells, k: int,
                          cfg: Config) -> dict:
-        """Refuse (DisclosureRefused with .code) or record one answered query. build_sets(subkey) -> [RevealedSet]
-        is called inside the transaction with the scope's key. Returns counts for the report."""
-        sid = self.scope_id(scope.tenant, scope.app, scope.purpose, dataset)
+        """Audit one response against the scope's whole history and record it, or refuse (DisclosureRefused with
+        .code). build_cells(subkey) -> [AuditCell] is called inside the transaction with the scope's key. Returns
+        {"suppress": names the history suppresses as well, "repeat": bool, "cells_audited", "atoms"}."""
+        labels = self.scope_labels(scope, dataset, cfg)
+        sid = self.scope_id(*labels)
         sq = self._sq
         with self._lock:
             try:
                 self._db.execute("BEGIN IMMEDIATE")
+                pending = None
                 try:
-                    out = self._check_and_record(scope, dataset, sid, predicate, build_sets, k, cfg)
-                except BaseException:
+                    out, pending = self._check_and_record(scope, labels, sid, predicate, build_cells, k, cfg)
+                except BaseException as e:
                     self._db.execute("ROLLBACK")
+                    if not isinstance(e, DisclosureRefused):
+                        self._auditors.pop(sid, None)     # possibly mid-trial: rebuilt from the database next time
                     raise
-                self._db.execute("COMMIT")
+                try:
+                    self._db.execute("COMMIT")
+                except BaseException:
+                    if pending is not None:
+                        pending.rollback()
+                    self._auditors.pop(sid, None)
+                    raise
+                if pending is not None:
+                    pending.commit()
             except DisclosureRefused as e:
-                self.metrics.inc("refused_capacity" if e.code in (REFUSE_FULL, REFUSE_SCOPES)
-                                 else "refused_differencing")
+                self.metrics.inc({REFUSE_FULL: "refused_capacity", REFUSE_SCOPES: "refused_capacity",
+                                  REFUSE_RATE: "refused_rate"}.get(e.code, "refused_differencing"))
                 if e.code in (REFUSE_FULL, REFUSE_SCOPES):
-                    log.error("event='disclosure_history_full' code=%s tenant=%r app=%r purpose=%r dataset=%r",
-                              e.code, scope.tenant, scope.app, scope.purpose, dataset)
+                    log.error("event='disclosure_history_full' code=%s tenant=%r dataset=%r", e.code, scope.tenant,
+                              dataset)
+                elif e.code == REFUSE_RATE:
+                    log.warning("event='disclosure_history_rate_limited' tenant=%r app=%r", scope.tenant, scope.app)
                 raise
             except HistoryUnavailable:
                 self.metrics.inc("store_unavailable")
+                self._auditors.pop(sid, None)
                 raise
             except sq.Error as e:
                 self.metrics.inc("store_unavailable")
+                self._auditors.pop(sid, None)
                 raise HistoryUnavailable(type(e).__name__) from None
-        self.metrics.inc("answered")
+            if out["new"] and self.state_dir and self.production and self.db_id:
+                try:
+                    write_hwm(self.state_dir, self.db_id, out["seq"])
+                except OSError as e:
+                    self.metrics.inc("store_unavailable")
+                    log.error("event='disclosure_history_hwm_write_failed' error_type=%s", type(e).__name__)
+                    raise HistoryUnavailable("hwm_write_failed") from None
+        self.metrics.inc("answered_repeat" if out["repeat"] else "answered")
+        if out["suppress"]:
+            self.metrics.inc("suppressed_more")
         return out
 
-    def _check_and_record(self, scope, dataset, sid, predicate, build_sets, k, cfg) -> dict:
+    def _rate_check(self, sid: str, caller: bytes, cfg: Config, day: int) -> None:
+        r = self._db.execute("SELECT n FROM caller_day WHERE sid = ? AND caller = ? AND day = ?",
+                             (sid, caller, day)).fetchone()
+        if r is not None and r[0] >= cfg.per_day:
+            raise DisclosureRefused("query refused: this caller has asked its daily number of new questions about "
+                                    "this data (questions already answered are still answered)", code=REFUSE_RATE)
+        now = time.monotonic()
+        recent = [t for t in self._burst.get((sid, caller), ()) if now - t < 60.0]
+        if len(recent) >= cfg.per_minute:
+            raise DisclosureRefused("query refused: too many new questions about this data in the last minute "
+                                    "(questions already answered are still answered)", code=REFUSE_RATE)
+        self._burst[(sid, caller)] = recent
+
+    def _check_and_record(self, scope, labels, sid, predicate, build_cells, k, cfg):
         db = self._db
-        row = db.execute("SELECT key_id, kcv, queries, stored_keys FROM scope WHERE sid = ?", (sid,)).fetchone()
+        row = db.execute("SELECT key_id, kcv, gen, cells, stored_keys, queries FROM scope WHERE sid = ?",
+                         (sid,)).fetchone()
         if row is None:
             if db.execute("SELECT COUNT(*) FROM scope").fetchone()[0] >= cfg.max_scopes:
                 raise DisclosureRefused("query refused: the disclosure-control history has no room for another "
                                         "scope (an operator must review it)", code=REFUSE_SCOPES)
             kid, sub, kcv = self._scope_key(scope.keyfn, sid, None)
-            queries = stored = 0
+            gen = ncells = stored = queries = 0
         else:
             kid, sub, kcv = self._scope_key(scope.keyfn, sid, row[0])
             if not hmac.compare_digest(kcv, row[1]):
-                log.error("event='disclosure_history_key_mismatch' tenant=%r app=%r purpose=%r dataset=%r",
-                          scope.tenant, scope.app, scope.purpose, dataset)
+                log.error("event='disclosure_history_key_mismatch' tenant=%r dataset=%r", scope.tenant, labels[3])
                 raise HistoryUnavailable("key_mismatch")
-            queries, stored = row[2], row[3]
-        if queries >= cfg.max_queries:
-            raise DisclosureRefused("query refused: the disclosure-control history of this data is full (an operator "
-                                    "must review and reset it)", code=REFUSE_FULL)
-        # this query's exactly printed, non-empty sets, deduplicated by content (whole if any copy is whole)
-        new: dict = {}
-        for s in build_sets(sub):
-            if not s.keys or not s.exact:
-                continue
-            d = _digest(s.keys)
-            o = new.get(d)
-            new[d] = s if o is None else RevealedSet(o.kind, o.keys, True, o.whole or s.whole)
-        known = set()
-        for d in new:
-            if db.execute("SELECT 1 FROM rset WHERE sid = ? AND digest = ?", (sid, d)).fetchone() is not None:
-                known.add(d)
-        added = sum(len(s.keys) for d, s in new.items() if d not in known)
-        if stored + added > cfg.max_keys:
-            raise DisclosureRefused("query refused: the disclosure-control history of this data is full (an operator "
-                                    "must review and reset it)", code=REFUSE_FULL)
-        compared = 0
-        loaded: dict = {}
-        for d, s in new.items():
-            n = len(s.keys)
-            for od, on, owhole in db.execute("SELECT digest, n, whole FROM rset WHERE sid = ? AND n BETWEEN ? AND ?",
-                                             (sid, n - k + 1, n + k - 1)).fetchall():
-                if od == d or (s.whole and owhole):
-                    continue
-                other = loaded.get(od)
-                if other is None:
-                    other = loaded[od] = _unpack(db.execute("SELECT keys FROM rset WHERE sid = ? AND digest = ?",
-                                                            (sid, od)).fetchone()[0])
-                compared += 1
-                diff = n + on - 2 * len(s.keys & other)
-                if 0 < diff < k:
-                    raise DisclosureRefused(f"query refused: a count it would print differs from a count already "
-                                            f"given for this data (in any conversation, on any day) by fewer than {k} "
-                                            "records", code=REFUSE_DIFFERENCING)
-        # record
-        now = time.time()
+            gen, ncells, stored, queries = row[2], row[3], row[4], row[5]
+        aud = self._auditor(sid, gen, k, cfg)
+        cells = [c for c in build_cells(sub) if c.keys]
+        digests = [_digest(c.keys) for c in cells]
+        caller = hmac.digest(sub, _CALLER + scope.app.encode(), "sha256")[:KEY_BYTES]
+        pred = hmac.digest(sub, _PRED + json.dumps(predicate, sort_keys=True).encode(), "sha256")[:KEY_BYTES]
+        day = _day()
+        repeat = all(aud.known(d, c.lo, c.hi) for d, c in zip(digests, cells, strict=True))
+        suppress: set = set()
+        pending = None
+        if not repeat:
+            self._rate_check(sid, caller, cfg, day)
+            bounds = {c.name: (c.lo, c.hi) for c in cells}
+            fixed = {d for d, c in zip(digests, cells, strict=True) if c.alt is None and c.lo == c.hi}
+
+            def attempt(b):
+                return aud.trial([(d, c.keys, *b[c.name], c.whole) for d, c in zip(digests, cells, strict=True)])
+            violation = attempt(bounds)
+            while violation is not None:
+                aud.rollback()
+                # secondary cells whose suppression could matter: not already known exactly to the reader (from the
+                # history, or from another cell of this response that must stay printed)
+                cand = [(i, c) for i, (d, c) in enumerate(zip(digests, cells, strict=True))
+                        if c.alt is not None and c.name not in suppress and d not in fixed
+                        and not aud.known(d, len(c.keys), len(c.keys))]
+                if not cand:
+                    break
+                cand.sort(key=lambda ic: (ic[0] not in violation.cells, ic[1].priority, len(ic[1].keys), ic[1].name))
+                done = False
+                for _i, c in cand[:8]:            # the one cell whose suppression suffices, if there is one
+                    trial_bounds = {**bounds, c.name: c.alt}
+                    v2 = attempt(trial_bounds)
+                    if v2 is None:
+                        suppress.add(c.name)
+                        bounds = trial_bounds
+                        violation, done = None, True
+                        break
+                    aud.rollback()
+                if done:
+                    break
+                c = cand[0][1]                    # else suppress the likeliest one and look again
+                suppress.add(c.name)
+                bounds[c.name] = c.alt
+                violation = attempt(bounds)
+            if violation is not None:
+                raise DisclosureRefused("query refused: together with answers already given about this data (in any "
+                                        "conversation, by any app, on any day) it would determine the size of a "
+                                        f"group of fewer than {k} records", code=REFUSE_DIFFERENCING)
+            pending = aud
+            new_keys = 0
+            new_cells = 0
+            for d, c in zip(digests, cells, strict=True):
+                lo, hi = bounds[c.name]
+                r = db.execute("SELECT lo, hi, whole FROM cell WHERE sid = ? AND digest = ?", (sid, d)).fetchone()
+                if r is None:
+                    db.execute("INSERT INTO cell (sid, digest, n, lo, hi, whole, keys) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                               (sid, d, len(c.keys), lo, hi, int(c.whole), b"".join(sorted(c.keys))))
+                    new_keys += len(c.keys)
+                    new_cells += 1
+                else:
+                    nhi = hi if r[1] is None else (r[1] if hi is None else min(r[1], hi))
+                    db.execute("UPDATE cell SET lo = ?, hi = ?, whole = ? WHERE sid = ? AND digest = ?",
+                               (max(r[0], lo), nhi, max(r[2], int(c.whole)), sid, d))
+            if (stored + new_keys > cfg.max_keys or ncells + new_cells > cfg.max_cells
+                    or aud.n_atoms > cfg.max_atoms):
+                aud.rollback()
+                raise DisclosureRefused("query refused: the disclosure-control history of this data has no room for "
+                                        "new information (questions already answered are still answered; an "
+                                        "operator must review it)", code=REFUSE_FULL)
+            stored += new_keys
+            ncells += new_cells
+            db.execute("INSERT INTO caller_day (sid, caller, day, n) VALUES (?, ?, ?, 1) "
+                       "ON CONFLICT (sid, caller, day) DO UPDATE SET n = n + 1", (sid, caller, day))
+            db.execute("DELETE FROM caller_day WHERE sid = ? AND day < ?", (sid, day - 1))
+            self._burst.setdefault((sid, caller), []).append(time.monotonic())
+            gen += 1
         if row is None:
-            db.execute("INSERT INTO scope (sid, tenant, app, purpose, dataset, key_id, kcv, created, queries, "
-                       "stored_keys) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)",
-                       (sid, scope.tenant, scope.app, scope.purpose, dataset, kid, kcv, now))
-        for d, s in new.items():
-            if d in known:
-                db.execute("UPDATE rset SET whole = MAX(whole, ?) WHERE sid = ? AND digest = ?", (int(s.whole), sid, d))
-            else:
-                db.execute("INSERT INTO rset (sid, digest, n, whole, keys) VALUES (?, ?, ?, ?, ?)",
-                           (sid, d, len(s.keys), int(s.whole), b"".join(sorted(s.keys))))
-        sets = [[s.kind, d.hex()[:16]] for d, s in new.items()]
-        db.execute("INSERT INTO query (sid, seq, ts, predicate, sets) VALUES (?, ?, ?, ?, ?)",
-                   (sid, queries + 1, now, json.dumps(predicate, sort_keys=True), json.dumps(sets)))
-        db.execute("UPDATE scope SET queries = ?, stored_keys = ? WHERE sid = ?", (queries + 1, stored + added, sid))
-        return {"queries_compared": compared, "history_queries": queries + 1}
+            db.execute("INSERT INTO scope (sid, tenant, app, purpose, dataset, key_id, kcv, created_day, gen, cells, "
+                       "stored_keys, queries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0)", (sid, *labels, kid, kcv, day))
+        queries += 1
+        db.execute("INSERT INTO query (sid, seq, day, predicate, caller, new) VALUES (?, ?, ?, ?, ?, ?)",
+                   (sid, queries, day, pred, caller, int(not repeat)))
+        db.execute("DELETE FROM query WHERE sid = ? AND seq <= ?", (sid, queries - cfg.query_log))
+        db.execute("UPDATE scope SET gen = ?, cells = ?, stored_keys = ?, queries = ? WHERE sid = ?",
+                   (gen, ncells, stored, queries, sid))
+        seq = self.seq()
+        if not repeat:
+            seq += 1
+            db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('seq', ?)", (str(seq),))
+        if pending is not None:
+            self._auditors[sid] = (gen, aud)
+        return ({"suppress": suppress, "repeat": repeat, "new": not repeat, "seq": seq, "cells_audited": len(cells),
+                 "atoms": aud.n_atoms, "history_queries": queries}, pending)
 
     # --- operator actions (python -m pgw.product.disclosure) --------------------------------------------------------
 
     def list_scopes(self) -> list[dict]:
         try:
             with self._lock:
-                rows = self._db.execute("SELECT tenant, app, purpose, dataset, key_id, created, queries, stored_keys "
-                                        "FROM scope ORDER BY tenant, app, purpose, dataset").fetchall()
+                rows = self._db.execute("SELECT tenant, app, purpose, dataset, key_id, created_day, queries, cells, "
+                                        "stored_keys FROM scope ORDER BY tenant, dataset, app, purpose").fetchall()
         except self._sq.Error as e:
             raise HistoryUnavailable(type(e).__name__) from None
-        return [dict(zip(("tenant", "app", "purpose", "dataset", "key_id", "created", "queries", "stored_keys"), r,
-                         strict=True)) for r in rows]
+        return [dict(zip(("tenant", "app", "purpose", "dataset", "key_id", "created_day", "queries", "cells",
+                          "stored_keys"), r, strict=True)) for r in rows]
 
-    def reset(self, tenant: str, app: str, purpose: str, dataset: str, reason: str) -> int:
-        """Delete one scope's history (a deliberate, logged admin action). Afterwards the provider's earlier answers
-        for this scope are no longer compared: a differencing pair split across the reset is answered. Returns the
-        number of queries dropped; the admin_log row (and the log line) records who-what-why without any value."""
+    def _admin(self, action: str, sid, tenant, dataset, detail: str, reason: str) -> None:
+        self._db.execute("INSERT INTO admin_log (day, action, sid, tenant, dataset, detail, reason) VALUES "
+                         "(?, ?, ?, ?, ?, ?, ?)", (_day(), action, sid, tenant, dataset, detail, reason))
+
+    def compact(self, tenant: str, dataset: str, reason: str, app: str = SHARED, purpose: str = SHARED) -> int:
+        """Drop one scope's query log (predicate HMACs, day numbers, callers) and its callers' daily counters: a
+        deliberate, logged admin action that frees the per-caller budget. Every revealed record set is KEPT, so no
+        answer given before becomes comparable-free: compaction never reopens a differencing gap (unlike the
+        former reset). Returns the number of query-log rows dropped."""
         if len(reason.strip()) < 20:
-            raise ValueError("a reset needs a written reason (20+ characters)")
+            raise ValueError("compaction needs a written reason (20+ characters)")
         sid = self.scope_id(tenant, app, purpose, dataset)
         with self._lock:
             try:
                 self._db.execute("BEGIN IMMEDIATE")
                 try:
-                    r = self._db.execute("SELECT queries FROM scope WHERE sid = ?", (sid,)).fetchone()
-                    n = r[0] if r else 0
-                    self._db.execute("DELETE FROM rset WHERE sid = ?", (sid,))
+                    n = self._db.execute("SELECT COUNT(*) FROM query WHERE sid = ?", (sid,)).fetchone()[0]
                     self._db.execute("DELETE FROM query WHERE sid = ?", (sid,))
-                    self._db.execute("DELETE FROM scope WHERE sid = ?", (sid,))
-                    self._db.execute("INSERT INTO admin_log (ts, action, sid, tenant, app, purpose, dataset, queries, "
-                                     "reason) VALUES (?, 'reset', ?, ?, ?, ?, ?, ?, ?)",
-                                     (time.time(), sid, tenant, app, purpose, dataset, n, reason.strip()))
+                    self._db.execute("DELETE FROM caller_day WHERE sid = ?", (sid,))
+                    self._admin("compact", sid, tenant, dataset, f"query_rows_dropped={n}", reason.strip())
                 except BaseException:
                     self._db.execute("ROLLBACK")
                     raise
                 self._db.execute("COMMIT")
             except self._sq.Error as e:
                 raise HistoryUnavailable(type(e).__name__) from None
-        log.warning("event='disclosure_history_reset' tenant=%r app=%r purpose=%r dataset=%r queries_dropped=%d",
-                    tenant, app, purpose, dataset, n)
+        self._burst = {key: v for key, v in self._burst.items() if key[0] != sid}
+        log.warning("event='disclosure_history_compacted' tenant=%r dataset=%r query_rows_dropped=%d", tenant,
+                    dataset, n)
         return n
 
+    def recover(self, reason: str, new: bool = False) -> str:
+        """Re-bind the high-water mark to this database after an investigated restore (`new`: start an EMPTY history
+        under a new id -- every earlier answer stops being compared, a gap the operator accepts in writing)."""
+        if len(reason.strip()) < 20:
+            raise ValueError("recovery needs a written reason (20+ characters)")
+        if not self.state_dir or not Path(self.state_dir).is_dir():
+            raise ValueError("recovery needs the existing state directory (--state-dir)")
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                if new:
+                    for stmt in ("DELETE FROM scope", "DELETE FROM cell", "DELETE FROM query",
+                                 "DELETE FROM caller_day"):
+                        self._db.execute(stmt)
+                    self.db_id = None
+                if self.db_id is None:
+                    import os
+                    self.db_id = os.urandom(16).hex()
+                    self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('db_id', ?), ('seq', '0'), "
+                                     "('schema', ?)", (self.db_id, SCHEMA_VERSION))
+                seq = self.seq() + 1
+                self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES ('seq', ?)", (str(seq),))
+                self._admin("recover_new" if new else "recover", None, None, None, f"db_id={self.db_id}",
+                            reason.strip())
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
+            self._auditors.clear()
+        import os
+        p = Path(self.state_dir) / HWM_NAME
+        if p.exists():
+            os.replace(p, p.with_name(p.name + f".replaced-{_day()}"))
+        write_hwm(self.state_dir, self.db_id, seq)
+        log.warning("event='disclosure_history_recovered' new_history=%r", new)
+        return self.db_id
+
     def admin_log(self) -> list[dict]:
-        rows = self._db.execute("SELECT ts, action, tenant, app, purpose, dataset, queries, reason FROM admin_log "
-                                "ORDER BY ts").fetchall()
-        return [dict(zip(("ts", "action", "tenant", "app", "purpose", "dataset", "queries", "reason"), r,
-                         strict=True)) for r in rows]
+        rows = self._db.execute("SELECT day, action, tenant, dataset, detail, reason FROM admin_log "
+                                "ORDER BY rowid").fetchall()
+        return [dict(zip(("day", "action", "tenant", "dataset", "detail", "reason"), r, strict=True)) for r in rows]
 
     def close(self) -> None:
         with self._lock:
@@ -824,20 +1245,42 @@ class HistoryStore:
 
 
 def _main(argv: list[str]) -> int:
-    """python -m pgw.product.disclosure history list  --db PATH
-       python -m pgw.product.disclosure history reset --db PATH --tenant T --app A --purpose P --dataset D
-                                                      --reason "ticket and why (20+ characters)"
-    Run with the gateway stopped or running (the reset is one transaction). Prints counts and labels only."""
+    """python -m pgw.product.disclosure history list    --db PATH
+       python -m pgw.product.disclosure history log     --db PATH
+       python -m pgw.product.disclosure history compact --db PATH --tenant T --dataset D [--app A --purpose P]
+                                                        --reason "ticket and why (20+ characters)"
+       python -m pgw.product.disclosure history recover --db PATH --state-dir DIR --reason "..." [--new]
+    compact keeps every record set (no gap reopens); recover re-binds the high-water mark after an investigated
+    restore, or with --new starts an empty history (logged; earlier answers are no longer compared). Prints counts
+    and labels only."""
     import argparse
     ap = argparse.ArgumentParser(prog="python -m pgw.product.disclosure")
     ap.add_argument("group", choices=["history"])
-    ap.add_argument("command", choices=["list", "reset", "log"])
+    ap.add_argument("command", choices=["list", "log", "compact", "recover"])
     ap.add_argument("--db", required=True)
+    ap.add_argument("--state-dir")
+    ap.add_argument("--new", action="store_true")
     for a in ("tenant", "app", "purpose", "dataset", "reason"):
         ap.add_argument(f"--{a}")
     a = ap.parse_args(argv)
-    if not Path(a.db).is_file():
+    if a.command != "recover" and not Path(a.db).is_file():
         ap.error("--db: no such history file")
+    if a.command == "recover":
+        if not (a.state_dir and a.reason):
+            ap.error("recover needs --state-dir and --reason")
+        if not a.new and not Path(a.db).is_file():
+            ap.error("--db: no such history file (restore it from backup, or start an empty history with --new)")
+        hwm = read_hwm(a.state_dir) if Path(a.state_dir).is_dir() else None
+        store = HistoryStore(a.db)            # development-mode open: no integrity refusal while recovering
+        store.state_dir = a.state_dir
+        if hwm is not None and not a.new and store.db_id == hwm["db_id"] and store.seq() >= hwm["seq"]:
+            print("history and high-water mark agree; nothing to recover")
+            store.close()
+            return 0
+        db_id = store.recover(a.reason, new=a.new)
+        print(f"recovered db_id={db_id} new_history={a.new}")
+        store.close()
+        return 0
     store = HistoryStore(a.db)
     if a.command == "list":
         for s in store.list_scopes():
@@ -846,10 +1289,10 @@ def _main(argv: list[str]) -> int:
         for s in store.admin_log():
             print(" ".join(f"{k}={v!r}" for k, v in s.items()))
     else:
-        if not all((a.tenant, a.app, a.purpose, a.dataset, a.reason)):
-            ap.error("reset needs --tenant --app --purpose --dataset --reason")
-        n = store.reset(a.tenant, a.app, a.purpose, a.dataset, a.reason)
-        print(f"reset tenant={a.tenant} app={a.app} purpose={a.purpose} dataset={a.dataset} queries_dropped={n}")
+        if not all((a.tenant, a.dataset, a.reason)):
+            ap.error("compact needs --tenant --dataset --reason")
+        n = store.compact(a.tenant, a.dataset, a.reason, a.app or SHARED, a.purpose or SHARED)
+        print(f"compacted tenant={a.tenant} dataset={a.dataset} query_rows_dropped={n}")
     store.close()
     return 0
 

@@ -59,7 +59,7 @@ Classification of every Settings field (`FIELD_CLASS`; a test fails if a field i
 | tenant_keys_file | operational | PGW_TENANT_KEYS_FILE | Path to secrets |
 | require_signed_policy | operational | PGW_REQUIRE_SIGNED_POLICY | Borderline: it can only add the legacy HMAC check; production already requires Ed25519 |
 | ledger_db_path, egress_ledger_path, replay_db_path | operational | PGW_LEDGER_DB, PGW_EGRESS_LEDGER, PGW_REPLAY_DB | State and log destinations (borderline for the audit log: its protection is the hash chain and shipping to WORM storage, OPERATIONS.md) |
-| disclosure_db_path | operational | PGW_DISCLOSURE_DB | The disclosure-control query history (default `<state_dir>/disclosure_history.sqlite`; required in production when a RECORDS contract runs). Borderline like the replay store: pointing it at an empty file resets the history (logged at startup with its scope and query counts; SECURITY_BOUNDARY.md §12) |
+| disclosure_db_path | operational | PGW_DISCLOSURE_DB | The disclosure-control query history (default `<state_dir>/disclosure_history.sqlite`; required in production when a RECORDS contract runs). A missing, empty, replaced or older history (against the high-water mark in state_dir) stops production startup; recovery is `python -m pgw.product.disclosure history recover` (SECURITY_BOUNDARY.md §12) |
 | private_model | operational | PGW_PRIVATE_MODEL | Borderline: the model name at the in-boundary endpoint; it does not change where data goes or what is inspected. Whether the endpoint is a real model is probed (GET /v1/models), not taken from this name |
 """
 from __future__ import annotations

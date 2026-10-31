@@ -460,11 +460,16 @@ def test_bypass_d_refreshed_export_with_a_new_joiner_is_refused(gw):
     assert post(client, "roster_question", S.ad_population(monday).envelope(g)).status_code == 200
     n0 = len(mock.received)
     _refused(post(client, "roster_question", S.ad_population(tuesday).envelope(g)))
-    # a joiner in ANOTHER department: Finance is unchanged, but total 17 and Finance 6 give "not Finance: 11" (was
-    # 10), so the joiner's department is still given away through the complement
+    # a joiner in ANOTHER department: Finance is unchanged, but total 17 next to Monday's 16 would give the joiner
+    # count (1) and, with Finance 6 on both days, "the joiner is not in Finance". The audit suppresses Tuesday's
+    # record total instead (complementary suppression that considers the history): Finance 6 is answered
     other = monday + [person("Sales", created=(2026, 10))]
-    _refused(post(client, "roster_question", S.ad_population(other).envelope(q)))
-    assert len(mock.received) == n0
+    r = post(client, "roster_question", S.ad_population(other).envelope(q))
+    assert r.status_code == 200, r.text
+    p = parse_roster(sent_since(mock, n0))
+    assert p["total"] == "suppressed" and p["matched"] == "6"
+    assert r.json()["pgw_report"]["records"]["disclosure"]["cells_suppressed_history"] == 1
+    n0 = len(mock.received)
     # an unchanged refresh is answered (same records, same counts)
     assert post(client, "roster_question", S.ad_population(monday).envelope(q)).status_code == 200
 
@@ -491,36 +496,6 @@ def _dc_variant(tmp_path, **dif):
     mock = MockLLMUpstream("summarise")
     app = create_app(_settings(tmp_path, cfg, mock))
     return _TC(app), mock, app, cfg
-
-
-def test_full_history_refuses_and_an_operator_reset_is_logged(tmp_path):
-    client, mock, app, cfg = _dc_variant(tmp_path, max_queries_per_scope=3)
-    # groups far enough apart that no two of these queries difference each other
-    sy = S.ad_population([person("Finance")] * 12 + [person("Sales")] * 8 + [person("Legal")] * 7
-                         + [person("Support")] * 6)
-    queries = [{"filter": [{"field": "department", "op": "eq", "value": d}], "list": False}
-               for d in ("Finance", "Sales", "Legal", "Support")]
-    for q in queries[:3]:
-        assert post(client, "roster_question", sy.envelope(q)).status_code == 200
-    n0 = len(mock.received)
-    _refused(post(client, "roster_question", sy.envelope(queries[3])), reason="history_full")
-    _refused(post(client, "roster_question", sy.envelope(queries[0])), reason="history_full")  # even a repeat
-    assert len(mock.received) == n0
-    m = app.state.pgw_disclosure_metrics.snapshot()
-    assert m["refused_capacity"] == 2 and m["answered"] == 3 and m["queries"] == 3 and m["scopes"] == 1
-    assert client.get("/healthz").json()["disclosure_history"]["refused_capacity"] == 2
-    # the deliberate, logged admin action: needs a written reason; recorded without any value
-    db = str(Path(cfg["state_dir"]) / disclosure.HISTORY_DB_NAME)
-    store = disclosure.HistoryStore(db)
-    with pytest.raises(ValueError, match="written reason"):
-        store.reset("acme", "pilot", "roster_question", "ad_user", "because")
-    assert store.reset("acme", "pilot", "roster_question", "ad_user", "CHG-1234 quarterly review by DPO") == 3
-    (entry,) = store.admin_log()
-    assert entry["action"] == "reset" and entry["queries"] == 3 and entry["reason"].startswith("CHG-1234")
-    store.close()
-    assert post(client, "roster_question", sy.envelope(queries[3])).status_code == 200
-    out = disclosure._main(["history", "list", "--db", db])
-    assert out == 0
 
 
 def test_store_failure_is_503_and_nothing_is_sent(gw):
@@ -582,7 +557,7 @@ def test_history_unit_record_keys_are_stable_and_keyed():
     with pytest.raises(disclosure.DisclosureRefused) as e:
         run(plan, S.ad_population([person("Finance")] * 7 + [person("Sales")] * 6), FIN, _history_scope(store))
     assert e.value.code == "differencing"
-    rows = store._db.execute("SELECT sid, keys FROM rset").fetchall()
+    rows = store._db.execute("SELECT sid, keys FROM cell").fetchall()
     by_sid: dict = {}
     for sid, keys in rows:
         by_sid.setdefault(sid, set()).update(keys[i:i + 16] for i in range(0, len(keys), 16))
@@ -600,25 +575,24 @@ def test_history_unit_record_keys_are_stable_and_keyed():
         plan_for({"dataset": "Bad Label"})
 
 
-def test_history_unit_complexity_bounds_and_capacity():
-    """Only sets whose size is within k-1 are compared; identical sets are skipped; the stored-key bound refuses."""
+def test_history_unit_capacity_refuses_only_new_information():
+    """The stored-key bound refuses a query that adds information; a repeat of an answered query is still answered."""
     plan = plan_for()
-    cfg = disclosure.Config(**{**plan.control.cfg.__dict__, "max_keys": 50})
+    cfg = disclosure.Config(**{**plan.control.cfg.__dict__, "max_keys": 45})
     plan.control.cfg = cfg
     store = disclosure.HistoryStore(":memory:")
     sy = S.ad_population([person(d) for d in ("Finance", "Sales", "Support") for _ in range(6)])
     rr = run(plan, sy, {"filter": [], "group_by": "department"}, _history_scope(store))
     st = rr.report["disclosure"]
-    assert st["history_queries"] == 1 and st["queries_compared"] == 0
-    rr = run(plan, sy, FIN, _history_scope(store))
-    # FIN's matched set equals the stored Finance group (identical: skipped without loading) and is compared with
-    # the two other 6-record groups; its complement (12) has nothing stored in its window 8..16 (the 18-record
-    # export is outside it), so 2 comparisons in all
-    assert rr.report["disclosure"]["queries_compared"] == 2
-    with pytest.raises(disclosure.DisclosureRefused) as e:   # 18 + 3 x 6 + 12 stored; 12 more would exceed 50
+    assert st["history_queries"] == 1 and st["cells_audited"] == 5          # total, matched (same set), 3 groups
+    rr = run(plan, sy, FIN, _history_scope(store))                         # the Finance group's set: no new keys
+    with pytest.raises(disclosure.DisclosureRefused) as e:   # 18 + 3 x 6 stored; 12 more would exceed 45
         run(plan, sy, {"filter": [{"field": "department", "op": "in", "value": ["Finance", "Sales"]}]},
             _history_scope(store))
     assert e.value.code == "history_full"
+    run(plan, sy, {"filter": [], "group_by": "department"}, _history_scope(store))   # repeat: answered
+    m = store.metrics.snapshot()
+    assert m["answered_repeat"] >= 1 and m["refused_capacity"] == 1
 
 
 def test_rounding_is_deterministic_and_consistent():
@@ -643,8 +617,12 @@ def test_rounding_is_deterministic_and_consistent():
 
 
 def test_unsafe_history_configs_are_refused(tmp_path):
-    for text, msg in (("max_queries_per_scope: 0", "integer between 1"), ("ttl_s: 60", "unknown keys")):
-        raw = DC.read_text().replace("max_queries_per_scope: 1000", text)
+    for text, msg in (("max_cells_per_scope: 0", "integer between 1"), ("ttl_s: 60", "unknown keys"),
+                      ("max_queries_per_scope: 1000", "unknown keys"),
+                      ("separate_purposes: true", "written justification")):
+        raw = DC.read_text()
+        raw = (raw.replace("separate_purposes: false", text) if text.startswith("separate")
+               else raw.replace("max_cells_per_scope: 100000", text))
         p = tmp_path / "disclosure_control.yaml"
         p.write_text(raw)
         with pytest.raises(SchemaError, match=msg):

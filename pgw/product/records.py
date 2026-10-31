@@ -275,6 +275,19 @@ def bind(purpose: str, contract: Contract, registry_dir: Path, read) -> Plan:
         if spec.min_group_size < cfg.k:
             raise ContractError(f"records.min_group_size: may only raise the sealed min_group_size ({cfg.k})")
         k = spec.min_group_size
+    if spec.compute == "roster_question" and cfg.differencing:
+        # the differencing history is shared by every contract over a dataset: its record identity is the
+        # schema's (sealed), never a contract's choice, so a second contract hashes the same people the same way
+        for sid in spec.sources:
+            rk = controls[sid].record_key
+            if rk is None:
+                raise ContractError(f"purpose {purpose!r}: schema {sid} has no record key for the differencing "
+                                    f"history (no employee-identifier field; set {cp.name} schemas.{sid}.record_key)")
+            missing = [n for n in rk.fields if n not in view]
+            if missing:
+                raise ContractError(f"purpose {purpose!r}: records.select must include the record key fields "
+                                    f"{missing} of schema {sid} (the differencing history's record identity, "
+                                    f"{cp.name} schemas.{sid}.record_key)")
     control = disclosure.Control(cfg, k, cfg.listing, controls, differencing=cfg.differencing, rounding=cfg.rounding)
     return Plan(purpose, contract, spec, schemas, comp, rules, rules_ref, starter_rules, view, dict(comp.catalog),
                 literals, control)
@@ -775,7 +788,7 @@ class _Disclosure:
     stats: dict = field(default_factory=lambda: dict.fromkeys(
         ("cells_suppressed", "cells_suppressed_complementary", "totals_suppressed", "groups_merged",
          "groups_suppressed", "rows_coarsened", "rows_attributes_withheld", "lists_withheld", "queries_refused",
-         "queries_compared", "history_queries", "counts_rounded"), 0))
+         "cells_audited", "cells_suppressed_history", "history_queries", "counts_rounded"), 0))
 
 
 def _leaves(plan: Plan, name: str) -> bool:
@@ -783,90 +796,105 @@ def _leaves(plan: Plan, name: str) -> bool:
     return o is not None and o.egress != "INTERNAL"
 
 
-def record_key_fields(plan: Plan) -> tuple:
-    """The fields whose values identify a record across exports (the differencing history's record key): the
-    contract's label fields that are employee identifiers in every source schema (stable usernames / employee ids),
-    else the label fields that name people, else every label field. Changing such a value between exports makes the
-    record count as a leaver plus a joiner."""
-    label = plan.spec.label
+def record_key(plan: Plan, schema_id: str | None = None) -> disclosure.RecordKey:
+    """The dataset-level record identity of the differencing history for one source schema (sealed in
+    disclosure_control.yaml schemas.<id>.record_key; default: the schema's first employee-identifier field):
+    the same for every contract over the schema, so two contracts over the same data hash the same people the same
+    way. Changing such a value between exports (beyond what normalisation absorbs) makes the record count as a
+    leaver plus a joiner."""
+    sid = schema_id or plan.spec.sources[0]
+    rk = plan.control.schemas[sid].record_key if plan.control is not None else None
+    if rk is None:
+        raise ContractError(f"schema {sid} has no record key for the differencing history")
+    return rk
 
-    def ent(n, e):
-        return all(s.spec(n) is not None and s.spec(n).entity is e for s in plan.schemas.values())
-    ids = tuple(n for n in label if ent(n, _T.EMPLOYEE_ID))
-    people = tuple(n for n in label if not ent(n, T_IDENTIFIER))
-    return ids or people or tuple(label)
+
+def record_key_fields(plan: Plan, schema_id: str | None = None) -> tuple:
+    return record_key(plan, schema_id).fields
 
 
-def _identity(fields: tuple):
-    """Row -> the bytes the record key is computed from (never stored): the key fields' values, or one shared
-    marker for a record without any (such records count with multiplicity, see disclosure.keyset)."""
+def _identity(rk: disclosure.RecordKey):
+    """Row -> the bytes the record key is computed from (never stored): the key fields' NORMALISED values
+    (disclosure.normalise_identity: NFKC, invisible characters, casefold, DOMAIN\\ prefix, @UPN suffix, per the
+    sealed options), or one shared marker for a record without any (such records count with multiplicity,
+    see disclosure.keyset)."""
     def ident(row) -> bytes:
-        vals = [row.values.get(n) for n in fields]
+        vals = [row.values.get(n) for n in rk.fields]
         if all(v is None for v in vals):
             return b'["#no-record-key"]'
-        return json.dumps(vals, ensure_ascii=False, default=str).encode("utf-8")
+        norm = [None if v is None else disclosure.normalise_identity(v, rk.norm[n])
+                for n, v in zip(rk.fields, vals, strict=True)]
+        if all(not v for v in norm):
+            return b'["#no-record-key"]'
+        return json.dumps(norm, ensure_ascii=False).encode("utf-8")
     return ident
 
 
 def _history_check(plan: Plan, schema: FieldSchema, t, params: dict, rows: list, outs: dict, history,
-                   dc: _Disclosure, k: int) -> None:
-    """Differencing across the durable history of (tenant, app, purpose, dataset): every count this response
-    reveals, as the set of keyed record hashes behind it (pgw.product.disclosure.HistoryStore)."""
+                   dc: _Disclosure, k: int) -> set:
+    """The whole-scope audit (pgw.product.disclosure.HistoryStore, pgw.product.setaudit): every cell this response
+    reveals -- printed or suppressed -- as the set of keyed record hashes behind it and what the reader learns about
+    its size. Returns the cells the history suppresses as well (secondary cells only; the matched count never: a
+    query whose answer would break the audit is refused)."""
     mc = outs["matched_count"]
     flt = params["filter"]
     matched_idx = mc.meta.get("matched", frozenset())
     matched = [r for r in rows if r.index in matched_idx]
     missing = [r for r in rows if r.index not in matched_idx and hrcompute.roster_match(r, flt) == -1]
-    missing_idx = {r.index for r in missing}
     cells = t.cells
-
-    def shown(n):
-        return cells[n].shown
-
-    def exact(n):
-        return cells[n].shown and not cells[n].suppressed
-    ident = _identity(record_key_fields(plan))
+    ident = _identity(record_key(plan, schema.id))
     gb = params.get("group_by")
     gsizes = outs["group_counts"].meta.get("sizes") or []
+    base = plan.control.rounding if plan.spec.compute == "roster_question" else 0
+
+    def seen(name, n):
+        """What the reader learns about cell `name` (true size n) as the response stands."""
+        c = cells[name]
+        if c.suppressed:
+            if c.reveals_small and c.primary:
+                return 1, k - 1
+            return (k, None) if c.reveals_small else (1, None)
+        if base and n > 0:
+            return disclosure.rounding_interval(n, base)
+        return n, n
 
     def build(subkey: bytes) -> list:
         cache: dict = {}
 
         def ks(rs):
             return disclosure.keyset(rs, subkey, ident, cache)
-        RS = disclosure.RevealedSet
+        AC = disclosure.AuditCell
         out = []
         filtered = bool(flt)
-        if shown("total_rows"):
-            out.append(RS("total", ks(rows), exact("total_rows"), whole=True))
-        if shown("matched_count"):
-            out.append(RS("matched", ks(matched), exact("matched_count"), whole=not filtered))
-        if shown("rows_missing_filter_field"):
-            out.append(RS("missing", ks(missing), exact("rows_missing_filter_field")))
-        if shown("total_rows") and shown("matched_count") and filtered:
-            out.append(RS("complement", ks([r for r in rows if r.index not in matched_idx]),
-                          exact("total_rows") and exact("matched_count")))
-            if shown("rows_missing_filter_field") and missing:
-                out.append(RS("did_not_match", ks([r for r in rows if r.index not in matched_idx
-                                                   and r.index not in missing_idx]),
-                              exact("total_rows") and exact("matched_count") and exact("rows_missing_filter_field")))
+        if cells["total_rows"].shown:
+            out.append(AC("total_rows", ks(rows), *seen("total_rows", len(rows)), whole=True,
+                          alt=(1, None) if not cells["total_rows"].suppressed else None, priority=0))
+        if cells["matched_count"].shown:
+            out.append(AC("matched_count", ks(matched), *seen("matched_count", len(matched)), whole=not filtered))
+        if cells["rows_missing_filter_field"].shown and missing:
+            out.append(AC("rows_missing_filter_field", ks(missing), *seen("rows_missing_filter_field", len(missing)),
+                          alt=(1, None) if not cells["rows_missing_filter_field"].suppressed else None, priority=1))
         if gb and gsizes and _leaves(plan, "group_counts"):
             by: dict = {}
             for r in matched:
                 by.setdefault(r.values.get(gb), []).append(r)
-            for i, (key, _n) in enumerate(gsizes):
-                out.append(RS("group", ks(by.get(key, [])), not cells[f"#group{i}"].suppressed))
+            for i, (key, n) in enumerate(gsizes):
+                name = f"#group{i}"
+                out.append(AC(name, ks(by.get(key, [])), *seen(name, n),
+                              alt=(1, None) if not cells[name].suppressed else None, priority=2))
         return out
-    predicate = {"filter": [[n, op, list(v) if isinstance(v, tuple) else v] for n, op, v, _o in flt],
-                 "group_by": gb, "list": bool(params.get("list"))}
+    pred = {"filter": [[n, op, list(v) if isinstance(v, tuple) else v] for n, op, v, _o in flt],
+            "group_by": gb, "list": bool(params.get("list"))}
     try:
-        st = history.store.check_and_record(history, disclosure.dataset_id(schema.id, plan.spec.dataset), predicate,
+        st = history.store.check_and_record(history, disclosure.dataset_id(schema.id, plan.spec.dataset), pred,
                                             build, k, plan.control.cfg)
     except disclosure.DisclosureRefused:
         dc.stats["queries_refused"] += 1
         raise
-    dc.stats["queries_compared"] = st["queries_compared"]
     dc.stats["history_queries"] = st["history_queries"]
+    dc.stats["cells_audited"] = st["cells_audited"]
+    dc.stats["cells_suppressed_history"] = len(st["suppress"])
+    return st["suppress"]
 
 
 def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Disclosure, k: int, history,
@@ -911,7 +939,14 @@ def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Discl
                                       else "none listed (withheld by disclosure control)")
         dc.stats["lists_withheld"] += 1
     if history is not None and plan.control is not None and plan.control.differencing:
-        _history_check(plan, schema, t, params, rows, outs, history, dc, k)
+        for n in sorted(_history_check(plan, schema, t, params, rows, outs, history, dc, k)):
+            t.cells[n].suppressed = True        # complementary suppression that considers the scope history
+            if n.startswith("#group"):
+                i = int(n[len("#group"):])
+                dc.group_marks.setdefault("group_counts", {})[i] = disclosure.MARK_SUPPRESSED
+                suppressed_vals.add(sizes[i][0])
+            else:
+                dc.markers[n] = disclosure.MARK_SUPPRESSED
     dc.prewithhold = {params["group_by"]: suppressed_vals} if params.get("group_by") and suppressed_vals else {}
 
 
