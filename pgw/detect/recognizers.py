@@ -30,6 +30,7 @@ from pgw.types import Detection, EntityType as T
 from .numwords import unit_amounts
 from .lexicon import ends_name, is_english
 from .places import addresses
+from .places import clip_blocks as _places_clip
 
 __all__ = ["detect_d2", "detect_fields", "detect_field_context", "verhoeff_valid", "verhoeff_check_digit", "luhn_valid",
            "iban_valid"]
@@ -2479,7 +2480,7 @@ def detect_d2(text: str) -> list[Detection]:
         cands.extend(c for c in part if not (hdr and any(a <= c[0] < b for a, b in hdr))
                      and not (neg_ix and c[2] in _REF_SENSITIVE and neg_ix.overlaps(c)))
     cands.extend(field_ctx)
-    return _resolve(cands)
+    return _resolve(_places_clip(cands))
 
 
 # --------------------------------------------------------------------------

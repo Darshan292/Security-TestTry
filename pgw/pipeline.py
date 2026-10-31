@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from .alias import AliasAllocator, canon, scope_key
-from .detect import idshape, recognizers, structure
+from .detect import idshape, places, recognizers, structure
 from .detect import names as _names
 from .detect.lexicon import ends_name, is_english
 from .detect.numwords import only_digit_words
@@ -614,7 +614,8 @@ def _banded(d: Detection) -> Detection:
 
 class Protector:
     def __init__(self, policy: PolicyPack, keys: Keys, roster: RosterIndex | None = None,
-                 ledger: RestoreLedger | None = None, ner=None, ml=None, heuristics: bool = True, plugins=None):
+                 ledger: RestoreLedger | None = None, ner=None, ml=None, heuristics: bool = True, plugins=None,
+                 pin_block: bool = False):
         self.policy = policy
         self.keys = keys
         self.roster = roster
@@ -622,6 +623,8 @@ class Protector:
         self.ner = ner          # D4 (pgw.detect.ner.NerDetector) or None; its errors propagate = fail closed
         # D4:ml (pgw.ml.runtime.MlEntityStage / DetectorPool) or None; its errors propagate = fail closed
         self.ml = ml
+        # pin_only address coverage (gateway.coverage): a PIN also masks the address block it ends (detect.places)
+        self.pin_block = pin_block
         # legacy name/amount heuristics; False only with an ML detector (measurement: ML + checksum regex only)
         self.heuristics = heuristics or ml is None
         # pgw.plugins.PluginSet or None (docs/PLUGINS.md): shadow plugins are compared and counted only; union-mode
@@ -653,7 +656,8 @@ class Protector:
             if ml_views:   # one batched call; any failure propagates (fail closed)
                 ml_res = dict(zip(ml_views, self.ml.detect_many(ml_views), strict=True))
         for name, view, omap in views:
-            dets = recognizers.detect_d2(view)
+            with places.pin_block(self.pin_block):
+                dets = recognizers.detect_d2(view)
             if self.heuristics:
                 dets += detect_person_cues(view)
             else:

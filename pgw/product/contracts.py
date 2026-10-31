@@ -150,6 +150,10 @@ class Contract:
     # RECORDS route only: the `records:` block (pgw.product.records.RecordSpec), bound to its sealed field schemas
     # and rules at startup (docs/HRMS_CONTRACTS.md).
     records: object = field(default=None, compare=False, hash=False)
+    # Detector coverage this contract needs before it may be served (docs/ML_ARCHITECTURE.md, "Address coverage").
+    # Types with no rule-based recall of their own: today only ADDRESS. Absent in the file = ("ADDRESS",) for routes
+    # whose free text reaches a model (EXT_PSEUDO, LOCAL_COMPUTE); `requires_detectors: []` declares there is none.
+    requires_detectors: tuple[str, ...] = ()
 
     @property
     def ref(self) -> str:
@@ -305,6 +309,19 @@ def _parse_external_input(raw) -> ExternalInput:
     return ExternalInput(frozenset(ids), un, dict(ids))
 
 
+REQUIRABLE_DETECTORS = ("ADDRESS",)
+
+
+def _parse_requires_detectors(raw, route: str) -> tuple[str, ...]:
+    """Types whose recall needs an ML detector label (see Contract.requires_detectors)."""
+    if raw is None:
+        return ("ADDRESS",) if route in ("EXT_PSEUDO", "LOCAL_COMPUTE") else ()
+    if not isinstance(raw, list) or len(raw) > len(REQUIRABLE_DETECTORS) or any(
+            x not in REQUIRABLE_DETECTORS for x in raw) or len(set(raw)) != len(raw):
+        raise ContractError(f"requires_detectors: a list of {list(REQUIRABLE_DETECTORS)} (or [] for none)")
+    return tuple(raw)
+
+
 def _parse_business_identifiers(raw) -> tuple:
     """Company reference formats (ticket, offer, claim ids: C0) as anchored, length-limited patterns, compiled here.
     A pattern that also matches a generic identifier (a 12-digit run, a PAN-like code, a 9-digit account, ...) is
@@ -418,7 +435,8 @@ def load_contract(path: str | Path, data: bytes | None = None) -> Contract:
                      org_identifiers=_parse_org_identifiers(raw.get("org_identifiers")),
                      content_gate=_parse_content_gate(raw.get("content_gate")),
                      structured_content=_parse_structured_content(raw.get("structured_content")),
-                     records=_parse_records(route, raw))
+                     records=_parse_records(route, raw),
+                     requires_detectors=_parse_requires_detectors(raw.get("requires_detectors"), route))
     except ContractError:
         raise
     except (KeyError, TypeError, ValueError) as e:

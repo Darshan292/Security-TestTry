@@ -17,6 +17,9 @@ Rules (`apply_deployment_profile`, called by `create_app` before anything else i
 - production: NER off (`ner_model: null`) is refused unless the profile also gives `ner_off_justification`, a
   written reason of at least 20 characters, or configures an ML detector (`ml_detector`) that replaces spaCy. It is a
   signed decision, not an environment switch.
+- production: contracts that need ADDRESS recall (`requires_detectors`, default for free-text routes) refuse startup
+  unless an `ml_detector` label maps to ADDRESS, or the profile seals the explicit opt-out `address_coverage: pin_only`
+  (pgw.gateway.coverage). The result is stated on /healthz and in every pgw_report.
 - ML models (`ml_detector`, `content_gate_model`; pgw.ml.config, docs/ML_ARCHITECTURE.md) are pinned by the sha256
   manifest digest of their directory; a model that does not match its pin stops startup. `legacy_heuristics: false`
   (name and amount heuristics off, for measuring "ML + checksum regex only") needs an `ml_detector`.
@@ -325,6 +328,7 @@ PROFILE_FIELDS = tuple(f for f, c in FIELD_CLASS.items() if c == PROFILE)
 PROFILE_DOC_KIND = "pgw-deployment-profile"
 PROFILE_REL = "registry/deployment.yaml"
 MIN_JUSTIFICATION = 20
+ADDRESS_PIN_ONLY = "pin_only"   # profile key `address_coverage`: accepted without an ML address label (docs/ML_ARCHITECTURE.md)
 UPSTREAM_KINDS = ("mock", "openai", "anthropic")
 
 
@@ -398,10 +402,11 @@ def parse_profile(data: bytes) -> tuple[dict, str | None]:
         raise ProfileError("deployment profile is not valid YAML") from None
     if not isinstance(doc, dict) or doc.get("kind") != PROFILE_DOC_KIND:
         raise ProfileError(f"deployment profile must declare kind: {PROFILE_DOC_KIND}")
-    extra_top = set(doc) - {"kind", "version", "config_serial", "settings", "ner_off_justification"}
+    extra_top = set(doc) - {"kind", "version", "config_serial", "settings", "ner_off_justification",
+                                  "address_coverage"}
     if extra_top or not isinstance(doc.get("version"), int) or not isinstance(doc.get("settings"), dict):
         raise ProfileError("deployment profile needs exactly: kind, version (int), settings (mapping), "
-                           "and optionally config_serial and ner_off_justification")
+                           "and optionally config_serial, ner_off_justification and address_coverage")
     cs = doc.get("config_serial")
     if cs is not None and (not isinstance(cs, int) or isinstance(cs, bool) or cs < 1):
         raise ProfileError("deployment profile: config_serial must be an integer >= 1")
@@ -417,7 +422,19 @@ def parse_profile(data: bytes) -> tuple[dict, str | None]:
     just = doc.get("ner_off_justification")
     if just is not None and not isinstance(just, str):
         raise ProfileError("deployment profile: ner_off_justification must be text")
+    if doc.get("address_coverage", ADDRESS_PIN_ONLY) != ADDRESS_PIN_ONLY:
+        raise ProfileError(f"deployment profile: address_coverage can only be {ADDRESS_PIN_ONLY!r} (the sealed "
+                           "acknowledgement that no ML detector maps a label to ADDRESS); omit it otherwise")
     return vals, just
+
+
+def profile_address_ack(data: bytes | None) -> bool:
+    """True if the profile carries the sealed `address_coverage: pin_only` acknowledgement. After parse_profile."""
+    if data is None:
+        return False
+    import yaml
+    doc = yaml.safe_load(data.decode("utf-8"))
+    return isinstance(doc, dict) and doc.get("address_coverage") == ADDRESS_PIN_ONLY
 
 
 def profile_serial(data: bytes | None) -> int | None:

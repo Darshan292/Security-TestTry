@@ -41,7 +41,7 @@ from ..types import BlockedRequest, Context, EgressViolation, EntityType
 from . import report as _report
 from . import rollback
 from .settings import (MODES, Settings, apply_deployment_profile, check_destination, check_private_destination,
-                       profile_location, profile_serial)
+                       profile_address_ack, profile_location, profile_serial)
 from .upstream import (AnthropicUpstream, MockLLMUpstream, OpenAICompatUpstream, Upstream, UpstreamError,
                        is_standin_entry, private_identity)
 
@@ -460,6 +460,10 @@ def create_app(settings: Settings) -> Starlette:
         from ..ml.config import parse_detector
         from ..ml.runtime import open_detector
         ml_detector = open_detector(parse_detector(settings.ml_detector), ml_cap)
+    from . import coverage as _coverage   # address recall the contracts need (requires_detectors)
+    coverage, cov_event = _coverage.check(contracts, settings.ml_detector, prod, profile_address_ack(profile_bytes))
+    if cov_event:
+        _log(logging.WARNING, event=cov_event)
     gated = {p: c for p, c in contracts.items() if c.content_gate is not None}
     if gated:
         if settings.content_gate_model is None:
@@ -491,6 +495,7 @@ def create_app(settings: Settings) -> Starlette:
                                        heuristics=settings.legacy_heuristics, plugins=plugin_set)
     elif contracts:   # production reaches this only with a signed ner_off_justification in the profile
         _log(logging.WARNING, event="ner_disabled_for_contracted_purposes")
+    contract_protector.pin_block = coverage["ADDRESS"] == _coverage.PIN_ONLY   # structure-only block around a PIN
     upstream = build_upstream(settings)
     if (not prod and not isinstance(upstream, MockLLMUpstream) and not settings.dev_allow_real_provider):
         # Development config may be unsigned, so it must stay isolated: no real provider unless set in code.
@@ -675,7 +680,7 @@ def create_app(settings: Settings) -> Starlette:
     async def _chat(request: Request, rid: str, box: list, t_start: float) -> Response:
         app = authenticate(request)
         # Nothing before this point (no app known: 401, pre-auth failures) ever carries a report.
-        rep = box[0] = _report.Report(rid, t_start) if app.transparency else _report.NULL
+        rep = box[0] = _report.Report(rid, t_start, coverage) if app.transparency else _report.NULL
         purpose = request.headers.get("x-pgw-purpose", "").strip()
         if not purpose:
             raise _Reject(400, "purpose_required", "X-PGW-Purpose header is required")
@@ -1410,7 +1415,7 @@ def create_app(settings: Settings) -> Starlette:
                                  headers={"X-PGW-Request-Id": rid, "Cache-Control": "no-store"})
 
     async def health(request: Request) -> Response:
-        out = {"status": "ok", "mode": settings.mode}
+        out = {"status": "ok", "mode": settings.mode, "coverage": coverage}
         if disclosure_history is not None:   # counts only (operator metric)
             out["disclosure_history"] = await to_thread.run_sync(disclosure_history.metrics.snapshot)
         return JSONResponse(out)

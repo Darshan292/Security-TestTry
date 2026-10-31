@@ -88,10 +88,15 @@ def write_profile(base: Path, deployment: dict | None = None) -> Path:
     dep = dict(deployment or {})
     just = dep.pop("ner_off_justification", TEST_NER_OFF)
     serial = dep.pop("config_serial", 1)
+    # The sealed acknowledgement that no ML detector label maps to ADDRESS (pgw.gateway.coverage). Tests that do not
+    # exercise address coverage seal it; pass address_coverage=None to omit it.
+    ack = dep.pop("address_coverage", gw_settings.ADDRESS_PIN_ONLY)
     vals = profile_values(**dep)
     doc = {"kind": gw_settings.PROFILE_DOC_KIND, "version": 1, "settings": vals}
     if serial is not None:
         doc["config_serial"] = serial
+    if ack is not None:
+        doc["address_coverage"] = ack
     if vals["ner_model"] is None and just is not None:
         doc["ner_off_justification"] = just
     path = Path(base) / gw_settings.PROFILE_REL

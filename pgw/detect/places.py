@@ -23,11 +23,20 @@ line breaks merge into one ADDRESS. The city or state name before a PIN stays ou
 identifies a residence); the PIN is its own span. Nothing else is inferred: a locality line with no house marker, street word or PIN is not recognised here; the ML detector's address label (profile
 `labels`) covers free-form addresses.
 
+PIN block (opt-in, `pin_block`): without an ML address label, a PIN that is accepted as above also masks the contiguous
+address block it ends, found by STRUCTURE only (no street-name lists): the comma-separated segments to its left on the
+same line while each is a short run of capitalised/numeric words, cut at a sentence boundary or a label colon (the
+last, partly prose segment contributes its trailing capitalised run), and up to three preceding lines that end in a
+comma/dash or are themselves short capitalised-or-numeric lines. See docs/ML_ARCHITECTURE.md, "Address coverage".
+
 Linear: one pass of bounded regexes; each candidate looks at most one line (capped at 300 characters) around it.
 """
 from __future__ import annotations
 
+import bisect
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from pgw.types import EntityType as T
 
@@ -176,6 +185,154 @@ def _merge(text: str, spans: list) -> list:
     return out
 
 
+# --- PIN block ------------------------------------------------------------------------------------------------------
+_PIN_BLOCK: ContextVar[bool] = ContextVar("pgw_pin_block", default=False)
+
+
+@contextmanager
+def pin_block(enabled: bool):
+    """Scope in which an accepted PIN also masks the address block it ends (the Protector sets it in pin_only mode)."""
+    tok = _PIN_BLOCK.set(bool(enabled))
+    try:
+        yield
+    finally:
+        _PIN_BLOCK.reset(tok)
+
+
+_BLOCK_LINES = 3                 # preceding lines that may join the block
+_BLOCK_SEGMENTS = 8              # comma segments examined per line
+_BLOCK_WORDS = 7                 # words in a segment that is taken whole
+_CONNECT = frozenset({"of", "and", "&", "near", "nr", "nr.", "opp", "opp.", "opposite", "behind", "beside", "off",
+                      "adjacent", "adj", "adj."})
+_SENT_END = re.compile(r"(?:(?<=[a-z]{3})[.!?;]|[:])[ \t]+|[:][ \t]*$|(?<=[a-z]{3})[.!?;]$")
+_NOT_ADDRESS_WORD = re.compile(r"[\"'(){}\[\]<>@=|]|https?:|www\.")
+
+
+def _addr_word(w: str) -> bool:
+    if _NOT_ADDRESS_WORD.search(w):
+        return False
+    return w[0].isupper() or w[0].isdigit() or w[0] == "#" or w.lower() in _CONNECT
+
+
+def _trailing_run(words: list[str]) -> int:
+    """How many words at the end of `words` are address words."""
+    n = 0
+    for w in reversed(words):
+        if not _addr_word(w):
+            break
+        n += 1
+    return n
+
+
+def _scan_back(text: str, ls: int, end: int) -> tuple[int, bool]:
+    """Start of the address block inside text[ls:end] (one line, ending where the PIN or the next block piece starts):
+    (offset, reached) with reached True if the whole line belongs to it (so the line above may join)."""
+    seg_end, start, n = end, end, 0
+    while seg_end > ls and n < _BLOCK_SEGMENTS:
+        c = text.rfind(",", ls, seg_end)
+        seg_start = c + 1 if c != -1 else ls
+        seg = text[seg_start:seg_end]
+        stripped = seg.strip(" \t-–")
+        if stripped:
+            lead = len(seg) - len(seg.lstrip(" \t-–"))
+            cut = 0
+            for m in _SENT_END.finditer(stripped):
+                cut = m.end()
+            tail = stripped[cut:]
+            words = tail.split()
+            k = _trailing_run(words) if words else 0
+            if cut == 0 and words and k == len(words) <= _BLOCK_WORDS:
+                start = seg_start + lead                  # the whole segment is address words
+            else:
+                if k == 0:
+                    return start, False
+                # start of the k-th word from the end of the segment
+                pos = seg_start + lead + cut
+                idx = [m.start() for m in re.finditer(r"\S+", tail)]
+                start = pos + idx[len(words) - k]
+                return start, False
+        seg_end = seg_start - 1 if c != -1 else ls
+        n += 1
+        if c == -1:
+            return start, True
+    return start, seg_end <= ls
+
+
+_HOUSE_START = re.compile(r"(?:#[ \t]?)?(?:[A-Za-z]{1,2}-)?\d{1,5}[A-Za-z]?(?:[/-]\w+)*(?=[ \t]*,|[ \t]+[A-Z])|(?:" +
+                          _HOUSE.pattern + r")")
+
+
+def _block_start(text: str, pin_at: int) -> int:
+    ls, _ = _line(text, pin_at)
+    before = _PIN_LABEL.sub("", text[ls:pin_at])
+    end = ls + len(before)
+    start, reached = _scan_back(text, ls, end)
+    if start >= end:
+        start = pin_at                                # nothing before the PIN (its label stays outside, as before)
+    for _ in range(_BLOCK_LINES):
+        if not reached or ls == 0 or _HOUSE_START.match(text, start):
+            break                                     # a block that starts with a house number starts there
+        pend = ls - 1 - (1 if text[ls - 2:ls - 1] == "\r" else 0)
+        pls = text.rfind("\n", max(0, pend - 300), pend) + 1
+        pls = max(pls, pend - 300, 0)
+        body = text[pls:pend].rstrip(" \t")
+        if not body.strip() or body.endswith((":", ".", "!", "?")):
+            break
+        words = body.strip(" \t,-–").split()
+        if not body.endswith((",", "-", "–")) and not (
+                words and len(words) <= 8 and all(_addr_word(w) for w in words) and ":" not in body):
+            break
+        s2, reached = _scan_back(text, pls, pls + len(body))
+        if s2 >= pls + len(body):        # nothing of the line belongs to the block
+            break
+        start, ls = s2, pls
+    return start
+
+
+_WORD = re.compile(r"[^\s,\-–]+")
+
+
+def _block_spans(text: str, pin_at: int, pin_end: int) -> list[tuple[int, int]]:
+    """The PIN plus the block it ends, without the city or state written just before the PIN (a city is not what
+    identifies a residence, as in the rule-based spans); a block that is only that city is dropped."""
+    start = _block_start(text, pin_at)
+    words = [m for m in _WORD.finditer(text, start, pin_at)]
+    cut = pin_at
+    for k in (3, 2, 1):
+        if len(words) >= k and " ".join(w.group() for w in words[-k:]).lower() in _PLACE_SET:
+            cut = words[-k].start()
+            break
+    left = text[start:cut].rstrip(" \t\r\n,-–")
+    return ([(start, start + len(left))] if left else []) + [(pin_at, pin_end)]
+
+
+def clip_blocks(cands: list) -> list:
+    """Candidates with every extended ADDRESS span cut back from the left until it no longer overlaps a stronger
+    candidate (a field-value or scheme span). Without this the stronger span wins the overlap and the whole address,
+    PIN included, would be dropped by the greedy resolver. Only used in `pin_block` scope."""
+    if not _PIN_BLOCK.get():
+        return cands
+    strong = sorted((c[0], c[1]) for c in cands if c[3] > SCORE)
+    if not strong:
+        return cands
+    starts = [a for a, _ in strong]
+    out = []
+    for c in cands:
+        if c[4] == SOURCE and c[3] == SCORE and c[1] - c[0] > 6:
+            lo = c[0]
+            # strong spans that start before this one ends and end after this one starts
+            i = bisect.bisect_left(starts, c[1]) - 1
+            while i >= 0 and starts[i] >= c[0] - 400:
+                a, b = strong[i]
+                if b > lo and b < c[1]:
+                    lo = b
+                i -= 1
+            if lo != c[0]:
+                c = (lo, c[1], c[2], c[3], c[4])
+        out.append(c)
+    return out
+
+
 def addresses(text: str) -> list[tuple[int, int, T, float, str]]:
     out: list[tuple[int, int, T, float, str]] = []
     if len(text) > 200_000 or not re.search(r"\d", text):
@@ -207,5 +364,6 @@ def addresses(text: str) -> list[tuple[int, int, T, float, str]]:
             ok = line.count(",") >= 2 and bool(re.search(r",[ \t]*[A-Z][\w .\-]*[ \t,\-–]*$", line)) and \
                 bool(_LOCALITY_RE.search(line) or _ends_with_place(line))
         if ok:
-            out.append((m.start(), m.end(), T.ADDRESS, SCORE, SOURCE))
+            for s0, e0 in _block_spans(text, a, m.end()) if _PIN_BLOCK.get() else [(a, m.end())]:
+                out.append((s0, e0, T.ADDRESS, SCORE, SOURCE))
     return _merge(text, out)
