@@ -270,10 +270,20 @@ every accepted step of random set families and of random roster query sequences 
 adversaries (exact rational span over every set of 1..k-1 records; exhaustive enumeration of every integer
 assignment consistent with every count and bound); `tests/test_disclosure_history.py` reproduces each bypass.
 
-**Cost.** Refinement is O(|S|) per new cell; one exact cell is one sparse row reduction. Measured on a synthetic
-5,000-person export with 300 random filtered / grouped questions (about 2,000 atoms, 500 cells): 0.1 s per audit on
-average, 0.35 s at most; rebuilding a scope's audit state from the database (another process wrote, or a restart)
-0.5 s. Bounded by the sealed caps on stored keys, cells and atoms per scope and the per-audit `audit_budget`.
+**Cost (round 9, measured).** Workload (synthetic, `bench.py`-style, in one history scope): 1,500 AD users over 10
+departments (weights 30/25/15/12/8/4/2/1.5/1.5/1 %), 80 % enabled, creation months over 11 years, 3 logon months;
+200-300 random questions per scope: 25 % `department in` 2-4 values, 15 % `eq`/`ne` one department, 40 % a
+`created_month gte/lte` clause, 30 % an `enabled` clause, `group_by` none / department / account_state /
+created_month, `list: true` in 0 % or 30 % of questions; per-caller rate limits lifted; 4 runs in parallel on a
+4-core host. Default `audit_max_ms` 1500: audit time per question (whole check-and-record) p50 40-210 ms, p95
+1.05-1.2 s, max 1.56 s, against p95 12 s and max 90 s before (the old search on the same workload without
+listings). Refusals for an exhausted audit budget: 0 of 400 questions without listings, 7 of 600 with listings
+(about 1 in 140 over all 1,000); before, 42-53 of 300 (1 in 6) on this workload. Refusals because the answer itself
+would determine a small group: 23-28 % of questions without listings, 40 % with (fine-grained month filters over a
+growing history; a 60 s budget refuses as many). The speed-up comes from a complete branching R1 search, R1
+searched only for sums containing rows a step changed, R2 moves verified once per trial, and a suppression search
+that first audits the fully suppressed response (refusing at once when even that fails) and works in nested levels
+on top of it.
 
 **What is stored** (`HistoryStore`; SQLite, WAL, `synchronous=FULL`, one IMMEDIATE transaction per
 check-and-record, so several gateway processes on a host cannot both answer a differencing pair; file mode 0600,
