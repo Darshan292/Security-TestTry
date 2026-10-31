@@ -34,6 +34,7 @@ differencing:
   query_log_per_scope: 10000         # metadata rows kept (predicate HMACs, day numbers); older rows compacted
   max_scopes: 10000
   audit_budget: 400000               # search steps per audit; exhausted -> the response is refused (fail closed)
+  audit_max_ms: 1500                 # wall-clock bound of one response's audit; exceeded -> refused (reason audit_budget)
 # Deterministic rounding of published roster counts to a base ("about 15"). Off: the audit above is the control (it
 # treats rounded counts as intervals when on); listings print every matching alias anyway (docs/HRMS_CONTRACTS.md
 # "Small groups").

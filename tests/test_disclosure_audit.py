@@ -352,3 +352,144 @@ def test_random_roster_sequences_never_determine_a_small_group(seed):
         store.close()
     print("stats", answered, refused, suppressed_seen)
     assert answered > 30 and refused > 0 and suppressed_seen > 20, (answered, refused, suppressed_seen)
+
+
+# =============================================================================================================
+# gateway level with listings: every printed label group of a listing is a count the adversary reads
+# =============================================================================================================
+
+ROLLUP = {"Finance": "Corporate functions", "Legal": "Corporate functions", "Sales": "Customer-facing"}
+
+
+def _listing_sets(text: str, people: list, sets: dict, p: dict, q: dict) -> list:
+    """The record sets behind a listing's label groups, computed independently: rows printed 'department: D' are the
+    matched people of D (or of the departments D rolls up, registry hierarchy); rows printed without a department are the matched people of a department whose group count
+    is suppressed in the same answer (the value is withheld), or every unclaimed row when the column is dropped;
+    'attributes withheld ...' rows are the rest. Every
+    group's line count must equal its set's size (the model is checked, not assumed)."""
+    block = text.split("Matching records:\n", 1)[1].split("\nAnswer the", 1)[0]
+    by: dict = {}
+    for line in block.splitlines():
+        if line.startswith("- "):
+            body = line[2:]
+            assert "more not listed" not in body
+            by.setdefault(body.split(": ", 1)[1] if ": " in body else "", []).append(body)
+    if len(by) == 1 and "none" in by.get("", [""])[0]:
+        return []
+    matched = sets["matched"]
+    out, claimed = [], set()
+    for t in by:
+        m = re.fullmatch(r"department: (.+)", t)
+        if m:
+            s = frozenset(i for i in matched if m.group(1) in (people[i]["dept"], ROLLUP[people[i]["dept"]]))
+            out.append((t, s))
+            claimed |= s
+    hidden = {g for g, tok in p["groups"].items() if tok != "" and not re.fullmatch(r"\d+", tok)} \
+        if q["group_by"] == "department" else set()
+    if "" in by:
+        s = frozenset(i for i in matched if i not in claimed and (people[i]["dept"] in hidden or not hidden))
+        out.append(("", s))
+        claimed |= s
+    rest = [t for t in by if t not in {x for x, _ in out}]
+    assert len(rest) <= 1, by.keys()
+    if rest:
+        out.append((rest[0], frozenset(matched - claimed)))
+    for t, s in out:
+        assert len(by[t]) == len(s), (t, len(by[t]), len(s), text)
+    return [s for _t, s in out]
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_random_roster_sequences_with_listings_never_determine_a_small_group(seed):
+    """As above, with listings (show: department): each label group of a listing, the 'attributes withheld' group
+    included, enters the adversary's knowledge as an exact count. Neither brute-force adversary may find a group
+    of 1..k-1 records determined after any answered query."""
+    plan = plan_for({"show": ["department"]})
+    rng = random.Random(9300 + seed)
+    answered = refused = labelled = 0
+    for _seq in range(14):
+        people = []
+        for d in DEPTS:
+            people += [person(d, rng.choice([True, True, False, None])) for _ in range(rng.randrange(3, 10))]
+        n = len(people)
+        sy = S.ad_population(people, seed=rng.randrange(10 ** 6))
+        store = disclosure.HistoryStore(":memory:")
+        scope = disclosure.HistoryScope(store, "t", "app", "roster_question", lambda kid: (kid or "k1", b"k" * 32))
+        known: list = []
+        whole = frozenset(range(n))
+        for _q in range(rng.randrange(3, 7)):
+            q = _random_query(rng)
+            q["list"] = rng.random() < 0.6
+            try:
+                text = leaving(run(plan, sy, q, scope))
+            except disclosure.DisclosureRefused:
+                refused += 1
+                continue
+            answered += 1
+            p = parse_roster(text)
+            sets = _sets(people, q)
+            for name in ("total", "matched", "missing"):
+                if name == "missing" and not sets["missing"]:
+                    continue
+                if sets[name]:
+                    known.append((sets[name], *_bounds(p[name], K)))
+            for g, tok in p["groups"].items():
+                known.append((sets["groups"][g], *_bounds(tok, K)))
+            if q["list"]:
+                ls = _listing_sets(text, people, sets, p, q)
+                labelled += len(ls) > 1
+                known += [(s, len(s), len(s)) for s in ls if s]
+            exact = [c[0] for c in known if c[2] is not None and c[1] == c[2]]
+            assert not linear_leaks(n, exact, K, [whole]), (seed, q, text)
+            dedup = {}
+            for c in known:
+                lo, hi = dedup.get(c[0], (0, None))
+                dedup[c[0]] = (max(lo, c[1]), c[2] if hi is None else (hi if c[2] is None else min(hi, c[2])))
+            assert not bound_pins(n, [(s, lo, hi) for s, (lo, hi) in dedup.items()], K, n + K, [whole]), (seed, q)
+        store.close()
+    print("stats", answered, refused, labelled)
+    assert answered > 25 and refused > 0 and labelled >= 5, (answered, refused, labelled)
+
+
+def test_incremental_audit_matches_a_full_audit():
+    """The auditor searches R1 only where a trial changed rows (and nests tentative levels); after every step its R1
+    verdict equals that of a fresh auditor that searches the same state in full. (R2 is a certificate search whose
+    candidate family depends on the elimination order, so it is compared only for soundness, by the brute-force
+    tests above.)"""
+    rng = random.Random(4242)
+    compared = disagreements = 0
+    for _ in range(150):
+        n = rng.randrange(8, 30)
+        whole = _cell(range(n), n, n, True)
+        aud = setaudit.Auditor(K)
+        assert aud.trial([whole]) is None
+        aud.commit()
+        hist = [whole]
+        for _step in range(rng.randrange(3, 9)):
+            batch = []
+            for _c in range(rng.randrange(1, 4)):
+                m = [i for i in range(n) if rng.random() < rng.choice([0.15, 0.4, 0.7])]
+                if m:
+                    lo, hi = (len(m), len(m)) if rng.random() < 0.6 else _marker_bounds(rng, len(m), K)
+                    batch.append(_cell(m, lo, hi))
+            if not batch:
+                continue
+            aud.begin()                      # an enclosing level, as the history's suppression uses
+            v = aud.trial(batch, r2=False)
+            fresh = setaudit.Auditor(K)
+            for c in hist:
+                fresh.add(*c)
+            fresh._normalise()
+            fv = fresh.trial(batch, r2=False)
+            compared += 1
+            disagreements += (v is None) != (fv is None)
+            if v is None and aud.check_r2() is not None:
+                v = "bounds"
+            if v is None:
+                aud.commit()
+                aud.commit()
+                hist += batch
+            else:
+                aud.rollback()
+                aud.rollback()
+    assert compared > 500 and disagreements == 0

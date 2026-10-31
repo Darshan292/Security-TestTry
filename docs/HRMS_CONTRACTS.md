@@ -176,7 +176,8 @@ differencing:              # durable audit history per (tenant, dataset); see "R
   max_atoms_per_scope: 20000         # bounds the audit's cost
   query_log_per_scope: 10000         # metadata rows (predicate HMACs, day numbers); older rows compacted
   max_scopes: 10000
-  audit_budget: 400000               # search steps per audit; exhausted -> refused (fail closed)
+  audit_budget: 400000               # search steps per audit trial; exhausted -> refused (fail closed)
+  audit_max_ms: 1500                 # wall-clock bound of one response's audit (50..60000); exceeded -> refused
 rounding: {enabled: false, base: 5}  # deterministic rounding of roster counts ("about 15"); off, see below
 schemas:
   ad_user:
@@ -196,6 +197,7 @@ The gateway enforces these rules on what leaves:
 | A roster filter matching 1..k-1 records | Prints `Matching: fewer than k` and `none listed`; every group count is suppressed. If the matched count is suppressed for any other reason, the listing is withdrawn too, because the listing would print the count. |
 | Grouped bands (`contractor_budget` per cost centre) | A cost centre with fewer than k people (distinct workers, not work orders) is merged into `other cost centres`. That merged line is printed only if it has at least k people; otherwise it shows `suppressed`. |
 | Listings with attributes (`show` fields, in any computation) | Each listed alias's printed attribute combination must be shared by at least k people of the population the listing is drawn from: the matched records for a roster query, the whole input for an exception list. First comes full-domain coarsening, one level per field for the whole listing, starting with the field that has the most distinct values: month -> year -> 5-year range, PIN `560xxx` -> `56xxxx`, sealed enumeration roll-ups, and finally dropping the column. Coarsening continues while more than k rows fail. Rows that still fail print `attributes withheld (fewer than k share them)`. The withheld rows must themselves be indistinguishable among at least k people; if they are not, more classes are withheld. A `group_by` value whose count was suppressed is withheld in the listing of the same response, and that field is not coarsened, so the listing cannot re-print a suppressed count. With `withhold`, coarsening is skipped. With `alias_only`, attributes are never printed next to aliases. |
+| Roster listings in the differencing history | Everything a printed listing lets the reader count is a history cell, audited (R1/R2) with every other count: the listed rows (lines can be counted), the rows not listed (`... and N more not listed`), and each attribute class -- the rows printed with one attribute text, `attributes withheld` included -- so per-attribute row counts are sums of audited cells. How many rows are listed is decided before the audit (`max_listed` and the character budget, every line costed as if it carried attributes); a cut that would leave 1..k-1 rows not listed, or list only 1..k-1, lists fewer. If the attribute classes would break the audit, the history withholds the attributes of the whole listing (`attributes withheld (disclosure control)` on every row, one class) before anything else is refused. Tester t6 (`in [Finance, Legal, Sales]` listed as Finance 12 / withheld 10, then `Sales` 8 -> Legal 2) is refused at the second question; in the reverse order the listing prints its attributes withheld. Tests: `tests/test_disclosure_listing.py`, `test_random_roster_sequences_with_listings_never_determine_a_small_group`. Exception lists of payroll, timecard and contractor contracts are not in the history (below). |
 | Exception lists (payroll, timecard, contractor) | A row describes the listed person by design. It carries the alias and codes or bands only, with no quasi-identifier, unless the contract selects `show` fields; then the listing rule above applies. Code counts over the whole export are not conditioned on any quasi-identifier and are already contained in the per-person list, so they are printed. |
 | Repeated queries (differencing) | A durable audit history per **tenant and dataset** -- shared by every app and every RECORDS purpose of the tenant, not per conversation (see "Repeated queries" below). It keeps every cell any answer revealed, printed numbers and suppression markers alike, as the set of keyed record hashes behind it, and audits the whole scope as linear constraints over record sets before anything is sent: no group of 1..k-1 records may have its size determined by any combination of answers, and no suppressed cell may be pinned by the markers' bounds. A response that would break this has its secondary cells (record total, missing count, group counts) suppressed as well; if its answer (the matched count) would break it, it is refused (422 `disclosure_control_refused`, `reason: differencing`, nothing sent). Per-caller rate limits apply to new questions only (429 `rate_limited`); a full scope refuses only new information (`history_full`); a store failure is 503 `disclosure_store_unavailable`. |
 
@@ -242,13 +244,18 @@ answers (which atoms exist) and to use linear algebra, integrality and the inter
 - **R1 (exhaustive).** No union W of atoms with 1 <= |W| <= k-1 has its size determined by the exact counts
   (1_W in L), except an export's own record total. Such a W lies in L n span(small atoms); once no row with a small
   pivot has an entry on a large atom, those rows are a basis of it and W is a 0/1 sum of at most k-1 of them; the
-  search is exhaustive per connected component of rows.
+  search is exhaustive per connected component of rows (a complete branching search: a partial sum that is not
+  yet a 0/1 vector of weight 1..k-1 can only be completed by a row that changes one of its offending columns).
 - **R2 (certified).** Every suppressed cell of 1..k-1 records and every atom of 1..k-1 records has a verified
   alternative: an integer atom-count vector, different on it, that satisfies every exact count exactly, every
   interval and non-negativity (a kernel vector of L, or the sum or difference of two, checked in integer
   arithmetic). Five suppressed singletons whose union is later printed as 5 have none: refused.
 
-Both fail closed (an exhausted `audit_budget` refuses). **History-aware complementary suppression:** when a
+Both fail closed: an audit that does not finish within `audit_budget` steps per trial or `audit_max_ms` of wall
+clock for the whole response (all its suppression trials; the clock is read cooperatively inside the search) is
+refused with 422 `reason: audit_budget` and a message that says the audit could not be certified and that a
+narrower or broader question may be answered -- distinct from 422 `reason: differencing` ("would determine the size
+of a group of fewer than k records"). Neither message carries a value. Metric: `refused_audit_budget`. **History-aware complementary suppression:** when a
 response would break R1 or R2, the gateway suppresses secondary cells of that response -- first the one whose
 suppression alone suffices, preferring cells that touch the problem; never one the reader already knows exactly --
 and audits again. "Sales: 8" first, then the grouped question, prints Finance as `suppressed`; after
@@ -359,8 +366,6 @@ option for statistics that are released rather than acted on. It is not built.
 - Records whose identity changes between exports beyond what normalisation absorbs count as a leaver plus a joiner.
 - Answers recorded outside the history (a deployment pointed at another store file), or forgotten by an operator's
   `history recover --new`.
-- Listings: per-attribute counts of listed rows are not part of the audit (each row is k-anonymous in its
-  population).
 - Exception lists and code counts of payroll, timecard and contractor contracts are not part of the history (they
   describe the listed people by design).
 - Reasoning about the suppression algorithm itself.
