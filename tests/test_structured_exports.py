@@ -84,11 +84,26 @@ def private_gw(tmp_path_factory):
     return Gw(tmp, contract(tmp, structured_content={"action": "PRIVATE"}))
 
 
+_GATEWAY_RANDOM = re.compile(r"req_[0-9a-f]{24}|\b[0-9a-f]{32,}\b")   # request ids (uuid4 hex) and digests
+
+
+def _appears(v: str, text: str) -> bool:
+    """True when the generated value `v` occurs anywhere in `text`, after removing only the gateway's own random
+    tokens (request ids `req_` + 24 hex, and hex digests of 32+ characters).
+
+    A short numeric canary such as '45708' could match a fragment of a request id by chance, which made this
+    assertion flaky. Only those gateway-generated random tokens are excluded; every other occurrence still counts,
+    including a value glued to other letters or digits ("INR41250.00", "EMP12345x"), so the check stays a plain
+    substring check everywhere else. See test_leak_matcher_ignores_only_gateway_random_tokens.
+    """
+    return v in _GATEWAY_RANDOM.sub(" ", text)
+
+
 def _no_leak(gw: Gw, values) -> None:
     sent = gw.external_bytes()
     unescaped = sent.encode().decode("unicode_escape", "replace") if "\\u" in sent else sent
     for v in values:
-        assert v not in sent and v not in unescaped, f"{v!r} reached the external provider"
+        assert not _appears(v, sent) and not _appears(v, unescaped), f"{v!r} reached the external provider"
 
 
 # --- the generator covers what it claims ---------------------------------------------------------------------------
@@ -122,7 +137,7 @@ def test_signed_export_is_refused_and_nothing_is_sent(refuse_gw, i):
     assert err["type"] == "structured_data_in_free_text" and "field-contract" in err["message"]
     assert err["regions"] and all(set(x) == {"format", "records", "fields"} for x in err["regions"])
     for v in c.values:                                         # the error never echoes content
-        assert v not in r.text
+        assert not _appears(v, r.text), f"{v!r} echoed in the refusal"
     rep = err["pgw_report"]
     assert {s["id"]: s["status"] for s in rep["stages"]}["structure_check"] == "failed"
     assert {c_["id"]: c_["status"] for c_ in rep["checks"]}["structure_check"] == "fail"
@@ -383,4 +398,15 @@ def test_json_report_never_echoes_content(refuse_gw):
     assert r.status_code == 422
     body = json.dumps(r.json())
     for v in c.values:
-        assert v not in body
+        assert not _appears(v, body), f"{v!r} echoed in the report"
+
+
+def test_leak_matcher_ignores_only_gateway_random_tokens():
+    # every real leak shape still counts, including values glued to other characters ...
+    assert _appears("45708", '{"id":"45708"}') and _appears("45708", "x 45708.") and _appears("45708", "45708\nnext")
+    assert _appears("EMP12345", 'Worker "EMP12345",') and _appears("41250.00", "Basic 41250.00 HRA")
+    assert _appears("Meera Kulkarni", '"name": "Meera Kulkarni"')
+    assert _appears("41250.00", "INR41250.00") and _appears("45708", "ref45708x")
+    # ... and only the gateway's own request id / digest hex is ignored
+    assert not _appears("45708", '"request_id":"req_fafc73d6db45708e16b9f7a1"')
+    assert not _appears("45708", "sha " + "ab" * 10 + "45708" + "cd" * 10)
