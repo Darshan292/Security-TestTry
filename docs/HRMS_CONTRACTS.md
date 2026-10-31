@@ -256,9 +256,14 @@ clock for the whole response (all its suppression trials; the clock is read coop
 refused with 422 `reason: audit_budget` and a message that says the audit could not be certified and that a
 narrower or broader question may be answered -- distinct from 422 `reason: differencing` ("would determine the size
 of a group of fewer than k records"). Neither message carries a value. Metric: `refused_audit_budget`. **History-aware complementary suppression:** when a
-response would break R1 or R2, the gateway suppresses secondary cells of that response -- first the one whose
-suppression alone suffices, preferring cells that touch the problem; never one the reader already knows exactly --
-and audits again. "Sales: 8" first, then the grouped question, prints Finance as `suppressed`; after
+response would break R1 or R2, the gateway first audits the response with every secondary cell (record total,
+missing count, group counts, a listing's attribute classes as one unit) suppressed -- if even that fails, the query
+is refused at once -- and then, on top of that accepted state, suppresses the one secondary cell whose suppression
+alone suffices, preferring cells that touch the problem (never one the reader already knows exactly), and audits
+again; if that search uses two thirds of `audit_max_ms`, the response is answered with every secondary cell
+suppressed (already audited). (Printing instead as many cells as the audit allows answered fewer later questions in
+the benchmark below: more exact counts in the history.) The auditor applies these steps as
+nested tentative levels and searches R1 only for sums that contain a row the step changed. "Sales: 8" first, then the grouped question, prints Finance as `suppressed`; after
 "(Finance, Sales): 20", "Finance" prints `Records: suppressed`. If even that is not enough, or the answer itself (the
 matched count) would pin a small group, the query is refused. **Tests:** `tests/test_disclosure_audit.py` checks
 every accepted step of random set families and of random roster query sequences against two independent brute-force

@@ -1067,10 +1067,10 @@ class HistoryStore:
           3. on top of the base, the minimal search: suppress the unit whose suppression alone suffices (cells
              touching the problem first, then by priority and size), else the likeliest one, and look again -- until
              two thirds of the deadline;
-          4. else greedy on top of the base: each unit, by importance (priority, then size, descending), printed if
-             R1 still passes; R2 once at the end; if that fails, the base itself.
+          4. else the base itself (every secondary cell suppressed). Measured: printing as many cells as R1 allows
+             here instead (greedy) answered fewer later questions, because more exact counts were printed.
 
-        Steps 2-4 only add information to an accepted state, so the auditor's nested levels undo exactly the step
+        Steps 2-3 only add information to an accepted state, so the auditor's nested levels undo exactly the step
         that failed. Returns (bounds, suppressed names, None) with the accepted state in one open level of the
         auditor, or (bounds, set(), Violation) with nothing applied."""
         t0 = time.monotonic()
@@ -1148,25 +1148,7 @@ class HistoryStore:
         if v is None:
             aud.commit()
             return bounds_for(sup), names(sup), None
-        # 4. greedy, R1 per unit, R2 at the end
-        order = sorted(all_units, key=lambda u: (-max(cells[i].priority for i in u),
-                                                 -sum(len(cells[i].keys) for i in u), cells[u[0]].name))
-        aud.begin()                                     # level G
-        sup = set(all_units)
-        for u in order:
-            v = aud.trial([batch[i] for i in u], deadline, r2=False)
-            if v is None:
-                aud.commit()
-                sup.discard(u)
-                continue
-            aud.rollback()
-            if v.kind == "budget" and time.monotonic() > deadline:
-                break
-        v = aud.check_r2(deadline) if not (v is not None and v.kind == "budget") else v
-        if v is None:
-            aud.commit()
-            return bounds_for(sup), names(sup), None
-        aud.rollback()                                  # the base alone (accepted in step 2)
+        # 4. the base itself: every secondary cell suppressed (accepted in step 2)
         return bounds_for(all_units), names(all_units), None
 
     def _check_and_record(self, scope, labels, sid, predicate, build_cells, k, cfg):
