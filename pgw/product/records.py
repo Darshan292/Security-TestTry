@@ -784,11 +784,13 @@ class _Disclosure:
     group_marks: dict = field(default_factory=dict)   # groups output -> {position: marker}
     list_withheld: dict = field(default_factory=dict)  # list output -> text replacing the whole list
     show: dict = field(default_factory=dict)          # list output -> {id(row): attribute text}
+    list_limit: dict = field(default_factory=dict)    # list output -> number of rows listed (decided before the audit)
     prewithhold: dict = field(default_factory=dict)   # group_by field -> values whose count was suppressed
     stats: dict = field(default_factory=lambda: dict.fromkeys(
         ("cells_suppressed", "cells_suppressed_complementary", "totals_suppressed", "groups_merged",
          "groups_suppressed", "rows_coarsened", "rows_attributes_withheld", "lists_withheld", "queries_refused",
-         "cells_audited", "cells_suppressed_history", "history_queries", "counts_rounded"), 0))
+         "cells_audited", "cells_suppressed_history", "history_queries", "counts_rounded",
+         "lists_attributes_withheld_history"), 0))
 
 
 def _leaves(plan: Plan, name: str) -> bool:
@@ -892,6 +894,8 @@ def _history_check(plan: Plan, schema: FieldSchema, t, params: dict, rows: list,
                 name = f"#group{i}"
                 out.append(AC(name, ks(by.get(key, [])), *seen(name, n),
                               alt=(1, None) if not cells[name].suppressed else None, priority=2))
+        out += [AC(name, ks(rs), len(rs), len(rs), alt=alt, priority=3, group=grp)
+                for name, rs, alt, grp in _list_cells(plan, params, outs, dc)]
         return out
     pred = {"filter": [[n, op, list(v) if isinstance(v, tuple) else v] for n, op, v, _o in flt],
             "group_by": gb, "list": bool(params.get("list"))}
@@ -907,8 +911,54 @@ def _history_check(plan: Plan, schema: FieldSchema, t, params: dict, rows: list,
     return st["suppress"]
 
 
+LISTING_GROUP = "listing"
+ATTR_WITHHELD_HISTORY = "attributes withheld (disclosure control)"
+
+
+def _list_cells(plan: Plan, params: dict, outs: dict, dc: _Disclosure) -> list:
+    """Every count a printed roster listing reveals, as (name, rows, alt, group): the listed rows (the lines can be
+    counted), the rows not listed ("... and N more not listed"), and when the listed rows carry more than one
+    attribute text, each attribute class -- the rows printed with one text, "attributes withheld" included (so
+    per-attribute row counts are sums of audited cells). The classes are one group: if the history suppresses one,
+    every listed row prints its attributes withheld (then the only class is the listed rows)."""
+    out = outs.get("matched")
+    if (not params.get("list") or out is None or out.kind != "list" or not out.value or not _leaves(plan, "matched")
+            or "matched" in dc.list_withheld):
+        return []
+    n = dc.list_limit.get("matched", len(out.value))
+    listed = [r for r, _tok in out.value[:n]]
+    cells = []
+    if listed:
+        cells.append(("#listed", listed, None, None))
+    if n < len(out.value):
+        cells.append(("#not_listed", [r for r, _tok in out.value[n:]], None, None))
+    show = dc.show.get("matched", {})
+    by: dict = {}
+    for (r, tok) in out.value[:n]:
+        by.setdefault("; ".join(x for x in (tok, show.get(id(r))) if x), []).append(r)
+    if len(by) > 1:
+        cells += [(f"#attr{i}", rs, disclosure.OMIT, LISTING_GROUP) for i, (_t, rs) in enumerate(sorted(by.items()))]
+    return cells
+
+
+def _list_limits(plan: Plan, schema: FieldSchema, outs: dict, dc: _Disclosure, k: int) -> None:
+    """Decide, before the audit, how many matched rows a roster listing prints (the renderer then prints exactly
+    that many). A non-empty remainder ("... and N more not listed") of fewer than k rows, or a listed part of fewer
+    than k, would print a small count: fewer rows are listed instead."""
+    out = outs.get("matched")
+    if out is None or out.kind != "list" or not out.value or "matched" in dc.list_withheld:
+        return
+    m = len(out.value)
+    n = _Renderer(plan, schema, dc).listable(out.value, plan.spec.max_prompt_chars - len(plan.contract.prompt_template))
+    if 0 < m - n < k:
+        n = max(m - k, 0)
+    if 0 < n < k:
+        n = 0
+    dc.list_limit["matched"] = n
+
+
 def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Disclosure, k: int, history,
-                    schema: FieldSchema) -> None:
+                    schema: FieldSchema, ctx=None) -> None:
     """Count table of a roster query: total = matched + missing + did-not-match; matched = sum of the groups."""
     t = disclosure.Table(k)
     mc = outs["matched_count"]
@@ -948,8 +998,20 @@ def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Discl
         dc.list_withheld["matched"] = (f"none listed: fewer than {k} records match" if c.primary
                                       else "none listed (withheld by disclosure control)")
         dc.stats["lists_withheld"] += 1
+    dc.prewithhold = {params["group_by"]: set(suppressed_vals)} if params.get("group_by") and suppressed_vals else {}
+    if params.get("list"):
+        # the listing is decided before the audit: its attribute classes are cells of this response
+        _list_limits(plan, schema, outs, dc, k)
+        if ctx is not None:
+            _list_control(plan, schema, outs, rows, dc, k, ctx)
     if history is not None and plan.control is not None and plan.control.differencing:
-        for n in sorted(_history_check(plan, schema, t, params, rows, outs, history, dc, k)):
+        sup = _history_check(plan, schema, t, params, rows, outs, history, dc, k)
+        if any(n.startswith("#attr") for n in sup):
+            lst = outs["matched"]
+            dc.show["matched"] = {id(r): ATTR_WITHHELD_HISTORY for r, _tok in lst.value}
+            dc.stats["rows_attributes_withheld"] = dc.list_limit.get("matched", len(lst.value))
+            dc.stats["lists_attributes_withheld_history"] = 1
+        for n in sorted(x for x in sup if x.startswith("#group") or x in t.cells):
             t.cells[n].suppressed = True        # complementary suppression that considers the scope history
             if n.startswith("#group"):
                 i = int(n[len("#group"):])
@@ -957,7 +1019,6 @@ def _roster_control(plan: Plan, outs: dict, params: dict, rows: list, dc: _Discl
                 suppressed_vals.add(sizes[i][0])
             else:
                 dc.markers[n] = disclosure.MARK_SUPPRESSED
-    dc.prewithhold = {params["group_by"]: suppressed_vals} if params.get("group_by") and suppressed_vals else {}
 
 
 def _list_control(plan: Plan, schema: FieldSchema, outs: dict, rows: list, dc: _Disclosure, k: int, ctx) -> None:
@@ -972,7 +1033,7 @@ def _list_control(plan: Plan, schema: FieldSchema, outs: dict, rows: list, dc: _
             continue
         pop = out.meta.get("population", rows)
         levels = {f: disclosure.levels_for(schema.spec(f), ctrl, coupled=f in pre) for f in show}
-        listed = [r for r, _tok in out.value]
+        listed = [r for r, _tok in out.value[:dc.list_limit.get(name, len(out.value))]]
         text, st = disclosure.anonymize_listing(pop, listed, show, levels, k, plan.control.listing, ctx.person_key,
                                                 pre)
         dc.show[name] = text
@@ -1022,6 +1083,29 @@ class _Renderer:
             return self.sent(f"record {row.index}")
         return parts[0] + (" (" + ", ".join(parts[1:]) + ")" if len(parts) > 1 else "")
 
+    def _ident_len(self, row) -> int:
+        parts = []
+        for n in self.plan.spec.label:
+            v = row.values.get(n)
+            if v is not None:
+                parts.append(", ".join(v) if isinstance(v, list) else v)
+        if not parts:
+            return 1
+        return len(parts[0]) + (len(parts[1:]) and len(", ".join(parts[1:])) + 3)
+
+    def listable(self, value: list, budget: int) -> int:
+        """How many rows of a list (a prefix, in order) fit the contract's bounds: max_listed over every list of the
+        response and the remaining character budget. Every line is costed as if it carried an attribute text, so
+        the number does not depend on what disclosure control later prints next to an alias (records._list_cells
+        decides it before the audit)."""
+        n = 0
+        for row, _tok in value:
+            if self.listed + n >= self.plan.spec.max_listed or budget <= 0:
+                break
+            budget -= 2 + self._ident_len(row) + 3 + 1
+            n += 1
+        return n
+
     def render(self, name: str, out: hrcompute.Out, budget: list) -> str:
         k, v = out.kind, out.value
         mark = self.dc.markers.get(name)
@@ -1047,8 +1131,11 @@ class _Renderer:
                 return self.sent(self.dc.list_withheld[name])
             lines = []
             show = self.dc.show.get(name, {})
-            for row, tok in v:
-                if self.listed >= self.plan.spec.max_listed or budget[0] <= 0:
+            limit = self.dc.list_limit.get(name)
+            if limit is None:
+                limit = self.listable(v, budget[0])
+            for i, (row, tok) in enumerate(v):
+                if i >= limit:
                     self.not_listed += 1
                     continue
                 full = "; ".join(x for x in (tok, show.get(id(row))) if x)
@@ -1141,8 +1228,9 @@ def run(plan: Plan, messages: list, history=None) -> RecordResult:
     if plan.control is not None:
         try:
             if plan.spec.compute == "roster_question":
-                _roster_control(plan, outs, params, rows, dc, plan.k, history, schema)
-            _list_control(plan, schema, outs, rows, dc, plan.k, ctx)
+                _roster_control(plan, outs, params, rows, dc, plan.k, history, schema, ctx)
+            else:
+                _list_control(plan, schema, outs, rows, dc, plan.k, ctx)
         except disclosure.DisclosureRefused as e:
             e.report = _report(plan, schema, env["format"], rows, stats, outs, [], _Renderer(plan, schema, dc),
                                prefix)

@@ -147,6 +147,7 @@ class Config:
     refused_per_day: int = DEFAULT_REFUSED_PER_DAY
     refused_app_per_minute: int = DEFAULT_REFUSED_APP_PER_MINUTE
     refused_app_per_day: int = DEFAULT_REFUSED_APP_PER_DAY
+    audit_max_ms: int = setaudit.DEFAULT_MAX_MS   # wall-clock bound of one response's audit (all its trials)
     separate_apps: bool = False   # history scope per app (default: shared by every app of the tenant)
     separate_purposes: bool = False   # history scope per purpose (default: shared by every RECORDS purpose)
 
@@ -205,7 +206,8 @@ def load_config(path: str | Path, data: bytes | None = None) -> Config:
         raise SchemaError(f"{name}.listing: one of {LISTING_POLICIES}")
     dif = raw.get("differencing") or {}
     _keys(dif, {"enabled", "scope", "max_scopes", "max_stored_keys_per_scope", "max_cells_per_scope",
-                "max_atoms_per_scope", "query_log_per_scope", "per_caller", "audit_budget"}, f"{name}.differencing")
+                "max_atoms_per_scope", "query_log_per_scope", "per_caller", "audit_budget", "audit_max_ms"},
+          f"{name}.differencing")
     enabled = dif.get("enabled", True)
     if not isinstance(enabled, bool):
         raise SchemaError(f"{name}.differencing.enabled: true or false")
@@ -258,6 +260,8 @@ def load_config(path: str | Path, data: bytes | None = None) -> Config:
                       ("refused_per_day", "refused_per_user_per_day", DEFAULT_REFUSED_PER_DAY),
                       ("refused_app_per_minute", "refused_per_app_per_minute", DEFAULT_REFUSED_APP_PER_MINUTE),
                       ("refused_app_per_day", "refused_per_app_per_day", DEFAULT_REFUSED_APP_PER_DAY))},
+                  audit_max_ms=_posint(dif.get("audit_max_ms", setaudit.DEFAULT_MAX_MS), f"{w}.audit_max_ms",
+                                       50, 60_000),
                   separate_apps=bool(sc.get("separate_apps", False)),
                   separate_purposes=bool(sc.get("separate_purposes", False)))
 
@@ -718,6 +722,8 @@ REFUSE_FULL = "history_full"
 REFUSE_SCOPES = "history_scopes_full"
 REFUSE_RATE = "rate_limited"
 REFUSE_KEY = "invalid_record_key"
+REFUSE_AUDIT_BUDGET = "audit_budget"
+OMIT = (0, None)       # AuditCell.alt: the cell is not revealed at all (nor is any other cell of its `group`)
 SHARED = "*"
 OPERATOR_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@-]{1,63}")
 DATASET_RE = re.compile(r"[a-z][a-z0-9_.-]{0,63}")
@@ -737,7 +743,9 @@ class HistoryIntegrityError(ValueError):
 class AuditCell:
     """One count a response would reveal: its record keys, what the reader learns about its size as the response
     stands (lo == hi: printed exactly; hi None: unbounded), whether it is a whole export, and `alt`: the bounds if
-    the history suppresses it as well ((1, None): "suppressed"), or None if it may not be suppressed (the answer)."""
+    the history suppresses it as well ((1, None): "suppressed"; OMIT: not printed at all), or None if it may not be
+    suppressed (the answer). Cells of one `group` (the attribute classes of one listing) are suppressed together:
+    suppressing one sets every cell of the group to its alt."""
     name: str
     keys: frozenset
     lo: int
@@ -745,6 +753,7 @@ class AuditCell:
     whole: bool = False
     alt: tuple | None = None
     priority: int = 0
+    group: str | None = None
 
 
 @dataclass(frozen=True)
@@ -797,8 +806,8 @@ def _day(t: float | None = None) -> int:
 class HistoryMetrics:
     """Operator counters (never in pgw_report, never a value) since start. `snapshot()` adds the stored sizes."""
 
-    NAMES = ("answered", "answered_repeat", "suppressed_more", "refused_differencing", "refused_capacity",
-             "refused_rate", "refused_identity", "store_unavailable")
+    NAMES = ("answered", "answered_repeat", "suppressed_more", "refused_differencing", "refused_audit_budget",
+             "refused_capacity", "refused_rate", "refused_identity", "store_unavailable")
 
     def __init__(self, store: "HistoryStore"):
         self._store = store
@@ -1234,7 +1243,8 @@ class HistoryStore:
                     pending.commit()
             except DisclosureRefused as e:
                 self.metrics.inc({REFUSE_FULL: "refused_capacity", REFUSE_SCOPES: "refused_capacity",
-                                  REFUSE_RATE: "refused_rate", REFUSE_KEY: "refused_identity"}.get(
+                                  REFUSE_RATE: "refused_rate", REFUSE_KEY: "refused_identity",
+                                  REFUSE_AUDIT_BUDGET: "refused_audit_budget"}.get(
                                       e.code, "refused_differencing"))
                 ctx = getattr(e, "rate_ctx", None)
                 if ctx is not None:      # a refused query is metered too (the transaction above was rolled back)
@@ -1339,6 +1349,102 @@ class HistoryStore:
         except self._sq.Error as e:
             log.error("event='disclosure_history_refusal_not_metered' error_type=%s", type(e).__name__)
 
+    @staticmethod
+    def _suppress_until_clean(aud, cells, digests, cfg):
+        """Audit the response's cells, with history-aware complementary suppression if the response as computed does
+        not pass. Steps, all sharing one wall-clock deadline (cfg.audit_max_ms):
+
+          1. every cell as printed: accepted -> done;
+          2. the BASE: the cells that must be printed as they are (the answer) with every secondary unit (one cell, or
+             every cell of one listing group) in its suppressed form (alt bounds; an OMIT unit left out) -- the least
+             the response can say. Not accepted -> refused (no suppression can help);
+          3. on top of the base, the minimal search: suppress the unit whose suppression alone suffices (cells
+             touching the problem first, then by priority and size), else the likeliest one, and look again -- until
+             two thirds of the deadline;
+          4. else the base itself (every secondary cell suppressed). Measured: printing as many cells as R1 allows
+             here instead (greedy) answered fewer later questions, because more exact counts were printed.
+
+        Steps 2-3 only add information to an accepted state, so the auditor's nested levels undo exactly the step
+        that failed. Returns (bounds, suppressed names, None) with the accepted state in one open level of the
+        auditor, or (bounds, set(), Violation) with nothing applied."""
+        t0 = time.monotonic()
+        deadline = t0 + cfg.audit_max_ms / 1000
+        soft = t0 + cfg.audit_max_ms / 1500
+        printed = {c.name: (c.lo, c.hi) for c in cells}
+        batch = [(d, c.keys, c.lo, c.hi, c.whole) for d, c in zip(digests, cells, strict=True)]
+        v = aud.trial(batch, deadline)
+        if v is None:
+            return printed, set(), None
+        aud.rollback()
+        if v.kind == "budget" and time.monotonic() > deadline:
+            return printed, set(), v
+        fixed = [i for i, c in enumerate(cells) if c.alt is None]
+        units: dict = {}
+        for i, c in enumerate(cells):
+            if c.alt is not None:
+                units.setdefault(("g", c.group) if c.group is not None else ("c", i), []).append(i)
+        base_bounds = dict(printed)
+        for ix in units.values():
+            for i in ix:
+                base_bounds[cells[i].name] = cells[i].alt
+        aud.begin()                                     # level A: the base and what is printed on top of it
+        v = aud.trial([batch[i] for i in fixed] + [
+            (digests[i], cells[i].keys, *base_bounds[cells[i].name], cells[i].whole)
+            for ix in units.values() for i in ix if base_bounds[cells[i].name] != OMIT], deadline)
+        if v is not None:
+            aud.rollback()
+            aud.rollback()
+            return printed, set(), v
+        aud.commit()
+        all_units = {tuple(ix) for ix in units.values()}
+
+        def names(us):
+            return {cells[i].name for u in us for i in u}
+
+        def bounds_for(sup):
+            return {**printed, **{cells[i].name: cells[i].alt for u in sup for i in u}}
+
+        def attempt(sup, r2=True):
+            """Print every unit not in `sup` on top of the base. The violation's cells index `cells`."""
+            idx = [i for u in all_units - sup for i in u]
+            v = aud.trial([batch[i] for i in idx], deadline, r2=r2)
+            if v is not None:
+                v.cells = {idx[i] for i in v.cells}
+            return v
+
+        # 3. minimal search
+        sup: set = set()
+        v = attempt(sup)
+        while v is not None:
+            aud.rollback()
+            if time.monotonic() > soft:
+                break
+            cand = sorted((u for u in all_units - sup
+                           if not all(aud.known(digests[i], len(cells[i].keys), len(cells[i].keys)) for i in u)),
+                          key=lambda u: (not any(i in v.cells for i in u), max(cells[i].priority for i in u),
+                                         sum(len(cells[i].keys) for i in u), cells[u[0]].name))
+            if not cand:
+                break
+            done = False
+            for u in cand[:8]:
+                v2 = attempt(sup | {u})
+                if v2 is None:
+                    sup.add(u)
+                    v, done = None, True
+                    break
+                aud.rollback()
+                if time.monotonic() > soft:
+                    break
+            if done or time.monotonic() > soft:
+                break
+            sup.add(cand[0])
+            v = attempt(sup)
+        if v is None:
+            aud.commit()
+            return bounds_for(sup), names(sup), None
+        # 4. the base itself: every secondary cell suppressed (accepted in step 2)
+        return bounds_for(all_units), names(all_units), None
+
     def _check_and_record(self, scope, labels, sid, predicate, build_cells, k, cfg):
         box: list = []
         try:
@@ -1386,39 +1492,14 @@ class HistoryStore:
         pending = None
         if not repeat:
             self._rate_check(sid, subs, cfg, now)
-            bounds = {c.name: (c.lo, c.hi) for c in cells}
-            fixed = {d for d, c in zip(digests, cells, strict=True) if c.alt is None and c.lo == c.hi}
-
-            def attempt(b):
-                return aud.trial([(d, c.keys, *b[c.name], c.whole) for d, c in zip(digests, cells, strict=True)])
-            violation = attempt(bounds)
-            while violation is not None:
-                aud.rollback()
-                # secondary cells whose suppression could matter: not already known exactly to the reader (from the
-                # history, or from another cell of this response that must stay printed)
-                cand = [(i, c) for i, (d, c) in enumerate(zip(digests, cells, strict=True))
-                        if c.alt is not None and c.name not in suppress and d not in fixed
-                        and not aud.known(d, len(c.keys), len(c.keys))]
-                if not cand:
-                    break
-                cand.sort(key=lambda ic: (ic[0] not in violation.cells, ic[1].priority, len(ic[1].keys), ic[1].name))
-                done = False
-                for _i, c in cand[:8]:            # the one cell whose suppression suffices, if there is one
-                    trial_bounds = {**bounds, c.name: c.alt}
-                    v2 = attempt(trial_bounds)
-                    if v2 is None:
-                        suppress.add(c.name)
-                        bounds = trial_bounds
-                        violation, done = None, True
-                        break
-                    aud.rollback()
-                if done:
-                    break
-                c = cand[0][1]                    # else suppress the likeliest one and look again
-                suppress.add(c.name)
-                bounds[c.name] = c.alt
-                violation = attempt(bounds)
+            bounds, suppress, violation = self._suppress_until_clean(aud, cells, digests, cfg)
             if violation is not None:
+                if violation.kind == "budget":
+                    raise DisclosureRefused("query refused: the disclosure-control audit of this question against "
+                                            "the answers already given about this data did not finish within its "
+                                            "time budget, so it could not be certified (nothing is known to be "
+                                            "revealed); a narrower or broader question may be answered",
+                                            code=REFUSE_AUDIT_BUDGET)
                 raise DisclosureRefused("query refused: together with answers already given about this data (in any "
                                         "conversation, by any app, on any day) it would determine the size of a "
                                         f"group of fewer than {k} records", code=REFUSE_DIFFERENCING)
@@ -1427,6 +1508,8 @@ class HistoryStore:
             new_cells = 0
             for d, c in zip(digests, cells, strict=True):
                 lo, hi = bounds[c.name]
+                if (lo, hi) == OMIT:
+                    continue                      # not printed: not recorded
                 r = db.execute("SELECT lo, hi, whole FROM cell WHERE sid = ? AND digest = ?", (sid, d)).fetchone()
                 if r is None:
                     db.execute("INSERT INTO cell (sid, digest, n, lo, hi, whole, keys) VALUES (?, ?, ?, ?, ?, ?, ?)",
